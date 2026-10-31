@@ -1,0 +1,35 @@
+#!/bin/sh
+set -eu
+app_dir=${APPDIR:-$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)}
+wine_bin="$app_dir/usr/bin/wine"
+export WINESERVER="$app_dir/usr/bin/wineserver"
+export WINEPREFIX=${WINEPREFIX:-"$HOME/.wine-opensapi-piper-test"}
+export WINEDEBUG=${WINEDEBUG:--all}
+share="$app_dir/usr/share/opensapi"
+case "${1:-}" in
+    --opensapi-register)
+        [ "$#" -eq 2 ] || { echo 'Usage: AppImage --opensapi-register /absolute/path/voice.onnx.json' >&2; exit 2; }
+        config=$(realpath -- "$2")
+        registry=$(mktemp --suffix=.reg)
+        trap 'rm -f "$registry"' EXIT HUP INT TERM
+        python3 "$share/scripts/register-voice.py" --config "$config" --make-default --output "$registry"
+        "$wine_bin" wineboot.exe -u
+        "$wine_bin" regedit.exe /S "Z:$registry"
+        echo "Piper voice registered in $WINEPREFIX (server must run on 127.0.0.1:5000)."
+        ;;
+    --opensapi-speak)
+        [ "$#" -eq 2 ] || { echo 'Usage: AppImage --opensapi-speak "Text to speak"' >&2; exit 2; }
+        exec "$wine_bin" "$share/sapi-probe.exe" unused.wav 0 100 "$2" play
+        ;;
+    --opensapi-wav)
+        [ "$#" -eq 3 ] || { echo 'Usage: AppImage --opensapi-wav /path/output.wav "Text to speak"' >&2; exit 2; }
+        output=$(realpath -m -- "$2")
+        exec "$wine_bin" "$share/sapi-probe.exe" "Z:$output" 0 100 "$3"
+        ;;
+    --opensapi-info)
+        cat "$share/BUILD-INFO.txt"
+        "$wine_bin" --version
+        ;;
+    '') exec "$wine_bin" winecfg.exe ;;
+    *) exec "$wine_bin" "$@" ;;
+esac
