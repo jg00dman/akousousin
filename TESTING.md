@@ -1,9 +1,16 @@
 # Testing the prototype tomorrow
 
-This is a source prototype, not a ready-to-install AppImage. The cloud build can
-run automated tests and write WAV files, but has no audio driver. To hear speech,
-build the patch into a desktop Wine runtime on your Linux machine as below.
-Neither the VisualFBEditor sample nor Logos is needed for the first test.
+For a prebuilt AppImage, first check the
+[GitHub build](https://github.com/jg00dman/opensapi/actions/workflows/appimage.yml)
+and [Releases](https://github.com/jg00dman/opensapi/releases), then follow
+[APPIMAGE-TESTING.md](scripts/ci/APPIMAGE-TESTING.md). A successful workflow publishes
+a test package that includes the sample program; you do not need to build Wine
+locally. The initial build was started as run `41248009427`; completion was pending
+when these instructions were written.
+
+The rest of this document covers building from source and using the headless
+cloud build. Neither the VisualFBEditor sample nor Logos is needed for the first
+test.
 
 ## 1. Recover the source
 

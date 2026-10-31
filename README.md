@@ -2,6 +2,13 @@
 
 For a step-by-step test session, start with [TESTING.md](TESTING.md).
 
+For a prebuilt test package, see [AppImage testing](scripts/ci/APPIMAGE-TESTING.md).
+The [GitHub workflow](https://github.com/jg00dman/opensapi/actions/workflows/appimage.yml)
+builds Wine, checks the packaged runtime, and publishes a unique experimental
+prerelease after successful checks. Downloads appear under
+[Releases](https://github.com/jg00dman/opensapi/releases). A running workflow is
+not yet a successful or tested AppImage release.
+
 This prototype adds an opt-in SAPI TTS engine to Wine. Windows applications keep
 using `ISpVoice` or `ISpeechVoice`; the engine calls a separately running Piper
 1.8 HTTP server on `127.0.0.1`. Piper returns WAV audio, which the engine validates
@@ -150,7 +157,8 @@ prove the spoken words or pronunciation are correct.
   fix them. Logos has not been tested.
 * Desktop playback, 32-bit/WoW64, and AppImage packaging need separate validation.
 
-The existing `Wine-Builds` custom workflow can build a branch of the Wine fork;
-`WINE_AppImage` can package that workflow's tarball. No workflow has been dispatched
-and no release published. A future bundle must arrange Piper startup, model
-installation, license notices, and registration; this patch alone does not do that.
+The existing `Wine-Builds` and `WINE_AppImage` workflows remain available for a
+future WoW64/full bundle. The OpenSAPI workflow builds the patch directly because
+the cloud credential cannot push to the Wine fork. It does not bundle Piper or a
+voice model. The AppImage wrapper provides explicit voice registration and sample
+speech/WAV commands; Piper startup and model installation remain separate.

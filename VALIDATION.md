@@ -3,7 +3,9 @@
 The Wine changes are saved locally on `codex/piper-sapi-prototype`, commit
 `b688f135551`. The OpenSAPI repository also carries the complete patch, so its
 source backup is sufficient to reproduce the Wine edits at the base below.
-These local commits have not been pushed to GitHub.
+The OpenSAPI branch, including the complete Wine patch and instructions, has now
+been pushed to GitHub. Pushing the Wine branch itself was denied by GitHub; the
+patch in OpenSAPI preserves those changes independently of this cloud workspace.
 
 Validated in this cloud workspace against Wine commit
 `2528aff26208257fdbf980666a4f0e66d47563ce` (11.21), x86-64 Linux, with a
@@ -74,5 +76,8 @@ settings, then publish the environment. Retry the model download after the polic
 is applied and run the real-server steps and `scripts/smoke-piper.py` in the README.
 
 Desktop playback, Logos, the VisualFBEditor sample, WoW64/32-bit execution, and
-AppImage packaging have not been validated. No branch was pushed, workflow
-dispatched, release published, or upstream PR submitted.
+AppImage packaging have not been validated in this cloud machine. The GitHub
+AppImage workflow was started as run `41248009427` and will validate its own
+package before publishing an experimental prerelease. Its status must be checked
+independently; starting the run is not proof it succeeded. No upstream PR has
+been submitted.
