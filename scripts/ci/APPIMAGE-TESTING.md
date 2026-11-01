@@ -69,7 +69,13 @@ WINEDEBUG=+sapi,+winhttp "$OPENSAPI_IMAGE" --opensapi-wav "$PWD/debug.wav" \
 
 CI runs the 13 deterministic integration tests against both the build-tree Wine
 and the packaged Wine runtime, plus an AppImage extraction/version/registration
-check. These tests use synthetic PCM, not a real Piper voice. A successful build
+check. CI disables compilation of Wine's unrelated regression test executables;
+this does not disable either OpenSAPI integration run. Stage output is streamed
+and retained as log artifacts, compilation uses the runner's available CPUs, and
+initialization and integration runs have explicit time limits. Prefix setup
+disables optional Mono/Gecko downloads and dialogs.
+
+These tests use synthetic PCM, not a real Piper voice. A successful build
 does not prove neural synthesis, audible playback, or Logos compatibility.
 
 Pause/resume, speech events, word highlighting, and several SAPI XML features

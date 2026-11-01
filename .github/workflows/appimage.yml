@@ -25,8 +25,6 @@ jobs:
     env:
       WINE_BASE: 2528aff26208257fdbf980666a4f0e66d47563ce
       WINE_VERSION: '11.21'
-      # Limits peak memory usage on hosted runners.
-      BUILD_JOBS: '2'
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -46,6 +44,7 @@ jobs:
             libpcap-dev liblcms2-dev libzstd-dev zlib1g-dev \
             squashfs-tools xz-utils curl git python3 xvfb xauth
       - name: Build patched Wine and test package
+        timeout-minutes: 165
         run: bash scripts/ci/build-appimage.sh
       - name: Upload build and test logs
         if: always()
