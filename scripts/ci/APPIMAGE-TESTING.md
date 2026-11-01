@@ -70,9 +70,22 @@ WINEDEBUG=+sapi,+winhttp "$OPENSAPI_IMAGE" --opensapi-wav "$PWD/debug.wav" \
 CI runs the 13 deterministic integration tests against both the build-tree Wine
 and the packaged Wine runtime, plus an AppImage extraction/version/registration
 check. CI disables compilation of Wine's unrelated regression test executables;
-this does not disable either OpenSAPI integration run. Stage output is streamed
-and retained as log artifacts, compilation uses the runner's available CPUs, and
-initialization and integration runs have explicit time limits. Prefix setup
+this does not disable either OpenSAPI integration run. Dependency setup runs in its own job and is retained as a Docker image in the
+repository's Actions cache, keyed by the dependency Dockerfile. The image contains
+only Ubuntu build dependencies; no credentials, Piper or voice models are included.
+It is not uploaded to a public container registry. Change the Dockerfile revision
+to refresh its signed distribution packages.
+
+Source, configuration, compilation, installation, probes, both integration runs,
+and packaging are separate workflow steps. The compiled source/build directories
+are checkpointed immediately after compilation, keyed by the exact Wine base,
+patch, build script and verified toolchain image ID. A later test/packaging failure
+can reuse that checkpoint on rerun. Cache eviction causes a clean rebuild, not a
+skipped test. No Wine prefix or test result is reused.
+
+Stage output is streamed and retained as log artifacts, compilation uses the
+runner's available CPUs, and initialization and integration runs have explicit
+time limits. Prefix setup
 disables optional Mono/Gecko downloads and dialogs.
 
 These tests use synthetic PCM, not a real Piper voice. A successful build

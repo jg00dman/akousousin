@@ -9,7 +9,12 @@ jobs=${BUILD_JOBS:-$(nproc)}
 export WINEDLLOVERRIDES="mscoree,mshtml=;${WINEDLLOVERRIDES:-}"
 export WINEDEBUG=${WINEDEBUG:--all}
 export PYTHONUNBUFFERED=1
-stage=setup
+export WINE_SRC="$project_dir/wine-src" WINE_BUILD="$project_dir/wine-build"
+export WINE="$WINE_BUILD/wine" WINEPREFIX="$project_dir/build/ci-prefix"
+image="wine-opensapi-piper-${wine_version}-x86_64.AppImage"
+share="$project_dir/AppDir/usr/share/opensapi"
+mkdir -p build dist
+stage=${1:-setup}
 fail_stage() {
     local result=$?
     echo "::error::Stage $stage failed (exit $result)"
@@ -27,12 +32,14 @@ run_stage() {
     echo "Completed $stage in $((SECONDS - started)) seconds"
     echo '::endgroup::'
 }
-echo "Runner: $(nproc) CPUs; build jobs: $jobs"
-free -h
-# Every stage leaves time for failure logs before the job timeout.
-mkdir -p build dist
-stage=fetch
-echo "::group::Fetch exact Wine source and apply OpenSAPI patch"
+
+case "${1:-}" in
+    source)
+if [ -d wine-src/.git ]; then
+    test "$(git -C wine-src rev-parse HEAD)" = "$wine_base"
+    git -C wine-src apply --reverse --check "$project_dir/patches/wine-piper.patch"
+    echo 'Reusing matching patched Wine source'
+else
 git init wine-src
 git -C wine-src remote add origin https://github.com/jg00dman/wine.git
 git -C wine-src fetch --depth=1 origin "$wine_base"
@@ -40,9 +47,13 @@ git -C wine-src checkout --detach FETCH_HEAD
 test "$(git -C wine-src rev-parse HEAD)" = "$wine_base"
 git -C wine-src apply --check "$project_dir/patches/wine-piper.patch"
 git -C wine-src apply "$project_dir/patches/wine-piper.patch"
-echo '::endgroup::'
-mkdir wine-build
-(
+fi
+        ;;
+    configure)
+mkdir -p wine-build
+if [ -f wine-build/.opensapi-configured ]; then
+    echo 'Reusing configured build from matching toolchain/source cache'
+else
     cd wine-build
     run_stage configure 10m ../wine-src/configure --enable-win64 --disable-tests --prefix=/usr \
         --without-oss --disable-winemenubuilder CFLAGS='-O2' CXXFLAGS='-O2'
@@ -50,25 +61,31 @@ mkdir wine-build
         echo 'Audio support is required for this desktop test build.' >&2
         exit 1
     fi
-    run_stage compile 120m make -j"$jobs"
-    run_stage install 10m make install DESTDIR="$project_dir/AppDir"
-)
-export WINE_SRC="$project_dir/wine-src" WINE_BUILD="$project_dir/wine-build"
+    touch .opensapi-configured
+fi
+        ;;
+    compile)
+echo "Runner: $(nproc) CPUs; build jobs: $jobs"
+free -h
+cd wine-build
+run_stage compile 120m make -j"$jobs"
+        ;;
+    install)
+cd wine-build
+run_stage install 10m make install DESTDIR="$project_dir/AppDir"
+        ;;
+    probes)
 run_stage probes 5m bash scripts/build-probes.sh
-export WINE="$WINE_BUILD/wine" WINEPREFIX="$project_dir/build/ci-prefix"
-# Mark the fresh disposable prefix before initialization so test-wine.sh
-# can enforce its existing ownership guard.
+        ;;
+    build-tests)
 mkdir -p "$WINEPREFIX"
 touch "$WINEPREFIX/.opensapi-test-prefix"
 run_stage build-tree-init 3m xvfb-run -a "$WINE" wineboot.exe -u
-run_stage build-tree-idle 1m "$WINE_BUILD/server/wineserver" -w
 run_stage integration 10m xvfb-run -a bash scripts/test-wine.sh
-# Fail closed if a future runner accidentally discovers fewer tests or skips any.
 grep -q '^Ran 13 tests in ' build/integration.log
 grep -qx 'OK' build/integration.log
-stage=package
-echo "::group::Assemble AppDir ($(date -u +%FT%TZ))"
-
+        ;;
+    assemble)
 share="$project_dir/AppDir/usr/share/opensapi"
 mkdir -p "$share/scripts" "$project_dir/AppDir/usr/share/licenses/opensapi"
 cp build/sapi-probe.exe "$share/"
@@ -99,8 +116,8 @@ cat > AppDir/opensapi.svg <<'EOF'
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><rect width="128" height="128" rx="24" fill="#263b58"/><path d="M22 50h19l24-20v68L41 78H22z" fill="#fff"/><path d="M81 43q29 21 0 42M90 28q47 36 0 72" fill="none" stroke="#70d6cf" stroke-width="7"/></svg>
 EOF
 
-echo '::endgroup::'
-
+        ;;
+    appimage)
 # Freeze the official runtime downloaded over verified HTTPS. A changed release
 # asset fails verification rather than silently changing the executable runtime.
 stage=appimage
@@ -114,21 +131,19 @@ image="wine-opensapi-piper-${wine_version}-x86_64.AppImage"
 cat build/appimage-runtime build/appdir.squashfs > "dist/$image"
 chmod +x "dist/$image"
 echo '::endgroup::'
+        ;;
+    package-tests)
 run_stage appimage-smoke 2m env APPIMAGE_EXTRACT_AND_RUN=1 "dist/$image" --opensapi-info
-
-# Check the packaged runtime and embedded C sample, not just the build-tree DLL.
 printf '%s\n' '{"audio":{"sample_rate":22050}}' > build/test-voice.onnx.json
 export WINEPREFIX="$project_dir/build/package-prefix"
 run_stage appimage-register 3m env APPIMAGE_EXTRACT_AND_RUN=1 xvfb-run -a "dist/$image" \
     --opensapi-register "$project_dir/build/test-voice.onnx.json"
-run_stage packaged-idle 1m "$project_dir/AppDir/usr/bin/wineserver" -w
 run_stage packaged-integration 10m env WINE="$project_dir/AppDir/AppRun" \
     xvfb-run -a python3 tests/test_integration.py
 grep -q '^Ran 13 tests in ' build/packaged-integration.log
 grep -qx 'OK' build/packaged-integration.log
-stage=archives
-echo "::group::Source archives and checksums ($(date -u +%FT%TZ))"
-
+        ;;
+    archives)
 tar -C AppDir -cJf "dist/wine-opensapi-piper-${wine_version}-x86_64.tar.xz" .
 tar --exclude=.git -cJf "dist/wine-opensapi-piper-${wine_version}-source.tar.xz" wine-src
 cp patches/wine-piper.patch dist/
@@ -144,4 +159,6 @@ cp build/packaged-integration.log dist/
 cat "$share/BUILD-INFO.txt" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
 cat build/integration.log >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
 
-echo '::endgroup::'
+        ;;
+    *) echo 'Select a stage: source configure compile install probes build-tests assemble appimage package-tests archives' >&2; exit 2 ;;
+esac

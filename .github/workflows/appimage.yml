@@ -9,43 +9,134 @@ on:
       - scripts/ci/**
       - patches/**
       - examples/**
-      - scripts/build-probes.sh
+      - tests/**
+      - scripts/*.sh
+      - scripts/*.py
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: piper-appimage-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  build:
+  environment:
+    name: Prepare reusable build environment
     runs-on: ubuntu-22.04
-    timeout-minutes: 180
-    env:
-      WINE_BASE: 2528aff26208257fdbf980666a4f0e66d47563ce
-      WINE_VERSION: '11.21'
+    timeout-minutes: 30
+    outputs:
+      cache-key: ${{ steps.identity.outputs.key }}
+      image-id: ${{ steps.image.outputs.id }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
-      - name: Install signed distribution build dependencies
+      - name: Identify dependency environment
+        id: identity
+        run: echo "key=wine-env-v1-${RUNNER_OS}-${RUNNER_ARCH}-${{ hashFiles('scripts/ci/Dockerfile') }}" >> "$GITHUB_OUTPUT"
+      - name: Restore prepared dependency environment
+        id: environment-cache
+        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684
+        with:
+          path: .ci-environment/image.tar
+          key: ${{ steps.identity.outputs.key }}
+      - name: Install dependencies into reusable image
+        if: steps.environment-cache.outputs.cache-hit != 'true'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential bison flex pkg-config gcc-mingw-w64-x86-64 \
-            g++-mingw-w64-x86-64 libasound2-dev libpulse-dev libdbus-1-dev \
-            libfontconfig1-dev libfreetype-dev libgnutls28-dev libunwind-dev \
-            libx11-dev libxcomposite-dev libxcursor-dev libxext-dev libxi-dev \
-            libxinerama-dev libxrandr-dev libxrender-dev libxfixes-dev \
-            libgl-dev libosmesa6-dev libvulkan-dev libudev-dev \
-            libusb-1.0-0-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
-            libpng-dev libjpeg-dev libtiff-dev libxml2-dev libxslt1-dev \
-            libpcap-dev liblcms2-dev libzstd-dev zlib1g-dev \
-            squashfs-tools xz-utils curl git python3 xvfb xauth
-      - name: Build patched Wine and test package
-        timeout-minutes: 165
-        run: bash scripts/ci/build-appimage.sh
+          docker build --progress=plain -t opensapi-ci:build -f scripts/ci/Dockerfile scripts/ci
+          mkdir -p .ci-environment
+          docker save opensapi-ci:build -o .ci-environment/image.tar
+      - name: Save dependency environment
+        if: steps.environment-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684
+        with:
+          path: .ci-environment/image.tar
+          key: ${{ steps.identity.outputs.key }}
+      - name: Verify prepared toolchain identity
+        id: image
+        run: |
+          docker load -i .ci-environment/image.tar
+          echo "id=$(docker image inspect --format '{{.Id}}' opensapi-ci:build)" >> "$GITHUB_OUTPUT"
+          docker run --rm opensapi-ci:build sh -c 'gcc --version; x86_64-w64-mingw32-gcc --version; bison --version; python3 --version'
+
+  build:
+    name: Build and validate AppImage
+    needs: environment
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+    permissions:
+      contents: write
+    env:
+      WINE_BASE: 2528aff26208257fdbf980666a4f0e66d47563ce
+      WINE_VERSION: '11.21'
+      CI_IMAGE_ID: ${{ needs.environment.outputs.image-id }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Restore dependency environment
+        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684
+        with:
+          path: .ci-environment/image.tar
+          key: ${{ needs.environment.outputs.cache-key }}
+          fail-on-cache-miss: true
+      - name: Load and verify dependency environment
+        run: |
+          docker load -i .ci-environment/image.tar
+          test "$(docker image inspect --format '{{.Id}}' opensapi-ci:build)" = "$CI_IMAGE_ID"
+          rm .ci-environment/image.tar
+      - name: Identify compatible Wine build checkpoint
+        id: build-key
+        env:
+          INPUT_HASH: ${{ hashFiles('patches/wine-piper.patch', 'scripts/ci/build-appimage.sh') }}
+        run: echo "key=wine-build-v1-${RUNNER_OS}-${RUNNER_ARCH}-${CI_IMAGE_ID#sha256:}-${WINE_BASE}-${INPUT_HASH}" >> "$GITHUB_OUTPUT"
+      - name: Restore compiled Wine checkpoint
+        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684
+        with:
+          path: |
+            wine-src
+            wine-build
+          key: ${{ steps.build-key.outputs.key }}
+      - name: Prepare exact Wine source and apply patch
+        timeout-minutes: 10
+        run: bash scripts/ci/run-stage.sh source
+      - name: Configure Wine without unrelated regression executables
+        timeout-minutes: 12
+        run: bash scripts/ci/run-stage.sh configure
+      - name: Compile Wine
+        timeout-minutes: 125
+        run: bash scripts/ci/run-stage.sh compile
+      - name: Save compiled Wine before testing or packaging
+        uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684
+        with:
+          path: |
+            wine-src
+            wine-build
+          key: ${{ steps.build-key.outputs.key }}
+      - name: Install Wine into AppDir
+        timeout-minutes: 12
+        run: bash scripts/ci/run-stage.sh install
+      - name: Build OpenSAPI diagnostic probes
+        timeout-minutes: 6
+        run: bash scripts/ci/run-stage.sh probes
+      - name: Run all 13 build-tree integration tests
+        timeout-minutes: 15
+        run: bash scripts/ci/run-stage.sh build-tests
+      - name: Assemble AppDir and test instructions
+        timeout-minutes: 5
+        run: bash scripts/ci/run-stage.sh assemble
+      - name: Create checksum-verified AppImage
+        timeout-minutes: 10
+        run: bash scripts/ci/run-stage.sh appimage
+      - name: Run all 13 packaged integration tests and AppImage checks
+        timeout-minutes: 16
+        run: bash scripts/ci/run-stage.sh package-tests
+      - name: Archive matching source and compute release checksums
+        timeout-minutes: 15
+        run: |
+          bash scripts/ci/run-stage.sh archives
+          cat AppDir/usr/share/opensapi/BUILD-INFO.txt build/integration.log build/packaged-integration.log >> "$GITHUB_STEP_SUMMARY"
       - name: Upload build and test logs
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -55,7 +146,7 @@ jobs:
             build/*.log
             wine-build/config.log
           if-no-files-found: ignore
-      - name: Upload test build
+      - name: Upload tested package
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: wine-piper-appimage-${{ github.run_id }}
