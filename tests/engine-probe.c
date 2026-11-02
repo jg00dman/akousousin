@@ -14,7 +14,7 @@ static HANDLE output;
 static ULONG total;
 static LONG rate;
 static USHORT volume;
-static BOOL partial, abort_output, fail_write;
+static BOOL partial, abort_output, fail_write, no_count, zero_write;
 
 static HRESULT WINAPI site_qi(ISpTTSEngineSite *iface, REFIID iid, void **out)
 {
@@ -32,8 +32,11 @@ static HRESULT WINAPI site_write(ISpTTSEngineSite *iface, const void *data, ULON
 {
     DWORD count = partial ? min(size, 14) : size;
     if (fail_write) return STG_E_WRITEFAULT;
+    if (zero_write) { *written = 0; return S_OK; }
     if (!WriteFile(output, data, count, &count, NULL)) return E_FAIL;
-    *written = count;
+    /* Match System.Speech's EngineSiteSapi.Write, which accepts data without
+     * storing the count through pcbWritten. */
+    if (!no_count) *written = count;
     total += count;
     return S_OK;
 }
@@ -62,6 +65,8 @@ int wmain(int argc, WCHAR **argv)
     partial = !wcscmp(argv[5], L"partial");
     abort_output = !wcscmp(argv[5], L"abort");
     fail_write = !wcscmp(argv[5], L"fail-write");
+    no_count = !wcscmp(argv[5], L"no-count");
+    zero_write = !wcscmp(argv[5], L"zero-write");
     output = CreateFileW(argv[1], GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
     if (output == INVALID_HANDLE_VALUE) return 2;
     CoInitializeEx(NULL, COINIT_MULTITHREADED);

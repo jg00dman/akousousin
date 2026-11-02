@@ -6,7 +6,8 @@ Pinned branch tip: `9a962f8799c79149af0be85d8d8f7b92951c1cc5`
 Upstream Wine 11.21 base: `2528aff26208257fdbf980666a4f0e66d47563ce`
 
 The complete branch tip is fetched, then `patches/wine-piper.patch` and
-`patches/wine-sapi-enum-values.patch` are applied.
+`patches/wine-sapi-enum-values.patch`, and `patches/wine-piper-site-write.patch`
+are applied.
 All 15 branch commits are included; no selection or cherry-picking is performed.
 The branch changes no SAPI files, and the Piper patch applies cleanly on this tip.
 A later branch update requires explicitly changing the pinned source commit.
@@ -14,7 +15,7 @@ A later branch update requires explicitly changing the pinned source commit.
 `wine-logos-11.21.patch` is the complete upstream-base-to-branch-tip diff, retained
 as a recovery asset; CI fetches the branch tip directly and does not apply that
 Logos diff again. To reconstruct from clean upstream source, apply the Logos diff
-first, then the Piper patch, then the SAPI enumeration patch. The release source
+first, then the Piper patch, then the SAPI enumeration and PCM write compatibility patches. The release source
 archive already contains all changes. The enumeration patch implements registry
 value-name enumeration used by .NET System.Speech; it is not proof that the
 Logos speech failure has been resolved.
@@ -42,3 +43,10 @@ e1ab975996fc764848a97a92629c1dcfabcf20e6 xpsprint: Don't export StartXpsPrintJob
 The CI audio tests do not launch Logos or validate these changes inside Logos.
 Native .NET, Logos, Piper and voice models are not included. Normal AppRun program
 launches preserve the user's Wine DLL overrides, including native mscoree.
+
+The PCM write patch initializes the accepted-byte count to the requested size
+before each site callback. System.Speech's EngineSiteSapi.Write does not store
+through that pointer. Partial writes, explicit zero progress, failed writes and
+cancellation remain checked; CI exercises the missing-count case with full PCM
+comparison. The helper also sets HKCU DefaultTokenId for .NET alongside Wine's
+HKLM DefaultDefaultTokenId when --make-default is requested.

@@ -1,0 +1,14 @@
+diff --git a/dlls/sapi/piper.c b/dlls/sapi/piper.c
+--- a/dlls/sapi/piper.c
++++ b/dlls/sapi/piper.c
+@@ -245,6 +245,10 @@
+         for (offset = 0; offset < count; offset += written)
+         {
+             if (ISpTTSEngineSite_GetActions(site) & SPVES_ABORT) return S_FALSE;
++            /* System.Speech accepts the buffer but leaves pcbWritten untouched.
++             * Default to full acceptance; compliant hosts can still report partial
++             * writes or zero progress, which are handled below. */
++            written = count - offset;
+             if (FAILED(hr = ISpTTSEngineSite_Write(site, (BYTE *)samples + offset, count - offset, &written)))
+                 return hr;
+             if (!written || written > count - offset || (written & 1)) return STG_E_WRITEFAULT;

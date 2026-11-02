@@ -114,6 +114,9 @@ class IntegrationTests(unittest.TestCase):
         output = self.run_probe(direct=True, volume=50, mode="partial")
         expected = struct.pack("<" + "h" * len(SAMPLES), *(s // 2 for s in SAMPLES))
         self.assertEqual(output.read_bytes(), expected)
+        # .NET accepts full buffers but does not update the output byte count.
+        output = self.run_probe(direct=True, mode="no-count")
+        self.assertEqual(output.read_bytes(), PCM)
 
     def test_silent_volume(self):
         output = self.run_probe(direct=True, volume=0)
@@ -125,6 +128,9 @@ class IntegrationTests(unittest.TestCase):
 
     def test_sink_failure(self):
         output = self.run_probe(direct=True, mode="fail-write", fail=True)
+        self.assertEqual(output.stat().st_size, 0)
+        # An explicit zero-progress report must still fail, not loop forever.
+        output = self.run_probe(direct=True, mode="zero-write", fail=True)
         self.assertEqual(output.stat().st_size, 0)
 
     def test_reject_http_and_malformed_audio(self):

@@ -45,11 +45,34 @@ run_stage() {
     echo '::endgroup::'
 }
 
+
+# Validate the original Piper patch beneath the additive write fix without
+# touching source timestamps or the real Git index of a cached build.
+verify_piper_patch() {
+    local patch_check_dir
+    if git -C wine-src apply --reverse --check "$project_dir/patches/wine-piper-site-write.patch" 2>/dev/null; then
+        patch_check_dir=$(mktemp -d)
+        if ! (
+            export GIT_INDEX_FILE="$patch_check_dir/index"
+            git -C wine-src read-tree HEAD
+            git -C wine-src add --all -- dlls/sapi
+            git -C wine-src apply --cached --reverse "$project_dir/patches/wine-piper-site-write.patch"
+            git -C wine-src apply --cached --reverse --check "$project_dir/patches/wine-piper.patch"
+        ); then
+            rm -rf -- "$patch_check_dir"
+            return 1
+        fi
+        rm -rf -- "$patch_check_dir"
+    else
+        git -C wine-src apply --reverse --check "$project_dir/patches/wine-piper.patch"
+    fi
+}
+
 case "${1:-}" in
     source)
 if [ -d wine-src/.git ]; then
     cached_base=$(git -C wine-src rev-parse HEAD)
-    git -C wine-src apply --reverse --check "$project_dir/patches/wine-piper.patch"
+    verify_piper_patch
     if [ "$cached_base" != "$wine_base" ]; then
         # This one inspected transition retains identical configure inputs and
         # SAPI source. Cache lookup also requires the same toolchain and recipe.
@@ -63,7 +86,7 @@ if [ -d wine-src/.git ]; then
         # Piper edits. Preserve object files so make follows the changed dependencies.
         git -C wine-src checkout --detach FETCH_HEAD
         test "$(git -C wine-src rev-parse HEAD)" = "$wine_base"
-        git -C wine-src apply --reverse --check "$project_dir/patches/wine-piper.patch"
+        verify_piper_patch
         echo 'Advanced cached upstream/Piper source to the complete Logos tip; using incremental make'
     else
         echo 'Reusing matching patched Wine source'
@@ -82,6 +105,12 @@ if git -C wine-src apply --reverse --check "$project_dir/patches/wine-sapi-enum-
 else
     git -C wine-src apply --check "$project_dir/patches/wine-sapi-enum-values.patch"
     git -C wine-src apply "$project_dir/patches/wine-sapi-enum-values.patch"
+fi
+if git -C wine-src apply --reverse --check "$project_dir/patches/wine-piper-site-write.patch" 2>/dev/null; then
+    echo 'Reusing System.Speech PCM write compatibility fix'
+else
+    git -C wine-src apply --check "$project_dir/patches/wine-piper-site-write.patch"
+    git -C wine-src apply "$project_dir/patches/wine-piper-site-write.patch"
 fi
         ;;
     configure)
@@ -140,6 +169,7 @@ Wine source commit: $wine_base
 Wine upstream base before the 15 Logos commits: 2528aff26208257fdbf980666a4f0e66d47563ce
 Piper patch SHA256: $(sha256sum patches/wine-piper.patch | cut -d' ' -f1)
 SAPI enumeration patch SHA256: $(sha256sum patches/wine-sapi-enum-values.patch | cut -d' ' -f1)
+PCM write patch SHA256: $(sha256sum patches/wine-piper-site-write.patch | cut -d' ' -f1)
 OpenSAPI revision: $(git rev-parse HEAD)
 Architecture: x86-64 Windows applications only; no WoW64/32-bit support
 Built on Ubuntu 22.04; requires glibc 2.35 or newer and normal Wine host libraries.
@@ -188,7 +218,7 @@ run_stage packaged-enum-values 2m xvfb-run -a "$project_dir/AppDir/AppRun" "$pro
     archives)
 tar -C AppDir -cJf "dist/wine-opensapi-piper-${wine_version}-x86_64.tar.xz" .
 tar --exclude=.git -cJf "dist/wine-opensapi-piper-${wine_version}-source.tar.xz" wine-src
-cp patches/wine-piper.patch patches/wine-logos-11.21.patch patches/wine-sapi-enum-values.patch dist/
+cp patches/wine-piper.patch patches/wine-logos-11.21.patch patches/wine-sapi-enum-values.patch patches/wine-piper-site-write.patch dist/
 cp scripts/ci/WINE-SOURCE.md dist/WINE-SOURCE.md
 cp scripts/ci/APPIMAGE-TESTING.md dist/APPIMAGE-TESTING.md
 cp scripts/ci/APPIMAGE-TESTING.md build/RELEASE-NOTES.md

@@ -42,6 +42,9 @@ def main():
         content += f'''
 [HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Speech\\Voices]
 "DefaultDefaultTokenId"="{token_id}"
+
+[HKEY_CURRENT_USER\\SOFTWARE\\Microsoft\\Speech\\Voices]
+"DefaultTokenId"="{token_id}"
 '''
     args.output.write_text(content, encoding="utf-16")
 
