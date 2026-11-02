@@ -198,17 +198,7 @@ diff --git a/dlls/sapi/piper.c b/dlls/sapi/piper.c
      free(buffer);
      return hr;
  }
-@@ -246,7 +325,8 @@
-         {
-             if (ISpTTSEngineSite_GetActions(site) & SPVES_ABORT) return S_FALSE;
-             /* System.Speech accepts the buffer but leaves pcbWritten untouched.
--             * Default to full acceptance; hosts may still report partial/zero writes. */
-+             * Default to full acceptance; compliant hosts can still report partial
-+             * writes or zero progress, which are handled below. */
-             written = count - offset;
-             if (FAILED(hr = ISpTTSEngineSite_Write(site, (BYTE *)samples + offset, count - offset, &written)))
-                 return hr;
-@@ -270,6 +350,7 @@
+@@ -271,6 +350,7 @@
      HRESULT hr;
  
      if (!fmtid || !wfx || !site) return E_POINTER;
