@@ -188,7 +188,8 @@ PCM write patch SHA256: $(sha256sum patches/wine-piper-site-write.patch | cut -d
 OpenSAPI revision: $(git rev-parse HEAD)
 Architecture: x86-64 Windows applications only; no WoW64/32-bit support
 Built on Ubuntu 22.04; requires glibc 2.35 or newer and normal Wine host libraries.
-Piper and voice models are NOT bundled. No real neural synthesis has been tested in CI.
+Piper and voice models are NOT bundled in Wine.
+Real neural synthesis is checked separately before publication; see real-packaged-piper.log.
 EOF
 cat > AppDir/opensapi.desktop <<'EOF'
 [Desktop Entry]
@@ -247,6 +248,7 @@ cp scripts/ci/APPIMAGE-TESTING.md dist/APPIMAGE-TESTING.md
 cp scripts/ci/APPIMAGE-TESTING.md build/RELEASE-NOTES.md
 cp "$share/BUILD-INFO.txt" dist/
 cp build/integration.log build/failure-recovery.log build/packaged-failure-recovery.log build/real-packaged-piper.log dist/
+cp build/real-piper/real-piper-sapi.wav dist/real-piper-sapi.wav
 cp build/packaged-integration.log build/enum-values.log build/packaged-enum-values.log dist/
 (
     cd dist
