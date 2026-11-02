@@ -62,7 +62,8 @@ subprocess.run([sys.executable, '-m', 'pip', 'freeze'],
                stdout=(source / 'python-requirements.txt').open('w'), check=True)
 subprocess.run(['pyinstaller', '--noconfirm', '--clean', '--onedir', '--name', 'opensapi-piper',
                 '--distpath', str(OUT / 'frozen'), '--workpath', 'build/backend-freeze',
-                '--specpath', 'build', '--paths', str(ROOT), '--collect-all', 'piper',
+                '--specpath', 'build', '--paths', str(ROOT), '--exclude-module', 'readline',
+                '--collect-all', 'piper',
                 '--collect-all', 'onnxruntime', '--collect-all', 'numpy',
                 str(ROOT / 'entrypoint.py')], check=True)
 # Preserve PSF terms for the embedded interpreter, and Debian/Ubuntu notices
