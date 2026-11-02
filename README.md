@@ -1,18 +1,28 @@
-# OpenSAPI: Piper speech for Wine (experimental)
+# OpenSAPI: Piper speech for Wine (beta)
 
 For a step-by-step test session, start with [TESTING.md](TESTING.md).
 
-For a prebuilt test package, [download the validated AppImage](https://github.com/jg00dman/opensapi/releases/download/piper-test-41372784570-1/wine-opensapi-piper-11.21-logos-x86_64.AppImage)
+For a prebuilt test package, [download the validated AppImage](https://github.com/jg00dman/opensapi/releases/download/piper-test-41381467483-1/wine-opensapi-piper-11.21-logos-x86_64.AppImage)
 and follow [AppImage testing](scripts/ci/APPIMAGE-TESTING.md).
-[The experimental release](https://github.com/jg00dman/opensapi/releases/tag/piper-test-41372784570-1) includes checksums, matching patched Wine
-source, both patches, provenance, and logs for both passing 13-test integration
-runs. It includes all 15 commits from the pinned Logos branch; Logos desktop
-startup and Read Aloud still need testing with your existing prefix.
+[The experimental release](https://github.com/jg00dman/opensapi/releases/tag/piper-test-41381467483-1) includes checksums, matching patched Wine
+source, patches, provenance, and logs for both passing 13-test integration
+runs. It includes all 15 commits from the pinned Logos branch. Desktop testing
+confirmed Read Aloud, speed controls and jumping back in an existing Logos/.NET
+prefix on Kubuntu 26.04. This is not a general compatibility guarantee.
 The [GitHub workflow](https://github.com/jg00dman/opensapi/actions/workflows/appimage.yml)
 builds Wine, checks the packaged runtime, and publishes a unique experimental
 prerelease after successful checks. Downloads appear under
 [Releases](https://github.com/jg00dman/opensapi/releases). A running workflow is
 not yet a successful or tested AppImage release.
+
+A separately packaged [Piper backend and bundled LJSpeech voice](https://github.com/jg00dman/opensapi/releases/tag/piper-backend-41388556427-1)
+now includes its Python runtime and a Waitress service; no local compiler or pip
+installation is needed. Its corresponding sources, licence notices and pinned
+voice provenance are included. See [backend instructions](backend/README.md).
+The [OuDedetai integration candidate](https://github.com/jg00dman/OuDedetai/pull/1)
+adds opt-in installation and start/stop controls. The new bounded/cancellable Wine
+transport is a separate candidate: see [deployment validation](DEPLOYMENT.md)
+for automated results and remaining desktop failure checks.
 
 This prototype adds an opt-in SAPI TTS engine to Wine. Windows applications keep
 using `ISpVoice` or `ISpeechVoice`; the engine calls a separately running Piper
@@ -34,15 +44,17 @@ CI uses the full `FaithLife-Community/wine` `logos-11.21` branch pinned at
 The Piper patch also applies to clean upstream Wine 11.21 at
 `2528aff26208257fdbf980666a4f0e66d47563ce`. To reconstruct the combined build from
 that upstream revision, apply `patches/wine-logos-11.21.patch` first. On a clean
-copy of the pinned Logos branch, apply only the Piper patch:
+copy of the pinned Logos branch, apply the complete patch stack in this order:
 
 ```sh
-git -C /path/to/wine apply /path/to/opensapi/patches/wine-piper.patch
+for patch in wine-piper.patch wine-sapi-enum-values.patch wine-piper-site-write.patch wine-piper-lifecycle.patch; do
+    git -C /path/to/wine apply "/path/to/opensapi/patches/$patch"
+done
 ```
 
 Configure and build Wine using its normal prerequisites and platform options.
 No Piper headers or libraries are required to build Wine. The new engine uses
-Wine's WinHTTP implementation as a delayed import. A normal desktop build should
+nonblocking loopback Winsock calls as a delayed import in the deployment candidate. A normal desktop build should
 include an audio driver; a headless build can still synthesize to WAV files.
 
 For an already configured Wine build, rebuild the DLL with:
@@ -56,8 +68,9 @@ be copied into an unrelated older Wine build.
 
 ## Start Piper
 
-Use a Python virtual environment and an explicitly chosen development voice.
-The example below is a candidate for license review, not cleared for bundling:
+Prefer the prebuilt backend above. For a manual development setup, the following
+commands use upstream Piper. The bundled voice selection and its licence basis
+are documented separately in backend/README.md:
 
 ```sh
 python3 -m venv /path/to/piper-venv
@@ -74,8 +87,8 @@ prints a production-deployment warning. These commands are for a loopback-only
 experimental desktop test. A production background service should use a WSGI
 server such as [Waitress](https://flask.palletsprojects.com/en/stable/deploying/waitress/)
 with a compatible launcher; Piper 1.8.0 constructs its app inside `main()` and
-exports no ready-made `app`/factory target. This project does not yet ship or
-validate that production-server adapter. No Wine rebuild is needed to change the
+exports no ready-made `app`/factory target. The separate backend package now provides and tests a Waitress service with
+bounded synthesis and worker recovery. No Wine rebuild is needed to change the
 external HTTP runner while retaining the same `/synthesize` JSON-to-WAV API.
 
 Keep the server bound to loopback. Test it independently:

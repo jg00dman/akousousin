@@ -7,7 +7,7 @@ unchanged. This deployment candidate adds failure handling and a separate servic
 ## Separate Piper service and voice
 
 The first standalone package is available at
-https://github.com/jg00dman/opensapi/releases/tag/piper-backend-41387876573-1
+https://github.com/jg00dman/opensapi/releases/tag/piper-backend-41388556427-1
 
 GitHub Actions built a Linux x86-64 application with embedded Python, Piper 1.8.0,
 Waitress 3.0.2, and en_US-ljspeech-medium. Its frozen executable produced valid,
@@ -61,7 +61,7 @@ Piper is optional and disabled by default. Startup failure does not prevent Logo
 launch. PID creation time and instance token prevent stopping unrelated servers;
 Logos launcher exit does not prematurely stop speech. See its PIPER.md.
 
-Eighteen focused OuDedetai tests pass. GitHub Actions passed all 95 tests (16
+Nineteen focused OuDedetai tests pass. GitHub Actions passed all 96 tests (16
 existing skips) and built both x86-64 and ARM launcher binaries. Actual packaged
 backend start/reuse/ownership-safe stop/restart checks passed locally. The local
 full suite has one pre-existing backup filesystem-size assertion failure, also
@@ -70,8 +70,16 @@ no claim of a clean full type check is made.
 
 ## Remaining release gates
 
-Rebuild with complete notices, confirm both Wine test runs and failure suites,
-build the companion OuDedetai executable, and desktop-test absent/stopped/restarted
+Confirm both Wine test runs and failure suites, publish the tested companion
+OuDedetai executable, and desktop-test absent/stopped/restarted
 Piper and stale registration inside Logos. Automated error returns do not prove
 that Logos handles every failure gracefully. Do not replace Beta 1 or mark this
 candidate generally deployable until those checks are complete.
+
+The final headless backend archives have been independently checksum-verified;
+Python and system-library notices and pinned voice provenance are present, with
+unused readline excluded. Real packaged-binary synthesis passed at three speeds.
+Missing-model startup and recovery after killing active neural inference were
+also checked: the interrupted request returned HTTP 503, and the next produced
+real speech. OuDedetai AppImage dispatch now supports wineserver symlinks, with
+an actual extraction-mode wineserver dispatch check in the Wine packaging stage.
