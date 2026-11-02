@@ -97,6 +97,10 @@ rendering, video, printing or Read Aloud. Test those on your Kubuntu desktop.
 
 ## What the build verifies
 
+CI additionally runs a registry-value enumeration probe against each runtime,
+covering .NET-style voice attributes and enumeration edge cases. Logos desktop
+behavior remains a separate test.
+
 CI runs the 13 deterministic integration tests against both the build-tree Wine
 and the packaged Wine runtime, plus an AppImage extraction/version/registration
 check. CI disables compilation of Wine's unrelated regression test executables;

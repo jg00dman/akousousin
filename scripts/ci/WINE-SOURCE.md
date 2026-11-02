@@ -5,7 +5,8 @@ Branch inspected: `logos-11.21`
 Pinned branch tip: `9a962f8799c79149af0be85d8d8f7b92951c1cc5`
 Upstream Wine 11.21 base: `2528aff26208257fdbf980666a4f0e66d47563ce`
 
-The complete branch tip is fetched, then `patches/wine-piper.patch` is applied.
+The complete branch tip is fetched, then `patches/wine-piper.patch` and
+`patches/wine-sapi-enum-values.patch` are applied.
 All 15 branch commits are included; no selection or cherry-picking is performed.
 The branch changes no SAPI files, and the Piper patch applies cleanly on this tip.
 A later branch update requires explicitly changing the pinned source commit.
@@ -13,7 +14,10 @@ A later branch update requires explicitly changing the pinned source commit.
 `wine-logos-11.21.patch` is the complete upstream-base-to-branch-tip diff, retained
 as a recovery asset; CI fetches the branch tip directly and does not apply that
 Logos diff again. To reconstruct from clean upstream source, apply the Logos diff
-first, then the Piper patch. The release source archive already contains both.
+first, then the Piper patch, then the SAPI enumeration patch. The release source
+archive already contains all changes. The enumeration patch implements registry
+value-name enumeration used by .NET System.Speech; it is not proof that the
+Logos speech failure has been resolved.
 
 ## Included Logos branch commits
 

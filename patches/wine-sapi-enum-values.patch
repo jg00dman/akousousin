@@ -1,0 +1,41 @@
+diff --git a/dlls/sapi/token.c b/dlls/sapi/token.c
+--- a/dlls/sapi/token.c
++++ b/dlls/sapi/token.c
+@@ -285,8 +285,35 @@
+ static HRESULT WINAPI data_key_EnumValues( ISpRegDataKey *iface,
+                                            ULONG index, LPWSTR *value )
+ {
+-    FIXME( "stub\n" );
+-    return E_NOTIMPL;
++    struct data_key *This = impl_from_ISpRegDataKey( iface );
++    DWORD capacity = 256, length, ret;
++    WCHAR *name;
++
++    TRACE( "%p, %lu, %p\n", This, index, value );
++
++    if (!value) return E_POINTER;
++    *value = NULL;
++    if (!This->key) return E_HANDLE;
++
++    for (;;)
++    {
++        if (!(name = CoTaskMemAlloc( (SIZE_T)capacity * sizeof(*name) )))
++            return E_OUTOFMEMORY;
++        length = capacity;
++        ret = RegEnumValueW( This->key, index, name, &length, NULL, NULL, NULL, NULL );
++        if (!ret)
++        {
++            *value = name;
++            return S_OK;
++        }
++        CoTaskMemFree( name );
++        if (ret != ERROR_MORE_DATA) break;
++        if (capacity > MAXDWORD / 2) return E_OUTOFMEMORY;
++        capacity *= 2;
++    }
++
++    if (ret == ERROR_NO_MORE_ITEMS) return SPERR_NO_MORE_ITEMS;
++    return HRESULT_FROM_WIN32(ret);
+ }
+ 
+ static HRESULT WINAPI data_key_SetKey( ISpRegDataKey *iface,

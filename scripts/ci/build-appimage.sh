@@ -77,6 +77,12 @@ test "$(git -C wine-src rev-parse HEAD)" = "$wine_base"
 git -C wine-src apply --check "$project_dir/patches/wine-piper.patch"
 git -C wine-src apply "$project_dir/patches/wine-piper.patch"
 fi
+if git -C wine-src apply --reverse --check "$project_dir/patches/wine-sapi-enum-values.patch" 2>/dev/null; then
+    echo 'Reusing SAPI value enumeration implementation'
+else
+    git -C wine-src apply --check "$project_dir/patches/wine-sapi-enum-values.patch"
+    git -C wine-src apply "$project_dir/patches/wine-sapi-enum-values.patch"
+fi
         ;;
     configure)
 mkdir -p wine-build
@@ -112,6 +118,7 @@ run_stage build-tree-init 3m xvfb-run -a "$WINE" wineboot.exe -u
 run_stage integration 10m xvfb-run -a bash scripts/test-wine.sh
 grep -q '^Ran 13 tests in ' build/integration.log
 grep -qx 'OK' build/integration.log
+run_stage enum-values 2m xvfb-run -a "$WINE" "$project_dir/build/token-enum-probe.exe"
         ;;
     assemble)
 share="$project_dir/AppDir/usr/share/opensapi"
@@ -132,6 +139,7 @@ Wine source repository: $wine_repository
 Wine source commit: $wine_base
 Wine upstream base before the 15 Logos commits: 2528aff26208257fdbf980666a4f0e66d47563ce
 Piper patch SHA256: $(sha256sum patches/wine-piper.patch | cut -d' ' -f1)
+SAPI enumeration patch SHA256: $(sha256sum patches/wine-sapi-enum-values.patch | cut -d' ' -f1)
 OpenSAPI revision: $(git rev-parse HEAD)
 Architecture: x86-64 Windows applications only; no WoW64/32-bit support
 Built on Ubuntu 22.04; requires glibc 2.35 or newer and normal Wine host libraries.
@@ -175,17 +183,18 @@ run_stage packaged-integration 10m env WINE="$project_dir/AppDir/AppRun" \
     xvfb-run -a python3 tests/test_integration.py
 grep -q '^Ran 13 tests in ' build/packaged-integration.log
 grep -qx 'OK' build/packaged-integration.log
+run_stage packaged-enum-values 2m xvfb-run -a "$project_dir/AppDir/AppRun" "$project_dir/build/token-enum-probe.exe"
         ;;
     archives)
 tar -C AppDir -cJf "dist/wine-opensapi-piper-${wine_version}-x86_64.tar.xz" .
 tar --exclude=.git -cJf "dist/wine-opensapi-piper-${wine_version}-source.tar.xz" wine-src
-cp patches/wine-piper.patch patches/wine-logos-11.21.patch dist/
+cp patches/wine-piper.patch patches/wine-logos-11.21.patch patches/wine-sapi-enum-values.patch dist/
 cp scripts/ci/WINE-SOURCE.md dist/WINE-SOURCE.md
 cp scripts/ci/APPIMAGE-TESTING.md dist/APPIMAGE-TESTING.md
 cp scripts/ci/APPIMAGE-TESTING.md build/RELEASE-NOTES.md
 cp "$share/BUILD-INFO.txt" dist/
 cp build/integration.log dist/
-cp build/packaged-integration.log dist/
+cp build/packaged-integration.log build/enum-values.log build/packaged-enum-values.log dist/
 (
     cd dist
     sha256sum ./* > SHA256SUMS
