@@ -6,6 +6,12 @@ export WINESERVER="$app_dir/usr/bin/wineserver"
 export WINEPREFIX="${WINEPREFIX:-$HOME/.wine-opensapi-piper-test}"
 export WINEDEBUG="${WINEDEBUG:--all}"
 share="$app_dir/usr/share/opensapi"
+# OuDedetai invokes the same AppImage through wine/wine64/wineserver symlinks.
+# The type-2 runtime preserves the original invocation name in ARGV0.
+invocation=${ARGV0:-$0}
+case "${invocation##*/}" in
+    wineserver) exec "$app_dir/usr/bin/wineserver" "$@" ;;
+esac
 case "${1:-}" in
     --opensapi-register)
         [ "$#" -eq 2 ] || { echo 'Usage: AppImage --opensapi-register /absolute/path/voice.onnx.json' >&2; exit 2; }

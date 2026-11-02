@@ -232,6 +232,9 @@ grep -qx 'OK' build/packaged-integration.log
 touch "$WINEPREFIX/.opensapi-test-prefix"
 run_stage packaged-failure-recovery 5m env WINE="$project_dir/AppDir/AppRun" xvfb-run -a python3 tests/test_failures.py
 run_stage packaged-enum-values 2m xvfb-run -a "$project_dir/AppDir/AppRun" "$project_dir/build/token-enum-probe.exe"
+mkdir -p build/appimage-bin
+ln -sf "$project_dir/dist/$image" build/appimage-bin/wineserver
+run_stage appimage-wineserver-dispatch 1m env APPIMAGE_EXTRACT_AND_RUN=1 "$project_dir/build/appimage-bin/wineserver" -k
         ;;
     archives)
 tar -C AppDir -cJf "dist/wine-opensapi-piper-${wine_version}-x86_64.tar.xz" .
