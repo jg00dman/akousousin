@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Fetch immutable voice and corresponding GPL sources; package outside Wine."""
+import ast
 import hashlib
+import platform
 import importlib.metadata
 import json
 from pathlib import Path
@@ -56,12 +58,35 @@ fetch('https://github.com/OHF-Voice/piper1-gpl/archive/refs/tags/v1.8.0.tar.gz',
 fetch('https://github.com/espeak-ng/espeak-ng/archive/724808c.tar.gz', source / 'espeak-ng-724808c.tar.gz')
 shutil.copytree(ROOT, source / 'opensapi-backend', dirs_exist_ok=True,
                 ignore=shutil.ignore_patterns('__pycache__', '*.egg-info', 'build'))
-subprocess.run([sys.executable, '-m', 'pip', 'freeze'], stdout=(source / 'python-requirements.txt').open('w'), check=True)
+subprocess.run([sys.executable, '-m', 'pip', 'freeze'],
+               stdout=(source / 'python-requirements.txt').open('w'), check=True)
 subprocess.run(['pyinstaller', '--noconfirm', '--clean', '--onedir', '--name', 'opensapi-piper',
                 '--distpath', str(OUT / 'frozen'), '--workpath', 'build/backend-freeze',
                 '--specpath', 'build', '--paths', str(ROOT), '--collect-all', 'piper',
                 '--collect-all', 'onnxruntime', '--collect-all', 'numpy',
                 str(ROOT / 'entrypoint.py')], check=True)
+# Preserve PSF terms for the embedded interpreter, and Debian/Ubuntu notices
+# for system libraries collected by PyInstaller (OpenSSL, libffi, liblzma, etc.).
+fetch(f'https://raw.githubusercontent.com/python/cpython/v{platform.python_version()}/LICENSE',
+      notices / 'Python-LICENSE.txt')
+analysis = ast.literal_eval(Path('build/backend-freeze/opensapi-piper/Analysis-00.toc').read_text())
+def system_notices(value):
+    if isinstance(value, (tuple, list)):
+        if len(value) == 3 and isinstance(value[1], str) and value[1].startswith(('/usr/lib/', '/lib/')):
+            path = value[1]
+            result = subprocess.run(['dpkg-query', '-S', path], capture_output=True, text=True)
+            if result.returncode and path.startswith('/lib/'):
+                result = subprocess.run(['dpkg-query', '-S', '/usr' + path], capture_output=True, text=True)
+            for line in result.stdout.splitlines():
+                package = line.split(': ')[0]
+                copyright = Path('/usr/share/doc') / package.split(':')[0] / 'copyright'
+                if copyright.is_file():
+                    target = notices / 'system' / package / 'copyright'
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy(copyright, target)
+        for item in value:
+            system_notices(item)
+system_notices(analysis)
 for path in (OUT / 'frozen/opensapi-piper').iterdir():
     target = BUNDLE / path.name
     if path.is_dir():

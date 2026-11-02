@@ -107,6 +107,9 @@ class Synthesizer:
             return audio
         except BlockingIOError:
             raise
+        except (ValueError, wave.Error) as error:
+            self.close()
+            raise RuntimeError("Invalid synthesized audio") from error
         except BaseException:
             self.close()
             raise

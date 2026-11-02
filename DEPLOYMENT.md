@@ -1,0 +1,76 @@
+# Deployment candidate status
+
+The previously released Beta 1 (a128f2f) was desktop-tested in Logos on Kubuntu
+26.04: Read Aloud, speed controls and jumping back worked. It remains available
+unchanged. This deployment candidate adds failure handling and a separate service.
+
+## Separate Piper service and voice
+
+The first standalone package is available at
+https://github.com/jg00dman/opensapi/releases/tag/piper-backend-41386724441-1
+
+GitHub Actions built a Linux x86-64 application with embedded Python, Piper 1.8.0,
+Waitress 3.0.2, and en_US-ljspeech-medium. Its frozen executable produced valid,
+non-empty 22050 Hz mono 16-bit WAVs at length_scale 1.0, 0.5 and 2.0. Six fake-worker
+unit tests passed, including worker death, timeout and recovery. Both downloaded
+archives were independently checked against SHA256SUMS. This is real neural
+synthesis verification, not a listening test or a Logos test.
+
+Voice provenance: rhasspy/piper-voices revision
+b4e358ffcb232591bf73a540e70f7de528e4174a declares MIT; the per-model card specifies
+public-domain LJ Speech data and training from scratch. The package retains both
+upstream declarations. Models with additional restrictions were not selected.
+Piper and the wrapper are distributed separately under GPL-3.0-or-later, with
+Piper/eSpeak sources and wheel licence notices. A follow-up packaging change adds
+explicit embedded-Python and collected system-library copyright notices; rebuild
+and verify that update before treating the package as distribution-ready.
+
+## Wine failure handling
+
+Patch order: the pinned Logos branch, wine-piper.patch,
+wine-sapi-enum-values.patch, wine-piper-site-write.patch, then
+wine-piper-lifecycle.patch. Nonblocking Winsock transport checks abort every
+50 ms; connection and send deadlines are 3 and 5 seconds, and each complete
+request has a 65-second deadline, including trickling peers. It connects only to
+127.0.0.1; it requires bounded Content-Length responses and rejects redirects,
+transfer encoding, malformed WAV, unsupported format and incomplete bodies.
+
+Uninitialized engines return SPERR_UNINITIALIZED. Removing the Piper voice
+makes OpenSAPI-filtered enumeration return zero; a stale default is tested to
+return SPERR_NOT_FOUND from speech. Wine's unrelated empty 'Wine Default Voice'
+placeholder is not removed, and other vendors' installed voices are preserved.
+
+All original 13 integration tests remain unchanged in scope and still run against
+both build-tree and packaged Wine. A separate seven-test suite adds absent
+backend, no registration/stale default, cancellation before headers/during body,
+dropped response, same-engine retry after HTTP failure, uninitialized engine,
+and a total timeout test. Results for the latest socket-transport candidate must
+be confirmed in Actions; these tests have not been claimed as passing locally.
+
+The earlier async candidate is superseded: Wine's WinHTTP request-handle closure
+does not interrupt pending reads. CI supports migrating that exact known source
+checkpoint without compiling Wine from scratch. Local patch application and
+repeat-source/cache verification pass without local Wine compilation.
+
+## OuDedetai integration
+
+The companion change is on jg00dman/OuDedetai branch codex/piper-lifecycle.
+Install/Configure/Start/Stop/Disable actions are available through GUI, TUI and
+CLI. Installation downloads a checksum-pinned standalone package and registers
+its voice only in the configured Logos prefix. It preserves native .NET overrides.
+Piper is optional and disabled by default. Startup failure does not prevent Logos
+launch. PID creation time and instance token prevent stopping unrelated servers;
+Logos launcher exit does not prematurely stop speech. See its PIPER.md.
+
+Eighteen focused OuDedetai tests pass. Full suite: 95 tests, 16 skipped, one
+pre-existing backup filesystem-size assertion fails in this environment and also
+fails on an unchanged baseline. Existing global type-check failures remain;
+no claim of a clean full type check is made.
+
+## Remaining release gates
+
+Rebuild with complete notices, confirm both Wine test runs and failure suites,
+build the companion OuDedetai executable, and desktop-test absent/stopped/restarted
+Piper and stale registration inside Logos. Automated error returns do not prove
+that Logos handles every failure gracefully. Do not replace Beta 1 or mark this
+candidate generally deployable until those checks are complete.
