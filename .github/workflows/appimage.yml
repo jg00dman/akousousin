@@ -170,6 +170,9 @@ jobs:
       - name: Run all 13 packaged integration tests and AppImage checks
         timeout-minutes: 16
         run: bash scripts/ci/run-stage.sh package-tests
+      - name: Verify real speech through packaged Wine and separate Piper backend
+        timeout-minutes: 8
+        run: bash scripts/ci/run-stage.sh real-piper-test
       - name: Archive matching source and compute release checksums
         timeout-minutes: 15
         run: |
@@ -182,6 +185,7 @@ jobs:
           name: piper-appimage-logs-${{ github.run_id }}
           path: |
             build/*.log
+            build/real-piper/backend.log
             wine-build/config.log
           if-no-files-found: ignore
       - name: Upload tested package

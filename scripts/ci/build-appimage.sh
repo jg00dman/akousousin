@@ -235,6 +235,9 @@ mkdir -p build/appimage-bin
 ln -sf "$project_dir/dist/$image" build/appimage-bin/wineserver
 run_stage appimage-wineserver-dispatch 1m env APPIMAGE_EXTRACT_AND_RUN=1 "$project_dir/build/appimage-bin/wineserver" -k
         ;;
+    real-piper-test)
+run_stage real-packaged-piper 7m xvfb-run -a python3 tests/test_packaged_piper.py "$project_dir/dist/$image"
+        ;;
     archives)
 tar -C AppDir -cJf "dist/wine-opensapi-piper-${wine_version}-x86_64.tar.xz" .
 tar --exclude=.git -cJf "dist/wine-opensapi-piper-${wine_version}-source.tar.xz" wine-src
@@ -243,7 +246,7 @@ cp scripts/ci/WINE-SOURCE.md dist/WINE-SOURCE.md
 cp scripts/ci/APPIMAGE-TESTING.md dist/APPIMAGE-TESTING.md
 cp scripts/ci/APPIMAGE-TESTING.md build/RELEASE-NOTES.md
 cp "$share/BUILD-INFO.txt" dist/
-cp build/integration.log build/failure-recovery.log build/packaged-failure-recovery.log dist/
+cp build/integration.log build/failure-recovery.log build/packaged-failure-recovery.log build/real-packaged-piper.log dist/
 cp build/packaged-integration.log build/enum-values.log build/packaged-enum-values.log dist/
 (
     cd dist
