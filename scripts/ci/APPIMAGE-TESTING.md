@@ -111,8 +111,12 @@ and packaging are separate workflow steps. The compiled source/build directories
 are checkpointed immediately after compilation, keyed by the exact Wine base,
 patch, configure recipe and verified toolchain image ID. A later test/packaging failure
 can reuse that checkpoint on rerun, including after changes to the test or
-packaging orchestration. Cache eviction causes a clean rebuild, not a
-skipped test. No Wine prefix or test result is reused.
+packaging orchestration. For the inspected upstream-to-Logos transition, CI can restore the upstream/Piper
+checkpoint only when the toolchain, configure recipe and Piper patch match. It
+verifies ancestry and unchanged configuration/SAPI sources, advances the source
+checkout while keeping Piper edits, and lets make rebuild affected dependencies.
+The resulting Logos checkpoint is then saved under its own exact source key.
+Cache eviction causes a clean rebuild, not a skipped test. No Wine prefix or test result is reused.
 
 Stage output is streamed and retained as log artifacts, compilation uses the
 runner's available CPUs, and initialization and integration runs have explicit

@@ -48,9 +48,26 @@ run_stage() {
 case "${1:-}" in
     source)
 if [ -d wine-src/.git ]; then
-    test "$(git -C wine-src rev-parse HEAD)" = "$wine_base"
+    cached_base=$(git -C wine-src rev-parse HEAD)
     git -C wine-src apply --reverse --check "$project_dir/patches/wine-piper.patch"
-    echo 'Reusing matching patched Wine source'
+    if [ "$cached_base" != "$wine_base" ]; then
+        # This one inspected transition retains identical configure inputs and
+        # SAPI source. Cache lookup also requires the same toolchain and recipe.
+        test "$cached_base" = 2528aff26208257fdbf980666a4f0e66d47563ce
+        test "$wine_base" = 9a962f8799c79149af0be85d8d8f7b92951c1cc5
+        git -C wine-src fetch --depth=64 "$wine_repository" "$wine_base"
+        git -C wine-src merge-base --is-ancestor "$cached_base" FETCH_HEAD
+        git -C wine-src diff --exit-code "$cached_base" FETCH_HEAD -- \
+            configure configure.ac Makefile.in tools dlls/sapi
+        # Checkout updates only changed tracked files and retains the nonoverlapping
+        # Piper edits. Preserve object files so make follows the changed dependencies.
+        git -C wine-src checkout --detach FETCH_HEAD
+        test "$(git -C wine-src rev-parse HEAD)" = "$wine_base"
+        git -C wine-src apply --reverse --check "$project_dir/patches/wine-piper.patch"
+        echo 'Advanced cached upstream/Piper source to the complete Logos tip; using incremental make'
+    else
+        echo 'Reusing matching patched Wine source'
+    fi
 else
 git init wine-src
 git -C wine-src remote add origin "$wine_repository"
