@@ -69,7 +69,7 @@ jobs:
       contents: write
     env:
       WINE_REPOSITORY: https://github.com/FaithLife-Community/wine.git
-      WINE_BASE: 9a962f8799c79149af0be85d8d8f7b92951c1cc5
+      WINE_BASE: 3b19eb0e45ac5f57301073fc9e721cac7829dc93
       WINE_VERSION: '11.21-logos'
       CI_IMAGE_ID: ${{ needs.environment.outputs.image-id }}
     steps:
@@ -114,6 +114,11 @@ jobs:
           if [ "$WINE_BASE" = 9a962f8799c79149af0be85d8d8f7b92951c1cc5 ]; then
             echo "incremental-key=wine-build-v2-${RUNNER_OS}-${RUNNER_ARCH}-${CI_IMAGE_ID#sha256:}-2528aff26208257fdbf980666a4f0e66d47563ce-${INPUT_HASH}" >> "$GITHUB_OUTPUT"
           fi
+          # The inspected two-revert update changes only three WineD3D files.
+          # Match all patches, configure inputs and the verified toolchain.
+          if [ "$WINE_BASE" = 3b19eb0e45ac5f57301073fc9e721cac7829dc93 ]; then
+            echo "logos-revert-key=wine-build-v2-${RUNNER_OS}-${RUNNER_ARCH}-${CI_IMAGE_ID#sha256:}-9a962f8799c79149af0be85d8d8f7b92951c1cc5-${INPUT_HASH}" >> "$GITHUB_OUTPUT"
+          fi
           # One-time migration of the successful 356c76c checkpoint. Its exact
           # source/patch, toolchain and configure flags match this recipe.
           # Never restore it for a different patch or configuration.
@@ -134,6 +139,7 @@ jobs:
             ${{ steps.build-key.outputs.write-base-key }}
             ${{ steps.build-key.outputs.enum-base-key }}
             ${{ steps.build-key.outputs.async-base-key }}
+            ${{ steps.build-key.outputs.logos-revert-key }}
             ${{ steps.build-key.outputs.incremental-key }}
             ${{ steps.build-key.outputs.legacy-key }}
       - name: Prepare exact Wine source and apply patch

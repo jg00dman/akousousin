@@ -2,13 +2,13 @@
 
 Repository: https://github.com/FaithLife-Community/wine
 Branch inspected: `logos-11.21`
-Pinned branch tip: `9a962f8799c79149af0be85d8d8f7b92951c1cc5`
+Pinned branch tip: `3b19eb0e45ac5f57301073fc9e721cac7829dc93`
 Upstream Wine 11.21 base: `2528aff26208257fdbf980666a4f0e66d47563ce`
 
 The complete branch tip is fetched, then `patches/wine-piper.patch` and
-`patches/wine-sapi-enum-values.patch`, and `patches/wine-piper-site-write.patch`
-are applied.
-All 15 branch commits are included; no selection or cherry-picking is performed.
+`patches/wine-sapi-enum-values.patch`, `patches/wine-piper-site-write.patch`
+and `patches/wine-piper-lifecycle.patch` are applied.
+All 17 branch commits are included; no selection or cherry-picking is performed.
 The branch changes no SAPI files, and the Piper patch applies cleanly on this tip.
 A later branch update requires explicitly changing the pinned source commit.
 
@@ -38,6 +38,8 @@ daa1f48b120d09fc594602372dbaf74ea94e7d3e wineps: Name glyphs after their charact
 e1ab975996fc764848a97a92629c1dcfabcf20e6 xpsprint: Don't export StartXpsPrintJob stubs.
 60130c04ef83f62d7134ae872c01713204c7ce20 wineps: Map ligatures and alternate glyphs back to their text through GSUB.
 9a962f8799c79149af0be85d8d8f7b92951c1cc5 wineps: Mark ligature glyphs with their text through ActualText spans.
+f9641663888598dbb69265e1ede182deeb9b27bd Revert "wined3d: Update the context DC from its swapchain if it changed."
+3b19eb0e45ac5f57301073fc9e721cac7829dc93 Revert "wined3d: Create / release the window DCs with the swapchains."
 ```
 
 The CI audio tests do not launch Logos or validate these changes inside Logos.
@@ -50,3 +52,20 @@ through that pointer. Partial writes, explicit zero progress, failed writes and
 cancellation remain checked; CI exercises the missing-count case with full PCM
 comparison. The helper also sets HKCU DefaultTokenId for .NET alongside Wine's
 HKLM DefaultDefaultTokenId when --make-default is requested.
+
+## Regression-revert update
+
+The update from `9a962f8799c79149af0be85d8d8f7b92951c1cc5` to
+`3b19eb0e45ac5f57301073fc9e721cac7829dc93` includes both new revert commits:
+`f9641663888598dbb69265e1ede182deeb9b27bd` and the new tip. They revert
+`92f5d5bc7c8412924e7cb4f6f715ecc9c4e4dd13` and
+`6048ac5dfebd7090672ec1c26e6e15dfd51d5a8d`, respectively. The exact reverted
+commit IDs are also recoverable from the pinned branch history.
+
+Only `dlls/wined3d/context_gl.c`, `dlls/wined3d/swapchain.c` and
+`dlls/wined3d/wined3d_private.h` change. CI permits this exact ancestor transition
+with the same toolchain, patch and configure hashes, verifies the two-commit count
+and changed-file allowlist, then rebuilds affected dependencies. All original
+integration and failure tests, enumeration checks, AppImage dispatch and real
+packaged-Piper synthesis remain enabled. The reverted desktop regression itself
+still requires testing in Logos; speech tests do not establish graphics behavior.

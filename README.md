@@ -43,8 +43,8 @@ have been settled for any particular bundle.
 ## Patch and build
 
 CI uses the full `FaithLife-Community/wine` `logos-11.21` branch pinned at
-`9a962f8799c79149af0be85d8d8f7b92951c1cc5`, then applies the Piper patch. See
-[Wine source provenance](scripts/ci/WINE-SOURCE.md) for all 15 branch commits.
+`3b19eb0e45ac5f57301073fc9e721cac7829dc93`, including both WineD3D regression reverts, then applies the OpenSAPI patches. See
+[Wine source provenance](scripts/ci/WINE-SOURCE.md) for all 17 branch commits.
 
 The Piper patch also applies to clean upstream Wine 11.21 at
 `2528aff26208257fdbf980666a4f0e66d47563ce`. To reconstruct the combined build from

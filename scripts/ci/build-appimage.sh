@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 project_dir=$(pwd)
 wine_repository=${WINE_REPOSITORY:-https://github.com/FaithLife-Community/wine.git}
-wine_base=${WINE_BASE:-9a962f8799c79149af0be85d8d8f7b92951c1cc5}
+wine_base=${WINE_BASE:-3b19eb0e45ac5f57301073fc9e721cac7829dc93}
 wine_version=${WINE_VERSION:-11.21-logos}
 jobs=${BUILD_JOBS:-$(nproc)}
 [[ "$jobs" =~ ^[1-9][0-9]*$ ]] || { echo 'BUILD_JOBS must be a positive integer' >&2; exit 2; }
@@ -84,18 +84,26 @@ if [ -d wine-src/.git ]; then
     if [ "$cached_base" != "$wine_base" ]; then
         # This one inspected transition retains identical configure inputs and
         # SAPI source. Cache lookup also requires the same toolchain and recipe.
-        test "$cached_base" = 2528aff26208257fdbf980666a4f0e66d47563ce
-        test "$wine_base" = 9a962f8799c79149af0be85d8d8f7b92951c1cc5
+        case "$cached_base:$wine_base" in
+            2528aff26208257fdbf980666a4f0e66d47563ce:9a962f8799c79149af0be85d8d8f7b92951c1cc5) ;;
+            9a962f8799c79149af0be85d8d8f7b92951c1cc5:3b19eb0e45ac5f57301073fc9e721cac7829dc93) ;;
+            *) echo 'Unsupported cached Wine source transition' >&2; exit 1 ;;
+        esac
         git -C wine-src fetch --depth=64 "$wine_repository" "$wine_base"
         git -C wine-src merge-base --is-ancestor "$cached_base" FETCH_HEAD
         git -C wine-src diff --exit-code "$cached_base" FETCH_HEAD -- \
             configure configure.ac Makefile.in tools dlls/sapi
+        if [ "$wine_base" = 3b19eb0e45ac5f57301073fc9e721cac7829dc93 ]; then
+            expected_changes=$(printf '%s\n' dlls/wined3d/context_gl.c dlls/wined3d/swapchain.c dlls/wined3d/wined3d_private.h)
+            test "$(git -C wine-src diff --name-only "$cached_base" FETCH_HEAD)" = "$expected_changes"
+            test "$(git -C wine-src rev-list --count "$cached_base"..FETCH_HEAD)" = 2
+        fi
         # Checkout updates only changed tracked files and retains the nonoverlapping
         # Piper edits. Preserve object files so make follows the changed dependencies.
         git -C wine-src checkout --detach FETCH_HEAD
         test "$(git -C wine-src rev-parse HEAD)" = "$wine_base"
         verify_piper_patch
-        echo 'Advanced cached upstream/Piper source to the complete Logos tip; using incremental make'
+        echo 'Advanced verified cached Wine source to the pinned Logos tip; using incremental make'
     else
         echo 'Reusing matching patched Wine source'
     fi
@@ -180,7 +188,7 @@ Package version: $wine_version
 Wine source version: $(cat wine-src/VERSION)
 Wine source repository: $wine_repository
 Wine source commit: $wine_base
-Wine upstream base before the 15 Logos commits: 2528aff26208257fdbf980666a4f0e66d47563ce
+Wine upstream base before the 17 Logos branch commits: 2528aff26208257fdbf980666a4f0e66d47563ce
 Piper patch SHA256: $(sha256sum patches/wine-piper.patch | cut -d' ' -f1)
 SAPI enumeration patch SHA256: $(sha256sum patches/wine-sapi-enum-values.patch | cut -d' ' -f1)
 HTTP lifecycle patch SHA256: $(sha256sum patches/wine-piper-lifecycle.patch | cut -d' ' -f1)
