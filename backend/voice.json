@@ -1,0 +1,9 @@
+{
+  "name": "en_US-ljspeech-medium",
+  "revision": "b4e358ffcb232591bf73a540e70f7de528e4174a",
+  "repository": "https://huggingface.co/rhasspy/piper-voices",
+  "path": "en/en_US/ljspeech/medium",
+  "model_sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
+  "licence": "MIT (repository declaration); public-domain LJ Speech training dataset",
+  "training": "Trained from scratch; see bundled upstream MODEL_CARD and README.md"
+}
