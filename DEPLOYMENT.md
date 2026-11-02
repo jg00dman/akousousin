@@ -7,7 +7,7 @@ unchanged. This deployment candidate adds failure handling and a separate servic
 ## Separate Piper service and voice
 
 The first standalone package is available at
-https://github.com/jg00dman/opensapi/releases/tag/piper-backend-41386724441-1
+https://github.com/jg00dman/opensapi/releases/tag/piper-backend-41387876573-1
 
 GitHub Actions built a Linux x86-64 application with embedded Python, Piper 1.8.0,
 Waitress 3.0.2, and en_US-ljspeech-medium. Its frozen executable produced valid,
@@ -21,9 +21,8 @@ b4e358ffcb232591bf73a540e70f7de528e4174a declares MIT; the per-model card specif
 public-domain LJ Speech data and training from scratch. The package retains both
 upstream declarations. Models with additional restrictions were not selected.
 Piper and the wrapper are distributed separately under GPL-3.0-or-later, with
-Piper/eSpeak sources and wheel licence notices. A follow-up packaging change adds
-explicit embedded-Python and collected system-library copyright notices; rebuild
-and verify that update before treating the package as distribution-ready.
+Piper/eSpeak sources and wheel licence notices. The packaging rebuild adds explicit embedded-Python and collected system-library
+copyright notices; both binary and source archives are separately downloadable.
 
 ## Wine failure handling
 
@@ -62,9 +61,11 @@ Piper is optional and disabled by default. Startup failure does not prevent Logo
 launch. PID creation time and instance token prevent stopping unrelated servers;
 Logos launcher exit does not prematurely stop speech. See its PIPER.md.
 
-Eighteen focused OuDedetai tests pass. Full suite: 95 tests, 16 skipped, one
-pre-existing backup filesystem-size assertion fails in this environment and also
-fails on an unchanged baseline. Existing global type-check failures remain;
+Eighteen focused OuDedetai tests pass. GitHub Actions passed all 95 tests (16
+existing skips) and built both x86-64 and ARM launcher binaries. Actual packaged
+backend start/reuse/ownership-safe stop/restart checks passed locally. The local
+full suite has one pre-existing backup filesystem-size assertion failure, also
+reproduced on an unchanged baseline. Existing global type-check failures remain;
 no claim of a clean full type check is made.
 
 ## Remaining release gates

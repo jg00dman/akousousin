@@ -70,7 +70,7 @@ int wmain(int argc, WCHAR **argv)
     abort_output = !wcscmp(argv[5], L"abort");
     fail_write = !wcscmp(argv[5], L"fail-write");
     no_count = !wcscmp(argv[5], L"no-count");
-    abort_network = !wcscmp(argv[5], L"abort-network");
+    abort_network = !wcscmp(argv[5], L"abort-network") || !wcscmp(argv[5], L"recover-cancel");
     zero_write = !wcscmp(argv[5], L"zero-write");
     output = CreateFileW(argv[1], GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
     if (output == INVALID_HANDLE_VALUE) return 2;
@@ -107,6 +107,13 @@ int wmain(int argc, WCHAR **argv)
     started = GetTickCount64();
     hr = ISpTTSEngine_Speak(engine, 0, &id, format, &fragment, &site);
     printf("result: %#lx, bytes: %lu\n", hr, total);
+    if (!wcscmp(argv[5], L"recover-cancel"))
+    {
+        if (FAILED(hr) || total) return 2;
+        abort_network = FALSE;
+        hr = ISpTTSEngine_Speak(engine, 0, &id, format, &fragment, &site);
+        printf("cancel recovery: %#lx, bytes: %lu\n", hr, total);
+    }
     if (!wcscmp(argv[5], L"recover"))
     {
         if (SUCCEEDED(hr) || total) return 2;

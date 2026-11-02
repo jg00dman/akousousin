@@ -17,6 +17,10 @@ class FailureHandler(Handler):
 
     def do_POST(self):
         mode = self.mode
+        if mode in ('drop-recover', 'cancel-recover'):
+            type(self).attempt += 1
+            if self.attempt == 1:
+                mode = 'drop' if mode == 'drop-recover' else 'stall'
         if mode == 'refuse':
             self.connection.shutdown(socket.SHUT_RDWR)
             self.connection.close()
@@ -91,14 +95,20 @@ class FailureTests(unittest.TestCase):
                 time.sleep(0.1)
                 FailureHandler.release.clear()
 
+        FailureHandler.mode = 'cancel-recover'
+        FailureHandler.attempt = 0
+        self.assertEqual(self.run_probe(direct=True, mode='recover-cancel').read_bytes(), PCM)
+
     def test_dropped_response_is_rejected(self):
         FailureHandler.mode = 'drop'
         self.assertEqual(self.run_probe(direct=True, fail=True).read_bytes(), b'')
 
     def test_http_failure_recovers_on_same_engine(self):
-        FailureHandler.mode = 'recover'
-        FailureHandler.attempt = 0
-        self.assertEqual(self.run_probe(direct=True, mode='recover').read_bytes(), PCM)
+        for mode in ('recover', 'drop-recover'):
+            with self.subTest(mode=mode):
+                FailureHandler.mode = mode
+                FailureHandler.attempt = 0
+                self.assertEqual(self.run_probe(direct=True, mode='recover').read_bytes(), PCM)
 
     def test_uninitialized_engine(self):
         self.assertEqual(self.run_probe(direct=True, mode='uninitialized', fail=True).read_bytes(), b'')
