@@ -5,14 +5,53 @@ For a prebuilt AppImage, first check the
 and [Releases](https://github.com/jg00dman/opensapi/releases), then follow
 [APPIMAGE-TESTING.md](scripts/ci/APPIMAGE-TESTING.md). A successful workflow publishes
 a test package that includes the sample program; you do not need to build Wine
-locally. [Run 41365675371](https://github.com/jg00dman/opensapi/actions/runs/41365675371) succeeded and
-published [this experimental release](https://github.com/jg00dman/opensapi/releases/tag/piper-test-41365675371-1). Both sets of 13 deterministic
+locally. [Run 41372784570](https://github.com/jg00dman/opensapi/actions/runs/41372784570) succeeded and
+published [this experimental release](https://github.com/jg00dman/opensapi/releases/tag/piper-test-41372784570-1). Both sets of 13 deterministic
 integration tests passed. Piper and voice models remain separate; real speech
 and audible playback have not been verified by CI.
 
 The rest of this document covers building from source and using the headless
 cloud build. Neither the VisualFBEditor sample nor Logos is needed for the first
 test.
+
+## Configure the voice in an existing Logos prefix
+
+Close Logos first and keep the Piper server running. In the same terminal,
+set `OPENSAPI_IMAGE` to the new `wine-opensapi-piper-11.21-logos-x86_64.AppImage`,
+set `APPIMAGE_EXTRACT_AND_RUN=1`, and set `WINEPREFIX` to your actual existing
+Logos prefix (the directory containing `drive_c` and `system.reg`). The standalone
+speech-test prefix is separate and its voice registration does not carry across.
+
+Keep native .NET and its `mscoree` settings. Set only SAPI to Wine's builtin
+implementation, register the engine, and register the voice using your model's
+configuration file:
+
+```sh
+"$OPENSAPI_IMAGE" reg.exe add 'HKCU\Software\Wine\DllOverrides' /v sapi /t REG_SZ /d builtin /f
+"$OPENSAPI_IMAGE" regsvr32.exe /s sapi.dll
+"$OPENSAPI_IMAGE" --opensapi-register "$HOME/opensapi/voices/en_US-ljspeech-medium.onnx.json"
+"$OPENSAPI_IMAGE" --opensapi-speak 'Testing Piper inside the Logos prefix.'
+```
+
+The helper creates
+`HKLM\SOFTWARE\Microsoft\Speech\Voices\Tokens\OpenSAPI-Piper` and sets
+`HKLM\SOFTWARE\Microsoft\Speech\Voices\DefaultDefaultTokenId`. Manual CLSID
+editing is not needed. This intentionally changes the default Wine SAPI voice
+in the selected prefix. Then launch Logos itself through this same AppImage and
+prefix, preserving the launcher's other settings. Registering with the new
+AppImage while launching Logos through an older unpatched Wine will not load
+the new engine. If Logos offers a voice selector, choose `Piper (OpenSAPI)`.
+
+For the supplied wine-bisect print launcher, pass the new AppImage as the target
+argument: its default still selects the older 11.20 runtime. That launcher also
+replaces `WINEDLLOVERRIDES`, so use its `PRINT_DLLOVERRIDES` option to retain
+`sapi=b`. In the pasted launcher, `PRINT_WINEDEBUG` is declared but never copied
+to `WINEDEBUG`; pass `WINEDEBUG=+sapi,+winhttp` explicitly when capturing speech
+traces. Leave native .NET's `mscoree` configuration intact.
+
+If the sample speaks in the Logos prefix but Logos remains silent, capture its
+SAPI/WinHTTP diagnostics; that is an application-integration issue to investigate,
+not evidence that the standalone speech check validates Logos Read Aloud.
 
 ## 1. Recover the source
 
@@ -30,8 +69,8 @@ patch once:
 ```sh
 mkdir -p "$HOME/opensapi-test"
 cd "$HOME/opensapi-test"
-git clone --single-branch --branch master https://github.com/jg00dman/wine.git wine
-git -C wine checkout 2528aff26208257fdbf980666a4f0e66d47563ce
+git clone --single-branch --branch logos-11.21 https://github.com/FaithLife-Community/wine.git wine
+git -C wine checkout 9a962f8799c79149af0be85d8d8f7b92951c1cc5
 git -C wine apply /absolute/path/to/opensapi/patches/wine-piper.patch
 ```
 
@@ -47,7 +86,7 @@ Then, from the directory containing the `wine` source checkout:
 ```sh
 mkdir wine-build
 cd wine-build
-../wine/configure --enable-win64
+../wine/configure --enable-win64 --disable-tests
 make -j4
 ```
 

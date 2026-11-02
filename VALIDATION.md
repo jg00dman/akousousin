@@ -1,6 +1,41 @@
 # Prototype validation
 
-## Current AppImage CI validation
+## Current Logos + Piper AppImage CI validation
+
+[Run 41372784570](https://github.com/jg00dman/opensapi/actions/runs/41372784570)
+succeeded for OpenSAPI commit `a43e304c12dc3b612f1a6d3b38fb72846def3bff` and
+published [the Logos + Piper test release](https://github.com/jg00dman/opensapi/releases/tag/piper-test-41372784570-1).
+
+* The full FaithLife-Community `logos-11.21` tip is pinned at
+  `9a962f8799c79149af0be85d8d8f7b92951c1cc5`, including all 15 branch commits.
+  Piper applies cleanly on top; no SAPI source was changed by the Logos branch.
+* The existing Ubuntu 22.04 dependency image and compatible compiled Wine
+  checkpoint were reused. The verified incremental source transition preserved
+  Piper edits, unchanged file timestamps and build outputs. Incremental make
+  completed in **13 seconds**; the build job completed in 12 minutes 26 seconds.
+* All **13 build-tree and 13 packaged integration tests passed**, along with the
+  AppImage extraction/version/registration checks. These use synthetic PCM.
+* The downloaded AppImage/source digests and all published checksums were verified.
+  All 16 Logos-modified source files in the release archive match the pinned
+  branch byte-for-byte. Both patches and `WINE-SOURCE.md` are release assets.
+* AppRun no longer disables `mscoree` globally. Local wrapper checks verified
+  normal launches preserve native .NET overrides, while optional Mono/Gecko
+  suppression is limited to explicit prefix initialization.
+
+The user reported hearing real Piper speech on Kubuntu 26.04 with the preceding
+Piper-only build. The combined Logos build still needs desktop startup and Read
+Aloud testing in the user's existing Logos/.NET prefix. No model is bundled or
+cleared for redistribution; no native .NET or Logos installation is bundled.
+The architecture remains 64-bit only, without WoW64, and the Ubuntu 22.04 target
+is unchanged. No Wine compilation was performed in the cloud workspace.
+
+The original run's diagnostic artifact is now readable. It records `Wine build
+complete` about 40 minutes after configuration, followed by successful install.
+Its integration log was created but remained empty until cancellation. This
+locates the long stall after compilation, during entry to the integration/setup
+stage; the exact command cannot be established from those untraced logs.
+
+## Earlier Piper-only AppImage CI validation
 
 [Run 41365675371](https://github.com/jg00dman/opensapi/actions/runs/41365675371) succeeded for OpenSAPI commit
 `bc62ec5633e8f73e5f1c5c73b542d69e81d0b121` and published
@@ -105,5 +140,5 @@ which does not download Piper or voice models.
 
 Desktop playback, Logos, the VisualFBEditor sample, and WoW64/32-bit execution
 remain unverified. AppImage packaging is now covered by the successful CI run
-above. The initial run `41248009427` timed out; its exact stalled command has not
-been confirmed from its diagnostic files. No upstream PR has been submitted.
+above. The initial run `41248009427` timed out; its diagnostic files locate the stall after installation, before any integration
+test output, without identifying the exact setup command. No upstream PR has been submitted.

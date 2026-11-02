@@ -2,10 +2,12 @@
 
 For a step-by-step test session, start with [TESTING.md](TESTING.md).
 
-For a prebuilt test package, [download the validated AppImage](https://github.com/jg00dman/opensapi/releases/download/piper-test-41365675371-1/wine-opensapi-piper-11.21-x86_64.AppImage)
+For a prebuilt test package, [download the validated AppImage](https://github.com/jg00dman/opensapi/releases/download/piper-test-41372784570-1/wine-opensapi-piper-11.21-logos-x86_64.AppImage)
 and follow [AppImage testing](scripts/ci/APPIMAGE-TESTING.md).
-[The experimental release](https://github.com/jg00dman/opensapi/releases/tag/piper-test-41365675371-1) includes checksums, matching patched Wine
-source, the patch, and logs for both passing 13-test integration runs.
+[The experimental release](https://github.com/jg00dman/opensapi/releases/tag/piper-test-41372784570-1) includes checksums, matching patched Wine
+source, both patches, provenance, and logs for both passing 13-test integration
+runs. It includes all 15 commits from the pinned Logos branch; Logos desktop
+startup and Read Aloud still need testing with your existing prefix.
 The [GitHub workflow](https://github.com/jg00dman/opensapi/actions/workflows/appimage.yml)
 builds Wine, checks the packaged runtime, and publishes a unique experimental
 prerelease after successful checks. Downloads appear under
@@ -25,8 +27,14 @@ have been settled for any particular bundle.
 
 ## Patch and build
 
-The patch targets the selected Wine 11.21 tree at
-`2528aff26208257fdbf980666a4f0e66d47563ce`. For a clean copy of that revision:
+CI uses the full `FaithLife-Community/wine` `logos-11.21` branch pinned at
+`9a962f8799c79149af0be85d8d8f7b92951c1cc5`, then applies the Piper patch. See
+[Wine source provenance](scripts/ci/WINE-SOURCE.md) for all 15 branch commits.
+
+The Piper patch also applies to clean upstream Wine 11.21 at
+`2528aff26208257fdbf980666a4f0e66d47563ce`. To reconstruct the combined build from
+that upstream revision, apply `patches/wine-logos-11.21.patch` first. On a clean
+copy of the pinned Logos branch, apply only the Piper patch:
 
 ```sh
 git -C /path/to/wine apply /path/to/opensapi/patches/wine-piper.patch
@@ -60,6 +68,15 @@ python3 -m venv /path/to/piper-venv
     --host 127.0.0.1 --port 5000 \
     --model /path/to/voices/en_US-ljspeech-medium.onnx
 ```
+
+The official Piper 1.8.0 HTTP command uses Flask's development server, which
+prints a production-deployment warning. These commands are for a loopback-only
+experimental desktop test. A production background service should use a WSGI
+server such as [Waitress](https://flask.palletsprojects.com/en/stable/deploying/waitress/)
+with a compatible launcher; Piper 1.8.0 constructs its app inside `main()` and
+exports no ready-made `app`/factory target. This project does not yet ship or
+validate that production-server adapter. No Wine rebuild is needed to change the
+external HTTP runner while retaining the same `/synthesize` JSON-to-WAV API.
 
 Keep the server bound to loopback. Test it independently:
 
