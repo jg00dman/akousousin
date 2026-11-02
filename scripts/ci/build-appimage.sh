@@ -75,6 +75,11 @@ case "${1:-}" in
     source)
 if [ -d wine-src/.git ]; then
     cached_base=$(git -C wine-src rev-parse HEAD)
+    # Migrate the one known async candidate checkpoint; never accept arbitrary
+    # cached source edits. Only these exact reversible patches are supported.
+    if git -C wine-src apply --reverse --check "$project_dir/scripts/ci/previous-piper-http.patch" 2>/dev/null; then
+        git -C wine-src apply --reverse "$project_dir/scripts/ci/previous-piper-http.patch"
+    fi
     verify_piper_patch
     if [ "$cached_base" != "$wine_base" ]; then
         # This one inspected transition retains identical configure inputs and

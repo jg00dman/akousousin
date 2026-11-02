@@ -1,0 +1,146 @@
+diff --git a/dlls/sapi/piper.c b/dlls/sapi/piper.c
+--- a/dlls/sapi/piper.c
++++ b/dlls/sapi/piper.c
+@@ -128,26 +128,85 @@
+     return json;
+ }
+ 
+-/* The service is deliberately loopback-only and redirects are forbidden. */
++/* One request owns its async callback context until HANDLE_CLOSING. All SAPI
++ * callbacks stay on the calling thread; no COM interfaces cross threads. */
++struct http_wait
++{
++    HANDLE event, closed;
++    DWORD error, received;
++};
++
++static void CALLBACK http_status(HINTERNET handle, DWORD_PTR context, DWORD status,
++                                void *info, DWORD size)
++{
++    struct http_wait *wait = (struct http_wait *)context;
++    if (!wait) return;
++    switch (status)
++    {
++    case WINHTTP_CALLBACK_STATUS_REQUEST_ERROR:
++        wait->error = ((WINHTTP_ASYNC_RESULT *)info)->dwError;
++        SetEvent(wait->event);
++        break;
++    case WINHTTP_CALLBACK_STATUS_READ_COMPLETE:
++        wait->received = size;
++        SetEvent(wait->event);
++        break;
++    case WINHTTP_CALLBACK_STATUS_SENDREQUEST_COMPLETE:
++    case WINHTTP_CALLBACK_STATUS_HEADERS_AVAILABLE:
++        SetEvent(wait->event);
++        break;
++    case WINHTTP_CALLBACK_STATUS_HANDLE_CLOSING:
++        SetEvent(wait->closed);
++        break;
++    }
++}
++
++static HRESULT await_http(struct http_wait *wait, ISpTTSEngineSite *site, ULONGLONG deadline)
++{
++    for (;;)
++    {
++        if (ISpTTSEngineSite_GetActions(site) & SPVES_ABORT) return S_FALSE;
++        if (GetTickCount64() >= deadline) return HRESULT_FROM_WIN32(ERROR_WINHTTP_TIMEOUT);
++        if (WaitForSingleObject(wait->event, 50) == WAIT_OBJECT_0)
++            return wait->error ? HRESULT_FROM_WIN32(wait->error) : S_OK;
++    }
++}
++
++/* Loopback only, no redirects. A total deadline also bounds a trickling peer. */
+ static HRESULT fetch_wav(struct piper_engine *engine, const char *json,
+                          ISpTTSEngineSite *site, BYTE **data, DWORD *size)
+ {
+     HINTERNET session = NULL, connection = NULL, request = NULL;
+-    DWORD status, len = sizeof(status), got, used = 0, capacity = 16384;
++    struct http_wait wait = {0};
++    DWORD status, len = sizeof(status), used = 0, capacity = 16384;
+     DWORD policy = WINHTTP_OPTION_REDIRECT_POLICY_NEVER;
++    DWORD_PTR context = (DWORD_PTR)&wait;
++    ULONGLONG deadline = GetTickCount64() + 65000;
+     BYTE *buffer = NULL, *next;
++    BOOL callback_set = FALSE;
+     HRESULT hr = E_FAIL;
+ 
+     *data = NULL;
+     *size = 0;
+-    if (!(session = WinHttpOpen(L"Wine Piper", WINHTTP_ACCESS_TYPE_NO_PROXY, NULL, NULL, 0))) goto done;
+-    if (!WinHttpSetTimeouts(session, 5000, 5000, 30000, 30000)) goto done;
++    if (!(wait.event = CreateEventW(NULL, FALSE, FALSE, NULL)) ||
++        !(wait.closed = CreateEventW(NULL, FALSE, FALSE, NULL))) goto done;
++    if (!(session = WinHttpOpen(L"Wine Piper", WINHTTP_ACCESS_TYPE_NO_PROXY, NULL, NULL,
++                                WINHTTP_FLAG_ASYNC))) goto done;
++    if (!WinHttpSetTimeouts(session, 3000, 3000, 5000, 60000)) goto done;
+     if (!(connection = WinHttpConnect(session, L"127.0.0.1", engine->port, 0))) goto done;
+     if (!(request = WinHttpOpenRequest(connection, L"POST", L"/synthesize", NULL, NULL, NULL, 0))) goto done;
+-    if (!WinHttpSetOption(request, WINHTTP_OPTION_REDIRECT_POLICY, &policy, sizeof(policy))) goto done;
++    if (!WinHttpSetOption(request, WINHTTP_OPTION_REDIRECT_POLICY, &policy, sizeof(policy)) ||
++        !WinHttpSetOption(request, WINHTTP_OPTION_CONTEXT_VALUE, &context, sizeof(context))) goto done;
++    if (WinHttpSetStatusCallback(request, http_status, WINHTTP_CALLBACK_FLAG_ALL_COMPLETIONS |
++                                WINHTTP_CALLBACK_FLAG_HANDLES, 0) == WINHTTP_INVALID_STATUS_CALLBACK) goto done;
++    callback_set = TRUE;
+     if (!WinHttpSendRequest(request, L"Content-Type: application/json\r\n", -1L,
+-                           (void *)json, strlen(json), strlen(json), 0) ||
+-        !WinHttpReceiveResponse(request, NULL)) goto done;
++                           (void *)json, strlen(json), strlen(json), context)) goto done;
++    if ((hr = await_http(&wait, site, deadline)) != S_OK) goto done;
++    hr = E_FAIL;
++    if (!WinHttpReceiveResponse(request, NULL)) goto done;
++    if ((hr = await_http(&wait, site, deadline)) != S_OK) goto done;
++    hr = E_FAIL;
+     if (!WinHttpQueryHeaders(request, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+                              NULL, &status, &len, NULL)) goto done;
+     if (status != 200)
+@@ -159,7 +218,6 @@
+     if (!(buffer = malloc(capacity))) { hr = E_OUTOFMEMORY; goto done; }
+     for (;;)
+     {
+-        if (ISpTTSEngineSite_GetActions(site) & SPVES_ABORT) { hr = S_FALSE; goto done; }
+         if (used == capacity)
+         {
+             if (capacity == MAX_WAV_SIZE) { hr = HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE); goto done; }
+@@ -167,9 +225,11 @@
+             if (!(next = realloc(buffer, capacity))) { hr = E_OUTOFMEMORY; goto done; }
+             buffer = next;
+         }
+-        if (!WinHttpReadData(request, buffer + used, capacity - used, &got)) goto done;
+-        if (!got) break;
+-        used += got;
++        hr = E_FAIL;
++        if (!WinHttpReadData(request, buffer + used, capacity - used, NULL)) goto done;
++        if ((hr = await_http(&wait, site, deadline)) != S_OK) goto done;
++        if (!wait.received) break;
++        used += wait.received;
+     }
+     *data = buffer;
+     *size = used;
+@@ -177,9 +237,17 @@
+     hr = S_OK;
+ done:
+     if (hr == E_FAIL) hr = HRESULT_FROM_WIN32(GetLastError() ? GetLastError() : ERROR_GEN_FAILURE);
+-    if (request) WinHttpCloseHandle(request);
++    if (request)
++    {
++        WinHttpCloseHandle(request);
++        /* HANDLE_CLOSING is the final notification. Keep buffers, events and
++         * context alive until callbacks can no longer refer to them. */
++        if (callback_set) WaitForSingleObject(wait.closed, INFINITE);
++    }
+     if (connection) WinHttpCloseHandle(connection);
+     if (session) WinHttpCloseHandle(session);
++    if (wait.event) CloseHandle(wait.event);
++    if (wait.closed) CloseHandle(wait.closed);
+     free(buffer);
+     return hr;
+ }
+@@ -270,6 +338,7 @@
+     HRESULT hr;
+ 
+     if (!fmtid || !wfx || !site) return E_POINTER;
++    if (!engine->token) return SPERR_UNINITIALIZED;
+     if (!IsEqualGUID(fmtid, &SPDFID_WaveFormatEx) || wfx->wFormatTag != WAVE_FORMAT_PCM ||
+         wfx->nChannels != 1 || wfx->wBitsPerSample != 16 || wfx->nSamplesPerSec != engine->rate ||
+         wfx->nBlockAlign != 2 || wfx->nAvgBytesPerSec != engine->rate * 2 || wfx->cbSize)

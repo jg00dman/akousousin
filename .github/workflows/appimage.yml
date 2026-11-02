@@ -101,6 +101,7 @@ jobs:
           # applied by the source stage and make rebuilds affected dependencies.
           {
             echo "lifecycle-base-key=wine-build-v2-${prefix}-${WRITE_INPUT_HASH}" >> "$GITHUB_OUTPUT"
+            echo "verified-source-prefix=wine-build-v2-${prefix}-" >> "$GITHUB_OUTPUT"
             echo "write-base-key=wine-build-v2-${prefix}-${ENUM_INPUT_HASH}"
             echo "enum-base-key=wine-build-v2-${prefix}-${BASE_INPUT_HASH}"
           } >> "$GITHUB_OUTPUT"
@@ -128,6 +129,7 @@ jobs:
             ${{ steps.build-key.outputs.lifecycle-base-key }}
             ${{ steps.build-key.outputs.write-base-key }}
             ${{ steps.build-key.outputs.enum-base-key }}
+            ${{ steps.build-key.outputs.verified-source-prefix }}
             ${{ steps.build-key.outputs.incremental-key }}
             ${{ steps.build-key.outputs.legacy-key }}
       - name: Prepare exact Wine source and apply patch
