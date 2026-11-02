@@ -157,7 +157,6 @@ run_stage probes 5m bash scripts/build-probes.sh
     build-tests)
 mkdir -p "$WINEPREFIX"
 touch "$WINEPREFIX/.opensapi-test-prefix"
-run_stage build-tree-init 3m xvfb-run -a "$WINE" wineboot.exe -u
 run_stage integration 10m xvfb-run -a bash scripts/test-wine.sh
 grep -q '^Ran 13 tests in ' build/integration.log
 grep -qx 'OK' build/integration.log

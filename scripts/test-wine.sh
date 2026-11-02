@@ -10,7 +10,10 @@ if [ -e "$WINEPREFIX" ] && [ ! -f "$WINEPREFIX/.opensapi-test-prefix" ]; then
 fi
 mkdir -p "$WINEPREFIX"
 touch "$WINEPREFIX/.opensapi-test-prefix"
-"$WINE" wineboot.exe -u
+echo '=== Initialize disposable Wine prefix (120-second limit) ==='
+timeout --signal=TERM --kill-after=10s 120s "$WINE" wineboot.exe -u
+ echo '=== Register test voice (45-second limit) ==='
 python3 "$project_dir/scripts/register-voice.py" --make-default --output "$project_dir/build/test-voice.reg"
-"$WINE" regedit.exe /S "Z:$project_dir/build/test-voice.reg"
+timeout --signal=TERM --kill-after=10s 45s "$WINE" regedit.exe /S "Z:$project_dir/build/test-voice.reg"
+echo '=== Run all 13 deterministic OpenSAPI integration tests ==='
 python3 "$project_dir/tests/test_integration.py"
