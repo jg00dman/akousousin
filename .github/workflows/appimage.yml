@@ -101,7 +101,11 @@ jobs:
           # applied by the source stage and make rebuilds affected dependencies.
           {
             echo "lifecycle-base-key=wine-build-v2-${prefix}-${WRITE_INPUT_HASH}" >> "$GITHUB_OUTPUT"
-            echo "verified-source-prefix=wine-build-v2-${prefix}-" >> "$GITHUB_OUTPUT"
+            # Only the inspected async checkpoint may migrate. This condition
+            # includes the unchanged configure recipe and all earlier patches.
+            if [ "$WRITE_INPUT_HASH" = 991891f8f0b2b1e5fde18e862c83dbd222c77c4d45de78b89ebefe13766d6b87 ]; then
+              echo "async-base-key=wine-build-v2-${prefix}-bfdd9b89c5b81d76fbff7bc4e191f141ba4b90e6a331d782e8c3f9744df363a3" >> "$GITHUB_OUTPUT"
+            fi
             echo "write-base-key=wine-build-v2-${prefix}-${ENUM_INPUT_HASH}"
             echo "enum-base-key=wine-build-v2-${prefix}-${BASE_INPUT_HASH}"
           } >> "$GITHUB_OUTPUT"
@@ -129,7 +133,7 @@ jobs:
             ${{ steps.build-key.outputs.lifecycle-base-key }}
             ${{ steps.build-key.outputs.write-base-key }}
             ${{ steps.build-key.outputs.enum-base-key }}
-            ${{ steps.build-key.outputs.verified-source-prefix }}
+            ${{ steps.build-key.outputs.async-base-key }}
             ${{ steps.build-key.outputs.incremental-key }}
             ${{ steps.build-key.outputs.legacy-key }}
       - name: Prepare exact Wine source and apply patch
