@@ -3,7 +3,7 @@ name: Piper SAPI test AppImage
 on:
   workflow_dispatch:
   push:
-    branches: [codex/piper-sapi-prototype]
+    branches: [main, codex/piper-sapi-prototype, codex/deployable-piper]
     paths:
       - .github/workflows/appimage.yml
       - scripts/ci/**
@@ -90,7 +90,8 @@ jobs:
       - name: Identify compatible Wine build checkpoint
         id: build-key
         env:
-          INPUT_HASH: ${{ hashFiles('patches/wine-piper.patch', 'patches/wine-sapi-enum-values.patch', 'patches/wine-piper-site-write.patch', 'scripts/ci/configure-wine.sh') }}
+          INPUT_HASH: ${{ hashFiles('patches/wine-piper.patch', 'patches/wine-sapi-enum-values.patch', 'patches/wine-piper-site-write.patch', 'patches/wine-piper-lifecycle.patch', 'scripts/ci/configure-wine.sh') }}
+          WRITE_INPUT_HASH: ${{ hashFiles('patches/wine-piper.patch', 'patches/wine-sapi-enum-values.patch', 'patches/wine-piper-site-write.patch', 'scripts/ci/configure-wine.sh') }}
           ENUM_INPUT_HASH: ${{ hashFiles('patches/wine-piper.patch', 'patches/wine-sapi-enum-values.patch', 'scripts/ci/configure-wine.sh') }}
           BASE_INPUT_HASH: ${{ hashFiles('patches/wine-piper.patch', 'scripts/ci/configure-wine.sh') }}
         run: |
@@ -99,6 +100,7 @@ jobs:
           # Reuse the existing Logos/Piper build; the additive token.c patch is
           # applied by the source stage and make rebuilds affected dependencies.
           {
+            echo "lifecycle-base-key=wine-build-v2-${prefix}-${WRITE_INPUT_HASH}" >> "$GITHUB_OUTPUT"
             echo "write-base-key=wine-build-v2-${prefix}-${ENUM_INPUT_HASH}"
             echo "enum-base-key=wine-build-v2-${prefix}-${BASE_INPUT_HASH}"
           } >> "$GITHUB_OUTPUT"
@@ -123,6 +125,7 @@ jobs:
             wine-build
           key: ${{ steps.build-key.outputs.key }}
           restore-keys: |
+            ${{ steps.build-key.outputs.lifecycle-base-key }}
             ${{ steps.build-key.outputs.write-base-key }}
             ${{ steps.build-key.outputs.enum-base-key }}
             ${{ steps.build-key.outputs.incremental-key }}

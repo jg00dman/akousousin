@@ -56,6 +56,9 @@ verify_piper_patch() {
             export GIT_INDEX_FILE="$patch_check_dir/index"
             git -C wine-src read-tree HEAD
             git -C wine-src add --all -- dlls/sapi
+            if git -C wine-src apply --cached --reverse --check "$project_dir/patches/wine-piper-lifecycle.patch" 2>/dev/null; then
+                git -C wine-src apply --cached --reverse "$project_dir/patches/wine-piper-lifecycle.patch"
+            fi
             git -C wine-src apply --cached --reverse "$project_dir/patches/wine-piper-site-write.patch"
             git -C wine-src apply --cached --reverse --check "$project_dir/patches/wine-piper.patch"
         ); then
@@ -112,6 +115,12 @@ else
     git -C wine-src apply --check "$project_dir/patches/wine-piper-site-write.patch"
     git -C wine-src apply "$project_dir/patches/wine-piper-site-write.patch"
 fi
+if git -C wine-src apply --reverse --check "$project_dir/patches/wine-piper-lifecycle.patch" 2>/dev/null; then
+    echo 'Reusing cancellable and bounded Piper HTTP transport'
+else
+    git -C wine-src apply --check "$project_dir/patches/wine-piper-lifecycle.patch"
+    git -C wine-src apply "$project_dir/patches/wine-piper-lifecycle.patch"
+fi
         ;;
     configure)
 mkdir -p wine-build
@@ -147,6 +156,7 @@ run_stage build-tree-init 3m xvfb-run -a "$WINE" wineboot.exe -u
 run_stage integration 10m xvfb-run -a bash scripts/test-wine.sh
 grep -q '^Ran 13 tests in ' build/integration.log
 grep -qx 'OK' build/integration.log
+run_stage failure-recovery 5m xvfb-run -a python3 tests/test_failures.py
 run_stage enum-values 2m xvfb-run -a "$WINE" "$project_dir/build/token-enum-probe.exe"
         ;;
     assemble)
@@ -169,6 +179,7 @@ Wine source commit: $wine_base
 Wine upstream base before the 15 Logos commits: 2528aff26208257fdbf980666a4f0e66d47563ce
 Piper patch SHA256: $(sha256sum patches/wine-piper.patch | cut -d' ' -f1)
 SAPI enumeration patch SHA256: $(sha256sum patches/wine-sapi-enum-values.patch | cut -d' ' -f1)
+HTTP lifecycle patch SHA256: $(sha256sum patches/wine-piper-lifecycle.patch | cut -d' ' -f1)
 PCM write patch SHA256: $(sha256sum patches/wine-piper-site-write.patch | cut -d' ' -f1)
 OpenSAPI revision: $(git rev-parse HEAD)
 Architecture: x86-64 Windows applications only; no WoW64/32-bit support
@@ -213,17 +224,19 @@ run_stage packaged-integration 10m env WINE="$project_dir/AppDir/AppRun" \
     xvfb-run -a python3 tests/test_integration.py
 grep -q '^Ran 13 tests in ' build/packaged-integration.log
 grep -qx 'OK' build/packaged-integration.log
+touch "$WINEPREFIX/.opensapi-test-prefix"
+run_stage packaged-failure-recovery 5m env WINE="$project_dir/AppDir/AppRun" xvfb-run -a python3 tests/test_failures.py
 run_stage packaged-enum-values 2m xvfb-run -a "$project_dir/AppDir/AppRun" "$project_dir/build/token-enum-probe.exe"
         ;;
     archives)
 tar -C AppDir -cJf "dist/wine-opensapi-piper-${wine_version}-x86_64.tar.xz" .
 tar --exclude=.git -cJf "dist/wine-opensapi-piper-${wine_version}-source.tar.xz" wine-src
-cp patches/wine-piper.patch patches/wine-logos-11.21.patch patches/wine-sapi-enum-values.patch patches/wine-piper-site-write.patch dist/
+cp patches/wine-piper.patch patches/wine-logos-11.21.patch patches/wine-sapi-enum-values.patch patches/wine-piper-site-write.patch patches/wine-piper-lifecycle.patch dist/
 cp scripts/ci/WINE-SOURCE.md dist/WINE-SOURCE.md
 cp scripts/ci/APPIMAGE-TESTING.md dist/APPIMAGE-TESTING.md
 cp scripts/ci/APPIMAGE-TESTING.md build/RELEASE-NOTES.md
 cp "$share/BUILD-INFO.txt" dist/
-cp build/integration.log dist/
+cp build/integration.log build/failure-recovery.log build/packaged-failure-recovery.log dist/
 cp build/packaged-integration.log build/enum-values.log build/packaged-enum-values.log dist/
 (
     cd dist

@@ -6,6 +6,7 @@
 #include <windows.h>
 #include <initguid.h>
 #include <sapi.h>
+#include <sperror.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -69,6 +70,7 @@ int wmain(int argc, wchar_t **argv)
     BOOL async = argc > 5 && !wcscmp(argv[5], L"async");
     BOOL use_default = argc > 5 && !wcscmp(argv[5], L"default");
     BOOL play = argc > 5 && !wcscmp(argv[5], L"play");
+    BOOL missing = argc > 5 && !wcscmp(argv[5], L"missing");
     BOOL automation = argc > 5 && !wcscmp(argv[5], L"automation");
 
     if (argc < 5)
@@ -80,7 +82,7 @@ int wmain(int argc, wchar_t **argv)
     check(CoCreateInstance(&CLSID_SpObjectTokenCategory, NULL, CLSCTX_INPROC_SERVER,
                           &IID_ISpObjectTokenCategory, (void **)&category), "create category");
     check(ISpObjectTokenCategory_SetId(category, SPCAT_VOICES, FALSE), "open voices");
-    check(ISpObjectTokenCategory_EnumTokens(category, NULL, NULL, &tokens), "enumerate voices");
+    check(ISpObjectTokenCategory_EnumTokens(category, missing ? L"Vendor=OpenSAPI" : NULL, NULL, &tokens), "enumerate voices");
     check(IEnumSpObjectTokens_GetCount(tokens, &count), "voice count");
     printf("voices: %lu\n", count);
     while (IEnumSpObjectTokens_Next(tokens, 1, &token, &fetched) == S_OK)
@@ -98,6 +100,18 @@ int wmain(int argc, wchar_t **argv)
     }
     IEnumSpObjectTokens_Release(tokens);
     ISpObjectTokenCategory_Release(category);
+    if (missing)
+    {
+        HRESULT hr;
+        if (selected || count) return 2;
+        check(CoCreateInstance(&CLSID_SpVoice, NULL, CLSCTX_INPROC_SERVER,
+                              &IID_ISpVoice, (void **)&voice), "create voice without token");
+        hr = ISpVoice_Speak(voice, argv[4], SPF_IS_NOT_XML, NULL);
+        ISpVoice_Release(voice);
+        CoUninitialize();
+        printf("missing voice result: %#lx\n", hr);
+        return hr == SPERR_NOT_FOUND ? 0 : 2;
+    }
     if (!selected) { fprintf(stderr, "No OpenSAPI-Piper voice registered\n"); return 1; }
     check(ISpObjectToken_GetDWORD(selected, L"SampleRate", &sample_rate), "sample rate");
     format.nSamplesPerSec = sample_rate;
