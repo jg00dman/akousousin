@@ -2,7 +2,7 @@
 
 For a step-by-step test session, start with [TESTING.md](TESTING.md).
 
-Download the [Wine deployment beta](https://github.com/jg00dman/opensapi/releases/tag/piper-test-41391312177-1)
+Download the [Wine deployment beta](https://github.com/jg00dman/opensapi/releases/tag/piper-test-41467603154-1)
 for an existing working 64-bit Logos/.NET prefix. It includes the AppImage,
 checksums, matching patched Wine source, every patch and validation logs.
 No local Wine compilation is needed.

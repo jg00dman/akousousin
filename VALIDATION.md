@@ -174,3 +174,23 @@ stage messages. Cached compilation took one second in the corrected run.
 A publication attempt with contents:write failed with GitHub 403; precreating the
 unique final-build tag through authorized Git allowed the final workflow to
 publish successfully. No repository permission settings were relaxed.
+
+## WineD3D regression-revert build
+
+Run [41467603154](https://github.com/jg00dman/opensapi/actions/runs/41467603154)
+succeeded and published [the new beta](https://github.com/jg00dman/opensapi/releases/tag/piper-test-41467603154-1).
+Wine is pinned to `3b19eb0e45ac5f57301073fc9e721cac7829dc93`, including both
+new WineD3D reverts (`f9641663888598dbb69265e1ede182deeb9b27bd` and the tip).
+CI reused the compatible previous checkpoint and compilation took 22 seconds.
+The Ubuntu 22.04/x86-64 target and OpenSAPI patch stack are unchanged.
+
+Both 13-case integration suites, both seven-case failure/recovery suites, both
+registry enumeration probes, AppImage wineserver dispatch and real packaged
+Piper synthesis passed. Downloaded asset hashes and the full checksum manifest
+were independently checked against GitHub digests. All 18 files changed by the
+17 Logos branch commits in the source archive match the pinned branch byte for
+byte, including all three WineD3D files changed by the two reverts. The recovery
+patch and all OpenSAPI patches also match the repository copies.
+
+The reported graphics regression still requires the user's Logos desktop test;
+these automated speech checks do not establish its graphics behavior.
