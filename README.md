@@ -2,27 +2,32 @@
 
 For a step-by-step test session, start with [TESTING.md](TESTING.md).
 
-For a prebuilt test package, [download the validated AppImage](https://github.com/jg00dman/opensapi/releases/download/piper-test-41381467483-1/wine-opensapi-piper-11.21-logos-x86_64.AppImage)
-and follow [AppImage testing](scripts/ci/APPIMAGE-TESTING.md).
-[The experimental release](https://github.com/jg00dman/opensapi/releases/tag/piper-test-41381467483-1) includes checksums, matching patched Wine
-source, patches, provenance, and logs for both passing 13-test integration
-runs. It includes all 15 commits from the pinned Logos branch. Desktop testing
-confirmed Read Aloud, speed controls and jumping back in an existing Logos/.NET
-prefix on Kubuntu 26.04. This is not a general compatibility guarantee.
-The [GitHub workflow](https://github.com/jg00dman/opensapi/actions/workflows/appimage.yml)
-builds Wine, checks the packaged runtime, and publishes a unique experimental
-prerelease after successful checks. Downloads appear under
-[Releases](https://github.com/jg00dman/opensapi/releases). A running workflow is
-not yet a successful or tested AppImage release.
+Download the [Wine deployment beta](https://github.com/jg00dman/opensapi/releases/tag/piper-test-41391312177-1)
+for an existing working 64-bit Logos/.NET prefix. It includes the AppImage,
+checksums, matching patched Wine source, every patch and validation logs.
+No local Wine compilation is needed.
 
-A separately packaged [Piper backend and bundled LJSpeech voice](https://github.com/jg00dman/opensapi/releases/tag/piper-backend-41388556427-1)
-now includes its Python runtime and a Waitress service; no local compiler or pip
-installation is needed. Its corresponding sources, licence notices and pinned
-voice provenance are included. See [backend instructions](backend/README.md).
-The [OuDedetai integration candidate](https://github.com/jg00dman/OuDedetai/pull/1)
-adds opt-in installation and start/stop controls. The new bounded/cancellable Wine
-transport is a separate candidate: see [deployment validation](DEPLOYMENT.md)
-for automated results and remaining desktop failure checks.
+The separate [Piper backend and bundled LJSpeech voice](https://github.com/jg00dman/opensapi/releases/tag/piper-backend-41388556427-1)
+includes its Python runtime, Piper 1.8.0 and Waitress 3.0.2, with licence notices,
+pinned voice provenance and corresponding sources. It remains outside Wine.
+The [OuDedetai integration beta](https://github.com/jg00dman/OuDedetai/releases/tag/piper-beta-41389712590-1)
+adds optional Install/Configure/Start/Stop/Disable controls and Logos lifecycle
+management. See [backend instructions](backend/README.md) and
+[deployment validation](DEPLOYMENT.md).
+
+All 13 original deterministic tests and seven failure/recovery cases passed
+against both Wine runtimes. The actual AppImage, frozen backend and bundled voice
+also produced a non-silent speech WAV in CI; it is a separate release asset.
+OuDedetai passed all 96 CI tests (16 existing skips). Downloads were independently
+checksum-verified. Real neural WAV generation is distinct from audible playback.
+
+The earlier working beta was desktop-tested on Kubuntu 26.04: Logos Read Aloud,
+speed controls and jumping back worked. This deployment candidate still needs
+Logos desktop checks with missing, stopped and restarted speech components.
+See [TESTING.md](TESTING.md) for the manual Wine test workflow. The
+[workflow](https://github.com/jg00dman/opensapi/actions/workflows/appimage.yml)
+publishes uniquely tagged prereleases after its checks; an in-progress run is
+not a completed release.
 
 This prototype adds an opt-in SAPI TTS engine to Wine. Windows applications keep
 using `ISpVoice` or `ISpeechVoice`; the engine calls a separately running Piper

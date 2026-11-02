@@ -43,8 +43,10 @@ All original 13 integration tests remain unchanged in scope and still run agains
 both build-tree and packaged Wine. A separate seven-test suite adds absent
 backend, no registration/stale default, cancellation before headers/during body,
 dropped response, same-engine retry after HTTP failure, uninitialized engine,
-and a total timeout test. Results for the latest socket-transport candidate must
-be confirmed in Actions; these tests have not been claimed as passing locally.
+and a total timeout test. Run 41391312177 passed all 13 original cases, all seven failure/recovery cases,
+and enumeration probes against both runtimes, plus actual AppImage wineserver
+dispatch. The composed real-speech check also passed using the separate frozen
+backend and bundled voice; its WAV and log are release assets.
 
 The earlier async candidate is superseded: Wine's WinHTTP request-handle closure
 does not interrupt pending reads. CI supports migrating that exact known source
@@ -70,8 +72,7 @@ no claim of a clean full type check is made.
 
 ## Remaining release gates
 
-Confirm both Wine test runs and failure suites, publish the tested companion
-OuDedetai executable, and desktop-test absent/stopped/restarted
+Desktop-test absent/stopped/restarted
 Piper and stale registration inside Logos. Automated error returns do not prove
 that Logos handles every failure gracefully. Do not replace Beta 1 or mark this
 candidate generally deployable until those checks are complete.
@@ -83,3 +84,18 @@ Missing-model startup and recovery after killing active neural inference were
 also checked: the interrupted request returned HTTP 503, and the next produced
 real speech. OuDedetai AppImage dispatch now supports wineserver symlinks, with
 an actual extraction-mode wineserver dispatch check in the Wine packaging stage.
+
+## Verified downloadable beta set
+
+- Wine and its matching source/checksums/logs/real-neural WAV:
+  https://github.com/jg00dman/opensapi/releases/tag/piper-test-41391312177-1
+- Backend, voice and corresponding sources:
+  https://github.com/jg00dman/opensapi/releases/tag/piper-backend-41388556427-1
+- OuDedetai x86-64 launcher and checksum:
+  https://github.com/jg00dman/OuDedetai/releases/tag/piper-beta-41389712590-1
+
+All downloaded Wine/AppImage/source/patch/log assets matched their published
+SHA-256 digests. The complete manifest also matched all release asset digests.
+The real-neural WAV has 77056 frames at 22050 Hz, mono 16-bit PCM. Backend and
+launcher archives/checksums were independently verified as well. Sources stay
+on feature branches for review; the prior main-branch beta remains unchanged.

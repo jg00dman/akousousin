@@ -142,3 +142,35 @@ Desktop playback, Logos, the VisualFBEditor sample, and WoW64/32-bit execution
 remain unverified. AppImage packaging is now covered by the successful CI run
 above. The initial run `41248009427` timed out; its diagnostic files locate the stall after installation, before any integration
 test output, without identifying the exact setup command. No upstream PR has been submitted.
+
+## Deployment beta — 2026-11-02
+
+Run [41391312177](https://github.com/jg00dman/opensapi/actions/runs/41391312177)
+succeeded and published [the deployment beta](https://github.com/jg00dman/opensapi/releases/tag/piper-test-41391312177-1).
+Both 13-case original suites and both seven-case failure/recovery suites passed,
+as did both registry enumeration probes and actual AppImage wineserver dispatch.
+The real AppImage plus frozen Piper and bundled voice generated a non-silent
+77056-frame 22050 Hz PCM WAV. All downloaded assets and the full checksum
+manifest were independently verified against GitHub SHA-256 digests.
+
+The backend uses Waitress and isolates inference in a bounded child process;
+real synthesis passed at three rates. Actual missing-model rejection and recovery
+after killing active inference were also exercised. The pinned LJSpeech voice's
+repository MIT declaration and public-domain dataset/training provenance are
+preserved with source and licence notices. Piper/models remain outside Wine.
+
+The companion OuDedetai beta passed all 96 CI tests (16 existing skips), including
+19 focused feature tests, and built both launcher architectures. The published
+x86-64 executable and checksum were independently verified. Real server readiness,
+external reuse, ownership-safe stop and restart passed. The backend installer is
+currently x86-64 only. New implementation PRs remain drafts until desktop failure
+checks; this is not a claim that every missing/stopped backend case is verified
+inside Logos.
+
+The first async candidate timed out before test output: its integration log was
+empty, after an initial Wineboot/Xvfb session ended. CI now initializes/registers
+once under the integration X server, with explicit 120/45-second bounds and
+stage messages. Cached compilation took one second in the corrected run.
+A publication attempt with contents:write failed with GitHub 403; precreating the
+unique final-build tag through authorized Git allowed the final workflow to
+publish successfully. No repository permission settings were relaxed.
