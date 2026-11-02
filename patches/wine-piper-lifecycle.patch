@@ -1,142 +1,198 @@
+diff --git a/dlls/sapi/Makefile.in b/dlls/sapi/Makefile.in
+--- a/dlls/sapi/Makefile.in
++++ b/dlls/sapi/Makefile.in
+@@ -1,3 +1,3 @@
+ MODULE    = sapi.dll
+ IMPORTS   = uuid ole32 oleaut32 user32 advapi32 mfuuid wmcodecdspuuid
+-DELAYIMPORTS = winmm mfplat winhttp
++DELAYIMPORTS = winmm mfplat ws2_32
 diff --git a/dlls/sapi/piper.c b/dlls/sapi/piper.c
 --- a/dlls/sapi/piper.c
 +++ b/dlls/sapi/piper.c
-@@ -128,26 +128,85 @@
+@@ -18,6 +18,7 @@
+ #include <limits.h>
+ 
+ #define COBJMACROS
++#include "winsock2.h"
+ #include "windef.h"
+ #include "winbase.h"
+ #include "objbase.h"
+@@ -128,58 +129,135 @@
      return json;
  }
  
 -/* The service is deliberately loopback-only and redirects are forbidden. */
-+/* One request owns its async callback context until HANDLE_CLOSING. All SAPI
-+ * callbacks stay on the calling thread; no COM interfaces cross threads. */
-+struct http_wait
++/* Nonblocking loopback HTTP/1.0 with Content-Length framing. Keeping the socket
++ * on the SAPI calling thread makes abort and deadlines independent of Wine's
++ * WinHTTP worker queues (closing those handles does not interrupt blocked I/O). */
++static HRESULT socket_ready(SOCKET socket, BOOL write, ISpTTSEngineSite *site, ULONGLONG deadline)
 +{
-+    HANDLE event, closed;
-+    DWORD error, received;
-+};
-+
-+static void CALLBACK http_status(HINTERNET handle, DWORD_PTR context, DWORD status,
-+                                void *info, DWORD size)
-+{
-+    struct http_wait *wait = (struct http_wait *)context;
-+    if (!wait) return;
-+    switch (status)
-+    {
-+    case WINHTTP_CALLBACK_STATUS_REQUEST_ERROR:
-+        wait->error = ((WINHTTP_ASYNC_RESULT *)info)->dwError;
-+        SetEvent(wait->event);
-+        break;
-+    case WINHTTP_CALLBACK_STATUS_READ_COMPLETE:
-+        wait->received = size;
-+        SetEvent(wait->event);
-+        break;
-+    case WINHTTP_CALLBACK_STATUS_SENDREQUEST_COMPLETE:
-+    case WINHTTP_CALLBACK_STATUS_HEADERS_AVAILABLE:
-+        SetEvent(wait->event);
-+        break;
-+    case WINHTTP_CALLBACK_STATUS_HANDLE_CLOSING:
-+        SetEvent(wait->closed);
-+        break;
-+    }
-+}
-+
-+static HRESULT await_http(struct http_wait *wait, ISpTTSEngineSite *site, ULONGLONG deadline)
-+{
++    fd_set ready, errors;
++    struct timeval interval;
++    int result, error, size;
 +    for (;;)
 +    {
 +        if (ISpTTSEngineSite_GetActions(site) & SPVES_ABORT) return S_FALSE;
 +        if (GetTickCount64() >= deadline) return HRESULT_FROM_WIN32(ERROR_WINHTTP_TIMEOUT);
-+        if (WaitForSingleObject(wait->event, 50) == WAIT_OBJECT_0)
-+            return wait->error ? HRESULT_FROM_WIN32(wait->error) : S_OK;
++        FD_ZERO(&ready);
++        FD_ZERO(&errors);
++        FD_SET(socket, &ready);
++        FD_SET(socket, &errors);
++        interval.tv_sec = 0;
++        interval.tv_usec = 50000;
++        result = select(0, write ? NULL : &ready, write ? &ready : NULL, &errors, &interval);
++        if (result == SOCKET_ERROR) return HRESULT_FROM_WIN32(ERROR_WINHTTP_CONNECTION_ERROR);
++        if (!result) continue;
++        size = sizeof(error);
++        if (getsockopt(socket, SOL_SOCKET, SO_ERROR, (char *)&error, &size) == SOCKET_ERROR || error)
++            return HRESULT_FROM_WIN32(ERROR_WINHTTP_CANNOT_CONNECT);
++        return S_OK;
 +    }
 +}
 +
-+/* Loopback only, no redirects. A total deadline also bounds a trickling peer. */
  static HRESULT fetch_wav(struct piper_engine *engine, const char *json,
                           ISpTTSEngineSite *site, BYTE **data, DWORD *size)
  {
-     HINTERNET session = NULL, connection = NULL, request = NULL;
+-    HINTERNET session = NULL, connection = NULL, request = NULL;
 -    DWORD status, len = sizeof(status), got, used = 0, capacity = 16384;
-+    struct http_wait wait = {0};
-+    DWORD status, len = sizeof(status), used = 0, capacity = 16384;
-     DWORD policy = WINHTTP_OPTION_REDIRECT_POLICY_NEVER;
-+    DWORD_PTR context = (DWORD_PTR)&wait;
-+    ULONGLONG deadline = GetTickCount64() + 65000;
-     BYTE *buffer = NULL, *next;
-+    BOOL callback_set = FALSE;
-     HRESULT hr = E_FAIL;
+-    DWORD policy = WINHTTP_OPTION_REDIRECT_POLICY_NEVER;
+-    BYTE *buffer = NULL, *next;
+-    HRESULT hr = E_FAIL;
++    SOCKET socket = INVALID_SOCKET;
++    WSADATA winsock;
++    struct sockaddr_in address = {0};
++    ULONGLONG deadline = GetTickCount64() + 65000, send_deadline;
++    char headers[16385], request[256], *line, *end, *value;
++    DWORD length = 0, used = 0, header_size = 0;
++    BOOL have_length = FALSE;
++    BYTE *buffer = NULL;
++    int count, offset, total;
++    HRESULT hr = HRESULT_FROM_WIN32(ERROR_WINHTTP_CONNECTION_ERROR);
  
      *data = NULL;
      *size = 0;
 -    if (!(session = WinHttpOpen(L"Wine Piper", WINHTTP_ACCESS_TYPE_NO_PROXY, NULL, NULL, 0))) goto done;
 -    if (!WinHttpSetTimeouts(session, 5000, 5000, 30000, 30000)) goto done;
-+    if (!(wait.event = CreateEventW(NULL, FALSE, FALSE, NULL)) ||
-+        !(wait.closed = CreateEventW(NULL, FALSE, FALSE, NULL))) goto done;
-+    if (!(session = WinHttpOpen(L"Wine Piper", WINHTTP_ACCESS_TYPE_NO_PROXY, NULL, NULL,
-+                                WINHTTP_FLAG_ASYNC))) goto done;
-+    if (!WinHttpSetTimeouts(session, 3000, 3000, 5000, 60000)) goto done;
-     if (!(connection = WinHttpConnect(session, L"127.0.0.1", engine->port, 0))) goto done;
-     if (!(request = WinHttpOpenRequest(connection, L"POST", L"/synthesize", NULL, NULL, NULL, 0))) goto done;
+-    if (!(connection = WinHttpConnect(session, L"127.0.0.1", engine->port, 0))) goto done;
+-    if (!(request = WinHttpOpenRequest(connection, L"POST", L"/synthesize", NULL, NULL, NULL, 0))) goto done;
 -    if (!WinHttpSetOption(request, WINHTTP_OPTION_REDIRECT_POLICY, &policy, sizeof(policy))) goto done;
-+    if (!WinHttpSetOption(request, WINHTTP_OPTION_REDIRECT_POLICY, &policy, sizeof(policy)) ||
-+        !WinHttpSetOption(request, WINHTTP_OPTION_CONTEXT_VALUE, &context, sizeof(context))) goto done;
-+    if (WinHttpSetStatusCallback(request, http_status, WINHTTP_CALLBACK_FLAG_ALL_COMPLETIONS |
-+                                WINHTTP_CALLBACK_FLAG_HANDLES, 0) == WINHTTP_INVALID_STATUS_CALLBACK) goto done;
-+    callback_set = TRUE;
-     if (!WinHttpSendRequest(request, L"Content-Type: application/json\r\n", -1L,
+-    if (!WinHttpSendRequest(request, L"Content-Type: application/json\r\n", -1L,
 -                           (void *)json, strlen(json), strlen(json), 0) ||
 -        !WinHttpReceiveResponse(request, NULL)) goto done;
-+                           (void *)json, strlen(json), strlen(json), context)) goto done;
-+    if ((hr = await_http(&wait, site, deadline)) != S_OK) goto done;
-+    hr = E_FAIL;
-+    if (!WinHttpReceiveResponse(request, NULL)) goto done;
-+    if ((hr = await_http(&wait, site, deadline)) != S_OK) goto done;
-+    hr = E_FAIL;
-     if (!WinHttpQueryHeaders(request, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
-                              NULL, &status, &len, NULL)) goto done;
-     if (status != 200)
-@@ -159,7 +218,6 @@
-     if (!(buffer = malloc(capacity))) { hr = E_OUTOFMEMORY; goto done; }
-     for (;;)
-     {
+-    if (!WinHttpQueryHeaders(request, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+-                             NULL, &status, &len, NULL)) goto done;
+-    if (status != 200)
+-    {
+-        WARN("Piper HTTP status %lu.\n", status);
+-        hr = HRESULT_FROM_WIN32(ERROR_BAD_NET_RESP);
++    if (WSAStartup(MAKEWORD(2, 2), &winsock)) return hr;
++    if ((socket = WSASocketW(AF_INET, SOCK_STREAM, IPPROTO_TCP, NULL, 0, 0)) == INVALID_SOCKET) goto done;
++    {
++        u_long nonblocking = 1;
++        if (ioctlsocket(socket, FIONBIO, &nonblocking)) goto done;
++    }
++    address.sin_family = AF_INET;
++    address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
++    address.sin_port = htons(engine->port);
++    if (connect(socket, (struct sockaddr *)&address, sizeof(address)) == SOCKET_ERROR &&
++        WSAGetLastError() != WSAEWOULDBLOCK)
++    {
++        hr = HRESULT_FROM_WIN32(ERROR_WINHTTP_CANNOT_CONNECT);
+         goto done;
+     }
+-    if (!(buffer = malloc(capacity))) { hr = E_OUTOFMEMORY; goto done; }
+-    for (;;)
+-    {
 -        if (ISpTTSEngineSite_GetActions(site) & SPVES_ABORT) { hr = S_FALSE; goto done; }
-         if (used == capacity)
-         {
-             if (capacity == MAX_WAV_SIZE) { hr = HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE); goto done; }
-@@ -167,9 +225,11 @@
-             if (!(next = realloc(buffer, capacity))) { hr = E_OUTOFMEMORY; goto done; }
-             buffer = next;
-         }
+-        if (used == capacity)
+-        {
+-            if (capacity == MAX_WAV_SIZE) { hr = HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE); goto done; }
+-            capacity *= 2;
+-            if (!(next = realloc(buffer, capacity))) { hr = E_OUTOFMEMORY; goto done; }
+-            buffer = next;
+-        }
 -        if (!WinHttpReadData(request, buffer + used, capacity - used, &got)) goto done;
 -        if (!got) break;
 -        used += got;
-+        hr = E_FAIL;
-+        if (!WinHttpReadData(request, buffer + used, capacity - used, NULL)) goto done;
-+        if ((hr = await_http(&wait, site, deadline)) != S_OK) goto done;
-+        if (!wait.received) break;
-+        used += wait.received;
++    if ((hr = socket_ready(socket, TRUE, site, GetTickCount64() + 3000)) != S_OK) goto done;
++    total = sprintf(request, "POST /synthesize HTTP/1.0\r\nHost: 127.0.0.1:%lu\r\n"
++                    "Content-Type: application/json\r\nContent-Length: %u\r\nConnection: close\r\n\r\n",
++                    engine->port, (unsigned int)strlen(json));
++    send_deadline = GetTickCount64() + 5000;
++    for (offset = 0; offset < total; offset += count)
++    {
++        if ((hr = socket_ready(socket, TRUE, site, send_deadline)) != S_OK) goto done;
++        count = send(socket, request + offset, total - offset, 0);
++        if (count <= 0) { hr = HRESULT_FROM_WIN32(ERROR_WINHTTP_CONNECTION_ERROR); goto done; }
++    }
++    total = strlen(json);
++    for (offset = 0; offset < total; offset += count)
++    {
++        if ((hr = socket_ready(socket, TRUE, site, send_deadline)) != S_OK) goto done;
++        count = send(socket, json + offset, total - offset, 0);
++        if (count <= 0) { hr = HRESULT_FROM_WIN32(ERROR_WINHTTP_CONNECTION_ERROR); goto done; }
++    }
++    /* Read only the bounded header here, leaving all audio bytes in the socket. */
++    while (header_size < sizeof(headers) - 1)
++    {
++        if ((hr = socket_ready(socket, FALSE, site, deadline)) != S_OK) goto done;
++        count = recv(socket, headers + header_size, 1, 0);
++        if (count != 1) { hr = HRESULT_FROM_WIN32(ERROR_BAD_NET_RESP); goto done; }
++        header_size++;
++        if (header_size >= 4 && !memcmp(headers + header_size - 4, "\r\n\r\n", 4)) break;
++    }
++    hr = HRESULT_FROM_WIN32(ERROR_BAD_NET_RESP);
++    headers[header_size] = 0;
++    if (header_size < 4 || memcmp(headers + header_size - 4, "\r\n\r\n", 4)) goto done;
++    if ((strncmp(headers, "HTTP/1.0 200 ", 13) && strncmp(headers, "HTTP/1.1 200 ", 13)) ||
++        !(line = strstr(headers, "\r\n"))) goto done;
++    line += 2;
++    while ((end = strstr(line, "\r\n")) && end != line)
++    {
++        *end = 0;
++        if (!_strnicmp(line, "Transfer-Encoding:", 18)) goto done;
++        if (!_strnicmp(line, "Content-Length:", 15))
++        {
++            if (have_length) goto done;
++            value = line + 15;
++            while (*value == ' ' || *value == '\t') value++;
++            if (*value < '0' || *value > '9') goto done;
++            for (; *value >= '0' && *value <= '9'; value++)
++            {
++                if (length > (MAX_WAV_SIZE - (*value - '0')) / 10) goto done;
++                length = length * 10 + *value - '0';
++            }
++            while (*value == ' ' || *value == '\t') value++;
++            if (*value) goto done;
++            have_length = TRUE;
++        }
++        line = end + 2;
++    }
++    if (!have_length || !length) goto done;
++    if (!(buffer = malloc(length))) { hr = E_OUTOFMEMORY; goto done; }
++    while (used < length)
++    {
++        if ((hr = socket_ready(socket, FALSE, site, deadline)) != S_OK) goto done;
++        count = recv(socket, (char *)buffer + used, min(length - used, 65536), 0);
++        if (count <= 0) { hr = HRESULT_FROM_WIN32(ERROR_BAD_NET_RESP); goto done; }
++        used += count;
      }
      *data = buffer;
-     *size = used;
-@@ -177,9 +237,17 @@
+-    *size = used;
++    *size = length;
+     buffer = NULL;
      hr = S_OK;
  done:
-     if (hr == E_FAIL) hr = HRESULT_FROM_WIN32(GetLastError() ? GetLastError() : ERROR_GEN_FAILURE);
+-    if (hr == E_FAIL) hr = HRESULT_FROM_WIN32(GetLastError() ? GetLastError() : ERROR_GEN_FAILURE);
 -    if (request) WinHttpCloseHandle(request);
-+    if (request)
-+    {
-+        WinHttpCloseHandle(request);
-+        /* HANDLE_CLOSING is the final notification. Keep buffers, events and
-+         * context alive until callbacks can no longer refer to them. */
-+        if (callback_set) WaitForSingleObject(wait.closed, INFINITE);
-+    }
-     if (connection) WinHttpCloseHandle(connection);
-     if (session) WinHttpCloseHandle(session);
-+    if (wait.event) CloseHandle(wait.event);
-+    if (wait.closed) CloseHandle(wait.closed);
+-    if (connection) WinHttpCloseHandle(connection);
+-    if (session) WinHttpCloseHandle(session);
++    if (socket != INVALID_SOCKET) closesocket(socket);
++    WSACleanup();
      free(buffer);
      return hr;
  }
-@@ -270,6 +338,7 @@
+@@ -270,6 +348,7 @@
      HRESULT hr;
  
      if (!fmtid || !wfx || !site) return E_POINTER;
