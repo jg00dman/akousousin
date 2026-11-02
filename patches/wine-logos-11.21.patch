@@ -1,0 +1,1542 @@
+diff --git a/dlls/d3d9/device.c b/dlls/d3d9/device.c
+index 2d036f2c22e..85c219fbf86 100644
+--- a/dlls/d3d9/device.c
++++ b/dlls/d3d9/device.c
+@@ -1959,6 +1959,18 @@ static HRESULT WINAPI d3d9_device_GetRenderTargetData(IDirect3DDevice9Ex *iface,
+         hr = wined3d_device_context_blt(device->immediate_context,
+                 dst_impl->wined3d_texture, dst_impl->sub_resource_idx, &dst_rect,
+                 rt_impl->wined3d_texture, rt_impl->sub_resource_idx, &src_rect, 0, NULL, WINED3D_TEXF_POINT);
++
++    /* The data has to be in system memory when GetRenderTargetData() returns:
++     * applications may read a user memory surface directly afterwards,
++     * without locking it first. */
++    if (SUCCEEDED(hr))
++    {
++        struct wined3d_resource *dst_resource = wined3d_texture_get_resource(dst_impl->wined3d_texture);
++        struct wined3d_map_desc map_desc;
++
++        if (SUCCEEDED(wined3d_resource_map(dst_resource, dst_impl->sub_resource_idx, &map_desc, NULL, WINED3D_MAP_READ)))
++            wined3d_resource_unmap(dst_resource, dst_impl->sub_resource_idx);
++    }
+     wined3d_mutex_unlock();
+ 
+     return hr;
+diff --git a/dlls/dwrite/font.c b/dlls/dwrite/font.c
+index 5d4f156f7df..4f67e8631c0 100644
+--- a/dlls/dwrite/font.c
++++ b/dlls/dwrite/font.c
+@@ -4695,8 +4695,14 @@ HRESULT create_font_collection(IDWriteFactory7 *factory, IDWriteFontFileEnumerat
+         fileenum->file = file;
+         list_add_tail(&scannedfiles, &fileenum->entry);
+ 
++        /* Unsupported or unreadable files are skipped. */
+         if (FAILED(hr = IDWriteFontSetBuilder1_AddFontFile(builder, file)))
+-            break;
++        {
++            if (hr == E_OUTOFMEMORY)
++                break;
++            WARN("Skipping font file %p, hr %#lx.\n", file, hr);
++            hr = S_OK;
++        }
+     }
+ 
+     if (SUCCEEDED(hr))
+diff --git a/dlls/dwrite/tests/font.c b/dlls/dwrite/tests/font.c
+index 865fdcf6672..adb21cfb122 100644
+--- a/dlls/dwrite/tests/font.c
++++ b/dlls/dwrite/tests/font.c
+@@ -3218,6 +3218,217 @@ static void test_CustomFontCollection(void)
+     ok(ref == 0, "factory not released, %lu\n", ref);
+ }
+ 
++struct filelist_key
++{
++    IDWriteFontFile *files[2];
++    unsigned int count;
++};
++
++struct filelist_enumerator
++{
++    IDWriteFontFileEnumerator IDWriteFontFileEnumerator_iface;
++    LONG ref;
++    struct filelist_key key;
++    unsigned int index;
++};
++
++static struct filelist_enumerator *impl_from_filelist_enumerator(IDWriteFontFileEnumerator *iface)
++{
++    return CONTAINING_RECORD(iface, struct filelist_enumerator, IDWriteFontFileEnumerator_iface);
++}
++
++static HRESULT WINAPI filelistenumerator_QueryInterface(IDWriteFontFileEnumerator *iface, REFIID riid, void **obj)
++{
++    if (IsEqualIID(riid, &IID_IUnknown) || IsEqualIID(riid, &IID_IDWriteFontFileEnumerator))
++    {
++        *obj = iface;
++        IDWriteFontFileEnumerator_AddRef(iface);
++        return S_OK;
++    }
++    *obj = NULL;
++    return E_NOINTERFACE;
++}
++
++static ULONG WINAPI filelistenumerator_AddRef(IDWriteFontFileEnumerator *iface)
++{
++    struct filelist_enumerator *enumerator = impl_from_filelist_enumerator(iface);
++    return InterlockedIncrement(&enumerator->ref);
++}
++
++static ULONG WINAPI filelistenumerator_Release(IDWriteFontFileEnumerator *iface)
++{
++    struct filelist_enumerator *enumerator = impl_from_filelist_enumerator(iface);
++    ULONG ref = InterlockedDecrement(&enumerator->ref);
++    unsigned int i;
++
++    if (!ref)
++    {
++        for (i = 0; i < enumerator->key.count; ++i)
++            IDWriteFontFile_Release(enumerator->key.files[i]);
++        free(enumerator);
++    }
++    return ref;
++}
++
++static HRESULT WINAPI filelistenumerator_MoveNext(IDWriteFontFileEnumerator *iface, BOOL *current)
++{
++    struct filelist_enumerator *enumerator = impl_from_filelist_enumerator(iface);
++
++    *current = enumerator->index < enumerator->key.count;
++    if (*current)
++        enumerator->index++;
++    return S_OK;
++}
++
++static HRESULT WINAPI filelistenumerator_GetCurrentFontFile(IDWriteFontFileEnumerator *iface, IDWriteFontFile **file)
++{
++    struct filelist_enumerator *enumerator = impl_from_filelist_enumerator(iface);
++
++    *file = enumerator->key.files[enumerator->index - 1];
++    IDWriteFontFile_AddRef(*file);
++    return S_OK;
++}
++
++static const IDWriteFontFileEnumeratorVtbl filelistenumeratorvtbl =
++{
++    filelistenumerator_QueryInterface,
++    filelistenumerator_AddRef,
++    filelistenumerator_Release,
++    filelistenumerator_MoveNext,
++    filelistenumerator_GetCurrentFontFile,
++};
++
++static HRESULT WINAPI filelistloader_QueryInterface(IDWriteFontCollectionLoader *iface, REFIID riid, void **obj)
++{
++    if (IsEqualIID(riid, &IID_IUnknown) || IsEqualIID(riid, &IID_IDWriteFontCollectionLoader))
++    {
++        *obj = iface;
++        IDWriteFontCollectionLoader_AddRef(iface);
++        return S_OK;
++    }
++    *obj = NULL;
++    return E_NOINTERFACE;
++}
++
++static ULONG WINAPI filelistloader_AddRef(IDWriteFontCollectionLoader *iface)
++{
++    return 2;
++}
++
++static ULONG WINAPI filelistloader_Release(IDWriteFontCollectionLoader *iface)
++{
++    return 1;
++}
++
++static HRESULT WINAPI filelistloader_CreateEnumeratorFromKey(IDWriteFontCollectionLoader *iface, IDWriteFactory *factory,
++        const void *key, UINT32 key_size, IDWriteFontFileEnumerator **ret)
++{
++    struct filelist_enumerator *enumerator;
++    unsigned int i;
++
++    ok(key_size == sizeof(struct filelist_key), "Unexpected key size %u.\n", key_size);
++
++    if (!(enumerator = calloc(1, sizeof(*enumerator))))
++        return E_OUTOFMEMORY;
++    enumerator->IDWriteFontFileEnumerator_iface.lpVtbl = &filelistenumeratorvtbl;
++    enumerator->ref = 1;
++    memcpy(&enumerator->key, key, sizeof(enumerator->key));
++    for (i = 0; i < enumerator->key.count; ++i)
++        IDWriteFontFile_AddRef(enumerator->key.files[i]);
++
++    *ret = &enumerator->IDWriteFontFileEnumerator_iface;
++    return S_OK;
++}
++
++static const IDWriteFontCollectionLoaderVtbl filelistloadervtbl =
++{
++    filelistloader_QueryInterface,
++    filelistloader_AddRef,
++    filelistloader_Release,
++    filelistloader_CreateEnumeratorFromKey,
++};
++
++static void test_CustomFontCollection_unsupported_file(void)
++{
++    IDWriteFontCollectionLoader filelist_loader = { &filelistloadervtbl };
++    static const char junk[] = "This is not a font file.";
++    WCHAR fontpathW[MAX_PATH], junkpathW[MAX_PATH];
++    IDWriteFontCollection *collection;
++    IDWriteFontFile *fontfile, *junkfile;
++    struct filelist_key key;
++    IDWriteFactory *factory;
++    UINT32 count, index;
++    DWORD written;
++    HANDLE file;
++    BOOL exists;
++    HRESULT hr;
++    ULONG ref;
++
++    factory = create_factory();
++
++    lstrcpyW(fontpathW, create_testfontfile(test_fontfile));
++
++    GetTempPathW(ARRAY_SIZE(junkpathW), junkpathW);
++    lstrcatW(junkpathW, L"wine_test_notafont.ttf");
++    file = CreateFileW(junkpathW, GENERIC_READ | GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, 0);
++    ok(file != INVALID_HANDLE_VALUE, "Failed to create %s, error %lu.\n", wine_dbgstr_w(junkpathW), GetLastError());
++    WriteFile(file, junk, sizeof(junk), &written, NULL);
++    CloseHandle(file);
++
++    hr = IDWriteFactory_CreateFontFileReference(factory, fontpathW, NULL, &fontfile);
++    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
++    hr = IDWriteFactory_CreateFontFileReference(factory, junkpathW, NULL, &junkfile);
++    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
++
++    hr = IDWriteFactory_RegisterFontCollectionLoader(factory, &filelist_loader);
++    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
++
++    /* Unsupported file before a valid one: the unsupported file is skipped. */
++    key.files[0] = junkfile;
++    key.files[1] = fontfile;
++    key.count = 2;
++    collection = NULL;
++    hr = IDWriteFactory_CreateCustomFontCollection(factory, &filelist_loader, &key, sizeof(key), &collection);
++    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
++    if (SUCCEEDED(hr))
++    {
++        count = IDWriteFontCollection_GetFontFamilyCount(collection);
++        ok(count == 1, "Unexpected family count %u.\n", count);
++
++        exists = FALSE;
++        hr = IDWriteFontCollection_FindFamilyName(collection, L"wine_test", &index, &exists);
++        ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
++        ok(exists, "Expected family to exist.\n");
++
++        IDWriteFontCollection_Release(collection);
++    }
++
++    /* Only an unsupported file: an empty collection. */
++    key.files[0] = junkfile;
++    key.count = 1;
++    collection = NULL;
++    hr = IDWriteFactory_CreateCustomFontCollection(factory, &filelist_loader, &key, sizeof(key), &collection);
++    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
++    if (SUCCEEDED(hr))
++    {
++        count = IDWriteFontCollection_GetFontFamilyCount(collection);
++        ok(count == 0, "Unexpected family count %u.\n", count);
++        IDWriteFontCollection_Release(collection);
++    }
++
++    hr = IDWriteFactory_UnregisterFontCollectionLoader(factory, &filelist_loader);
++    ok(hr == S_OK, "Unexpected hr %#lx.\n", hr);
++
++    IDWriteFontFile_Release(junkfile);
++    IDWriteFontFile_Release(fontfile);
++
++    ref = IDWriteFactory_Release(factory);
++    ok(ref == 0, "factory not released, %lu\n", ref);
++
++    DELETE_FONTFILE(junkpathW);
++    DELETE_FONTFILE(fontpathW);
++}
++
+ static HRESULT WINAPI fontfileloader_QueryInterface(IDWriteFontFileLoader *iface, REFIID riid, void **obj)
+ {
+     if (IsEqualIID(riid, &IID_IUnknown) || IsEqualIID(riid, &IID_IDWriteFontFileLoader))
+@@ -10708,6 +10919,7 @@ START_TEST(font)
+     test_system_fontcollection();
+     test_ConvertFontFaceToLOGFONT();
+     test_CustomFontCollection();
++    test_CustomFontCollection_unsupported_file();
+     test_CreateCustomFontFileReference();
+     test_CreateFontFileReference();
+     test_shared_isolated();
+diff --git a/dlls/evr/mixer.c b/dlls/evr/mixer.c
+index 65f5501c5c4..6b0270f38c3 100644
+--- a/dlls/evr/mixer.c
++++ b/dlls/evr/mixer.c
+@@ -1121,20 +1121,51 @@ static HRESULT WINAPI video_mixer_transform_ProcessEvent(IMFTransform *iface, DW
+     return E_NOTIMPL;
+ }
+ 
+-static void video_mixer_request_sample(struct video_mixer *mixer, unsigned int idx)
++/* Marks an input as requested, called with the mixer lock held. The request
++ * itself is sent by video_mixer_send_requests() after the lock is released:
++ * the renderer takes its own lock in Notify(), and calls into the mixer with
++ * that lock held (e.g. on clock start), so notifying with the mixer lock held
++ * can deadlock. */
++static void video_mixer_request_sample(struct video_mixer *mixer, unsigned int idx, unsigned int *requests)
+ {
+     if (!mixer->event_sink || mixer->inputs[idx].sample_requested)
+         return;
+ 
+-    IMediaEventSink_Notify(mixer->event_sink, EC_SAMPLE_NEEDED, idx, 0);
+     mixer->inputs[idx].sample_requested = 1;
++    *requests |= 1u << idx;
++}
++
++/* Takes a reference to the event sink if there are requests to send; called
++ * with the mixer lock held. */
++static IMediaEventSink *video_mixer_get_request_sink(struct video_mixer *mixer, unsigned int requests)
++{
++    if (!requests || !mixer->event_sink)
++        return NULL;
++    IMediaEventSink_AddRef(mixer->event_sink);
++    return mixer->event_sink;
++}
++
++/* Called without the mixer lock. */
++static void video_mixer_send_requests(IMediaEventSink *sink, unsigned int requests)
++{
++    unsigned int i;
++
++    if (!sink)
++        return;
++    for (i = 0; requests; ++i, requests >>= 1)
++    {
++        if (requests & 1)
++            IMediaEventSink_Notify(sink, EC_SAMPLE_NEEDED, i, 0);
++    }
++    IMediaEventSink_Release(sink);
+ }
+ 
+ static HRESULT WINAPI video_mixer_transform_ProcessMessage(IMFTransform *iface, MFT_MESSAGE_TYPE message, ULONG_PTR param)
+ {
+     struct video_mixer *mixer = impl_from_IMFTransform(iface);
++    unsigned int i, requests = 0;
++    IMediaEventSink *request_sink;
+     HRESULT hr = S_OK;
+-    unsigned int i;
+ 
+     TRACE("%p, %#x, %Iu.\n", iface, message, param);
+ 
+@@ -1161,7 +1192,7 @@ static HRESULT WINAPI video_mixer_transform_ProcessMessage(IMFTransform *iface,
+             else
+             {
+                 for (i = 0; i < mixer->input_count; ++i)
+-                    video_mixer_request_sample(mixer, i);
++                    video_mixer_request_sample(mixer, i, &requests);
+             }
+ 
+             mixer->is_streaming = message == MFT_MESSAGE_NOTIFY_BEGIN_STREAMING;
+@@ -1176,7 +1207,9 @@ static HRESULT WINAPI video_mixer_transform_ProcessMessage(IMFTransform *iface,
+             hr = E_NOTIMPL;
+     }
+ 
++    request_sink = video_mixer_get_request_sink(mixer, requests);
+     LeaveCriticalSection(&mixer->cs);
++    video_mixer_send_requests(request_sink, requests);
+ 
+     return hr;
+ }
+@@ -1400,10 +1433,11 @@ static HRESULT WINAPI video_mixer_transform_ProcessOutput(IMFTransform *iface, D
+ {
+     struct video_mixer *mixer = impl_from_IMFTransform(iface);
+     LONGLONG timestamp, duration;
++    unsigned int i, requests = 0;
++    IMediaEventSink *request_sink;
+     IDirect3DSurface9 *surface;
+     IDirect3DDevice9 *device;
+     BOOL repaint = FALSE;
+-    unsigned int i;
+     HRESULT hr;
+ 
+     TRACE("%p, %#lx, %lu, %p, %p.\n", iface, flags, count, buffers, status);
+@@ -1450,10 +1484,16 @@ static HRESULT WINAPI video_mixer_transform_ProcessOutput(IMFTransform *iface, D
+                 mixer->output_rendered = 1;
+             }
+ 
+-            if (SUCCEEDED(hr) && !repaint)
++            /* Ask for new input after a normal render, and also whenever we have
++             * nothing new to render: a repaint (e.g. after the presenter changed
++             * the output type on a resize) may have rendered the latest input
++             * without requesting more, and after a flush (seek) the inputs are
++             * empty. Without a request the EVR sends no more samples and the
++             * picture freezes. */
++            if ((SUCCEEDED(hr) && !repaint) || hr == MF_E_TRANSFORM_NEED_MORE_INPUT)
+             {
+                 for (i = 0; i < mixer->input_count; ++i)
+-                    video_mixer_request_sample(mixer, i);
++                    video_mixer_request_sample(mixer, i, &requests);
+             }
+         }
+         else
+@@ -1473,7 +1513,9 @@ static HRESULT WINAPI video_mixer_transform_ProcessOutput(IMFTransform *iface, D
+         IDirect3DSurface9_Release(surface);
+     }
+ 
++    request_sink = video_mixer_get_request_sink(mixer, requests);
+     LeaveCriticalSection(&mixer->cs);
++    video_mixer_send_requests(request_sink, requests);
+ 
+     return hr;
+ }
+diff --git a/dlls/mf/evr.c b/dlls/mf/evr.c
+index bca5fa3fe5a..4d831ed3018 100644
+--- a/dlls/mf/evr.c
++++ b/dlls/mf/evr.c
+@@ -49,7 +49,6 @@ enum video_stream_flags
+ {
+     EVR_STREAM_PREROLLING = 0x1,
+     EVR_STREAM_PREROLLED = 0x2,
+-    EVR_STREAM_SAMPLE_NEEDED = 0x4,
+     EVR_STREAM_STARTED = 0x8,
+ };
+ 
+@@ -64,6 +63,7 @@ struct video_stream
+     LONG refcount;
+     unsigned int id;
+     unsigned int flags;
++    BOOL sample_needed; /* guarded by parent's request_cs */
+     struct video_renderer *parent;
+     IMFMediaEventQueue *event_queue;
+     IMFVideoSampleAllocator *allocator;
+@@ -102,8 +102,20 @@ struct video_renderer
+     size_t stream_count;
+ 
+     CRITICAL_SECTION cs;
++    /* Guards state, the stream array and the streams' sample_needed flags for
++     * sample requests from the mixer. Never held while calling out: the mixer
++     * may request samples from a presenter thread that holds the presenter's
++     * lock, while the renderer calls into the presenter with renderer->cs held. */
++    CRITICAL_SECTION request_cs;
+ };
+ 
++static void video_renderer_set_state(struct video_renderer *renderer, unsigned int state)
++{
++    EnterCriticalSection(&renderer->request_cs);
++    renderer->state = state;
++    LeaveCriticalSection(&renderer->request_cs);
++}
++
+ static struct video_renderer *impl_from_IMFMediaSink(IMFMediaSink *iface)
+ {
+     return CONTAINING_RECORD(iface, struct video_renderer, IMFMediaSink_iface);
+@@ -1187,6 +1199,7 @@ static ULONG WINAPI video_renderer_sink_Release(IMFMediaSink *iface)
+         if (renderer->attributes)
+             IMFAttributes_Release(renderer->attributes);
+         DeleteCriticalSection(&renderer->cs);
++        DeleteCriticalSection(&renderer->request_cs);
+         free(renderer);
+     }
+ 
+@@ -1213,11 +1226,14 @@ static HRESULT video_renderer_add_stream(struct video_renderer *renderer, unsign
+     struct video_stream *stream;
+     HRESULT hr;
+ 
++    EnterCriticalSection(&renderer->request_cs);
+     if (!mf_array_reserve((void **)&renderer->streams, &renderer->stream_size, renderer->stream_count + 1,
+             sizeof(*renderer->streams)))
+     {
++        LeaveCriticalSection(&renderer->request_cs);
+         return E_OUTOFMEMORY;
+     }
++    LeaveCriticalSection(&renderer->request_cs);
+ 
+     if (SUCCEEDED(hr = video_renderer_stream_create(renderer, id, &stream)))
+     {
+@@ -1226,7 +1242,9 @@ static HRESULT video_renderer_add_stream(struct video_renderer *renderer, unsign
+             *stream_sink = &stream->IMFStreamSink_iface;
+             IMFStreamSink_AddRef(*stream_sink);
+         }
++        EnterCriticalSection(&renderer->request_cs);
+         renderer->streams[renderer->stream_count++] = stream;
++        LeaveCriticalSection(&renderer->request_cs);
+     }
+ 
+     return hr;
+@@ -1275,7 +1293,9 @@ static HRESULT WINAPI video_renderer_sink_RemoveStreamSink(IMFMediaSink *iface,
+         {
+             if (renderer->streams[i]->id == id)
+             {
+-                IMFStreamSink_Release(&renderer->streams[i]->IMFStreamSink_iface);
++                struct video_stream *stream = renderer->streams[i];
++
++                EnterCriticalSection(&renderer->request_cs);
+                 renderer->streams[i] = NULL;
+                 if (i < renderer->stream_count - 1)
+                 {
+@@ -1283,6 +1303,8 @@ static HRESULT WINAPI video_renderer_sink_RemoveStreamSink(IMFMediaSink *iface,
+                             (renderer->stream_count - i - 1) * sizeof(*renderer->streams));
+                 }
+                 renderer->stream_count--;
++                LeaveCriticalSection(&renderer->request_cs);
++                IMFStreamSink_Release(&stream->IMFStreamSink_iface);
+                 break;
+             }
+         }
+@@ -1464,9 +1486,12 @@ static HRESULT WINAPI video_renderer_sink_Shutdown(IMFMediaSink *iface)
+             IMFMediaSink_Release(iface);
+             renderer->streams[i] = NULL;
+         }
++        EnterCriticalSection(&renderer->request_cs);
+         free(renderer->streams);
++        renderer->streams = NULL;
+         renderer->stream_count = 0;
+         renderer->stream_size = 0;
++        LeaveCriticalSection(&renderer->request_cs);
+         IMFMediaEventQueue_Shutdown(renderer->event_queue);
+         video_renderer_set_presentation_clock(renderer, NULL);
+         video_renderer_release_services(renderer);
+@@ -1922,7 +1947,7 @@ static HRESULT WINAPI video_renderer_clock_sink_OnClockStart(IMFClockStateSink *
+     state = renderer->state;
+ 
+     /* Update sink state before sending sample requests, to avoid potentially receiving new sample in stopped state */
+-    renderer->state = EVR_STATE_RUNNING;
++    video_renderer_set_state(renderer, EVR_STATE_RUNNING);
+ 
+     if (state == EVR_STATE_STOPPED)
+     {
+@@ -1933,10 +1958,15 @@ static HRESULT WINAPI video_renderer_clock_sink_OnClockStart(IMFClockStateSink *
+         {
+             struct video_stream *stream = renderer->streams[i];
+ 
++            EnterCriticalSection(&renderer->request_cs);
++            request_sample = stream->sample_needed;
++            stream->sample_needed = FALSE;
++            LeaveCriticalSection(&renderer->request_cs);
++
+             EnterCriticalSection(&stream->cs);
+-            request_sample = !(stream->flags & EVR_STREAM_PREROLLED) || (stream->flags & EVR_STREAM_SAMPLE_NEEDED);
++            if (!(stream->flags & EVR_STREAM_PREROLLED))
++                request_sample = TRUE;
+             stream->flags |= EVR_STREAM_PREROLLED;
+-            stream->flags &= ~EVR_STREAM_SAMPLE_NEEDED;
+             LeaveCriticalSection(&stream->cs);
+ 
+             IMFMediaEventQueue_QueueEventParamVar(stream->event_queue, MEStreamSinkStarted, &GUID_NULL, S_OK, NULL);
+@@ -1978,10 +2008,14 @@ static HRESULT WINAPI video_renderer_clock_sink_OnClockStop(IMFClockStateSink *i
+             struct video_stream *stream = renderer->streams[i];
+ 
+             EnterCriticalSection(&stream->cs);
+-            stream->flags &= ~(EVR_STREAM_PREROLLED | EVR_STREAM_SAMPLE_NEEDED);
++            stream->flags &= ~EVR_STREAM_PREROLLED;
+             LeaveCriticalSection(&stream->cs);
++
++            EnterCriticalSection(&renderer->request_cs);
++            stream->sample_needed = FALSE;
++            LeaveCriticalSection(&renderer->request_cs);
+         }
+-        renderer->state = EVR_STATE_STOPPED;
++        video_renderer_set_state(renderer, EVR_STATE_STOPPED);
+     }
+ 
+     for (i = 0; i < renderer->stream_count; ++i)
+@@ -2012,7 +2046,7 @@ static HRESULT WINAPI video_renderer_clock_sink_OnClockPause(IMFClockStateSink *
+         IMFMediaEventQueue_QueueEventParamVar(stream->event_queue, MEStreamSinkPaused, &GUID_NULL, S_OK, NULL);
+     }
+ 
+-    renderer->state = EVR_STATE_PAUSED;
++    video_renderer_set_state(renderer, EVR_STATE_PAUSED);
+ 
+     LeaveCriticalSection(&renderer->cs);
+ 
+@@ -2035,7 +2069,7 @@ static HRESULT WINAPI video_renderer_clock_sink_OnClockRestart(IMFClockStateSink
+         struct video_stream *stream = renderer->streams[i];
+         IMFMediaEventQueue_QueueEventParamVar(stream->event_queue, MEStreamSinkStarted, &GUID_NULL, S_OK, NULL);
+     }
+-    renderer->state = EVR_STATE_RUNNING;
++    video_renderer_set_state(renderer, EVR_STATE_RUNNING);
+ 
+     LeaveCriticalSection(&renderer->cs);
+ 
+@@ -2276,10 +2310,10 @@ static HRESULT WINAPI video_renderer_event_sink_Notify(IMediaEventSink *iface, L
+ 
+     TRACE("%p, %ld, %Id, %Id.\n", iface, event, param1, param2);
+ 
+-    EnterCriticalSection(&renderer->cs);
+-
+     if (event == EC_SAMPLE_NEEDED)
+     {
++        /* Not under renderer->cs, see request_cs. */
++        EnterCriticalSection(&renderer->request_cs);
+         idx = param1;
+         if (idx >= renderer->stream_count)
+             hr = MF_E_INVALIDSTREAMNUMBER;
+@@ -2292,10 +2326,15 @@ static HRESULT WINAPI video_renderer_event_sink_Notify(IMediaEventSink *iface, L
+         {
+             /* Mixer asks for more input right after preroll too, before renderer finished running state transition.
+                Mark such streams here, and issue requests later in OnClockStart(). */
+-            renderer->streams[idx]->flags |= EVR_STREAM_SAMPLE_NEEDED;
++            renderer->streams[idx]->sample_needed = TRUE;
+         }
++        LeaveCriticalSection(&renderer->request_cs);
++        return hr;
+     }
+-    else if (event == EC_DISPLAY_CHANGED)
++
++    EnterCriticalSection(&renderer->cs);
++
++    if (event == EC_DISPLAY_CHANGED)
+     {
+         for (idx = 0; idx < renderer->stream_count; ++idx)
+             IMFMediaEventQueue_QueueEventParamVar(renderer->streams[idx]->event_queue,
+@@ -2868,6 +2907,7 @@ static HRESULT evr_create_object(IMFAttributes *attributes, void *user_context,
+     object->IMFRateSupport_iface.lpVtbl = &video_renderer_rate_support_vtbl;
+     object->refcount = 1;
+     InitializeCriticalSection(&object->cs);
++    InitializeCriticalSection(&object->request_cs);
+ 
+     if (FAILED(hr = MFCreateEventQueue(&object->event_queue)))
+         goto failed;
+diff --git a/dlls/ntdll/unix/virtual.c b/dlls/ntdll/unix/virtual.c
+index b61da59918f..f2fb0b0c431 100644
+--- a/dlls/ntdll/unix/virtual.c
++++ b/dlls/ntdll/unix/virtual.c
+@@ -224,6 +224,7 @@ static const size_t pages_vprot_shift = 20;
+ static const size_t pages_vprot_mask = (1 << 20) - 1;
+ static size_t pages_vprot_size;
+ static BYTE **pages_vprot;
++static BYTE *pages_vprot_dirty;  /* per chunk: set once the chunk holds a non-zero byte */
+ #else  /* on 32-bit we use a simple array with one byte per page */
+ static BYTE *pages_vprot;
+ #endif
+@@ -913,13 +914,20 @@ static void set_page_vprot( const void *addr, size_t size, BYTE vprot )
+     size_t end = ((size_t)addr + size + page_mask) >> page_shift;
+ 
+ #ifdef _WIN64
+-    while (idx >> pages_vprot_shift != end >> pages_vprot_shift)
++    while (idx < end)
+     {
+-        size_t dir_size = pages_vprot_mask + 1 - (idx & pages_vprot_mask);
+-        memset( pages_vprot[idx >> pages_vprot_shift] + (idx & pages_vprot_mask), vprot, dir_size );
+-        idx += dir_size;
++        size_t chunk = idx >> pages_vprot_shift;
++        size_t count = min( end - idx, pages_vprot_mask + 1 - (idx & pages_vprot_mask) );
++
++        /* chunks start out all zero, so storing zero into a chunk that never held
++         * anything else changes nothing, and skipping it avoids touching the memory */
++        if (vprot || pages_vprot_dirty[chunk])
++        {
++            memset( pages_vprot[chunk] + (idx & pages_vprot_mask), vprot, count );
++            if (vprot) pages_vprot_dirty[chunk] = 1;
++        }
++        idx += count;
+     }
+-    memset( pages_vprot[idx >> pages_vprot_shift] + (idx & pages_vprot_mask), vprot, end - idx );
+ #else
+     memset( pages_vprot + idx, vprot, end - idx );
+ #endif
+@@ -937,10 +945,21 @@ static void set_page_vprot_bits( const void *addr, size_t size, BYTE set, BYTE c
+     size_t end = ((size_t)addr + size + page_mask) >> page_shift;
+ 
+ #ifdef _WIN64
+-    for ( ; idx < end; idx++)
++    while (idx < end)
+     {
+-        BYTE *ptr = pages_vprot[idx >> pages_vprot_shift] + (idx & pages_vprot_mask);
+-        *ptr = (*ptr & ~clear) | set;
++        size_t chunk = idx >> pages_vprot_shift;
++        size_t count = min( end - idx, pages_vprot_mask + 1 - (idx & pages_vprot_mask) );
++
++        /* clearing bits in a chunk that never held a non-zero byte is a no-op */
++        if (set || pages_vprot_dirty[chunk])
++        {
++            BYTE *ptr = pages_vprot[chunk] + (idx & pages_vprot_mask);
++            size_t i;
++
++            for (i = 0; i < count; i++) ptr[i] = (ptr[i] & ~clear) | set;
++            if (set) pages_vprot_dirty[chunk] = 1;
++        }
++        idx += count;
+     }
+ #else
+     for ( ; idx < end; idx++) pages_vprot[idx] = (pages_vprot[idx] & ~clear) | set;
+@@ -2646,6 +2665,51 @@ static IMAGE_BASE_RELOCATION *process_relocation_block( char *page, IMAGE_BASE_R
+ }
+ 
+ 
++/* Sections that are read-only and whose position in the image file isn't host page aligned
++ * can't be mmapped from the file, so every process would read them into its own private
++ * memory. For big sections the server keeps a page aligned copy in the image's shared temp
++ * file instead, so that all the processes mapping the image share the same pages.
++ * Keep in sync with is_shared_copy_section() in server/mapping.c */
++#define SHARED_COPY_MIN_SIZE 0x100000
++
++static BOOL is_shared_copy_section( const IMAGE_SECTION_HEADER *sec, SIZE_T file_start, SIZE_T file_size )
++{
++    if (sec->Characteristics & (IMAGE_SCN_MEM_WRITE | IMAGE_SCN_MEM_SHARED)) return FALSE;
++    if (!sec->PointerToRawData || file_size < SHARED_COPY_MIN_SIZE) return FALSE;
++    if (!(file_start & host_page_mask)) return FALSE;        /* can be mapped directly */
++    if (sec->VirtualAddress & host_page_mask) return FALSE;  /* can't be mapped on a host page boundary */
++    return TRUE;
++}
++
++/* offset in the shared file of the page aligned section copies: they follow the shared sections */
++static off_t get_shared_copy_base( const IMAGE_SECTION_HEADER *sec, unsigned int nb_sec, SIZE_T align_mask )
++{
++    off_t size = 0;
++    unsigned int i;
++
++    for (i = 0; i < nb_sec; i++)
++    {
++        if (!(sec[i].Characteristics & IMAGE_SCN_MEM_SHARED) ||
++            !(sec[i].Characteristics & IMAGE_SCN_MEM_WRITE)) continue;
++        if (!sec[i].Misc.VirtualSize) size += ROUND_SIZE( 0, sec[i].SizeOfRawData, align_mask );
++        else size += ROUND_SIZE( 0, sec[i].Misc.VirtualSize, align_mask );
++    }
++    return ROUND_SIZE( 0, size, host_page_mask );
++}
++
++/* map a section from its page aligned copy in the shared file */
++static BOOL map_shared_copy_section( struct file_view *view, int shared_fd, off_t *copy_pos,
++                                     const IMAGE_SECTION_HEADER *sec, SIZE_T file_size )
++{
++    off_t start = *copy_pos;
++
++    *copy_pos += ROUND_SIZE( 0, file_size, host_page_mask );
++    TRACE_(module)( "mapping section %.8s at %p from the shared copy at %#lx size %#lx\n",
++                    sec->Name, (char *)view->base + sec->VirtualAddress, (long)start, (long)file_size );
++    return map_file_into_view( view, shared_fd, sec->VirtualAddress, file_size, start,
++                               VPROT_COMMITTED | VPROT_READ | VPROT_WRITECOPY, FALSE ) == STATUS_SUCCESS;
++}
++
+ /***********************************************************************
+  *           map_image_into_view
+  *
+@@ -2662,7 +2726,7 @@ static NTSTATUS map_image_into_view( struct file_view *view, const UNICODE_STRIN
+     IMAGE_DATA_DIRECTORY *imports, *dir;
+     NTSTATUS status = STATUS_CONFLICTING_ADDRESSES;
+     int i;
+-    off_t pos;
++    off_t pos, copy_pos;
+     struct stat st;
+     char *header_end;
+     char *ptr = view->base;
+@@ -2728,6 +2792,8 @@ static NTSTATUS map_image_into_view( struct file_view *view, const UNICODE_STRIN
+ 
+     /* map all the sections */
+ 
++    copy_pos = get_shared_copy_base( sec, nt->FileHeader.NumberOfSections, align_mask );
++
+     for (i = pos = 0; i < nt->FileHeader.NumberOfSections; i++)
+     {
+         static const SIZE_T sector_align = 0x1ff;
+@@ -2793,7 +2859,15 @@ static NTSTATUS map_image_into_view( struct file_view *view, const UNICODE_STRIN
+          *       fall back to read(), so we don't need to check anything here.
+          */
+         end = file_start + file_size;
+-        if (sec[i].PointerToRawData >= st.st_size ||
++        if (sec[i].PointerToRawData < st.st_size &&
++            end <= ((st.st_size + sector_align) & ~sector_align) &&
++            end >= file_start &&
++            shared_fd != -1 && is_shared_copy_section( &sec[i], file_start, file_size ) &&
++            map_shared_copy_section( view, shared_fd, &copy_pos, &sec[i], file_size ))
++        {
++            /* mapped from the page aligned shared copy */
++        }
++        else if (sec[i].PointerToRawData >= st.st_size ||
+             end > ((st.st_size + sector_align) & ~sector_align) ||
+             end < file_start ||
+             map_file_into_view( view, fd, sec[i].VirtualAddress, file_size, file_start,
+@@ -3292,6 +3366,8 @@ void virtual_init(void)
+     pages_vprot_size = ((size_t)host_addr_space_limit >> page_shift >> pages_vprot_shift) + 1;
+     pages_vprot = calloc( pages_vprot_size, sizeof(*pages_vprot) );
+     assert( pages_vprot != NULL );
++    pages_vprot_dirty = calloc( pages_vprot_size, 1 );
++    assert( pages_vprot_dirty != NULL );
+ #else
+     pages_vprot = anon_mmap_alloc( 1U << (32 - page_shift), PROT_READ | PROT_WRITE );
+     assert( pages_vprot != MAP_FAILED );
+diff --git a/dlls/prntvpt/tests/prntvpt.c b/dlls/prntvpt/tests/prntvpt.c
+index 8d955cd866b..a90918c39d3 100644
+--- a/dlls/prntvpt/tests/prntvpt.c
++++ b/dlls/prntvpt/tests/prntvpt.c
+@@ -126,6 +126,61 @@ static void test_PTOpenProviderEx(void)
+     }
+ }
+ 
++static void test_PTConvertPrintTicketToDevMode(void)
++{
++    static const LARGE_INTEGER zero;
++    DEVMODEW *drv_dm, *dm;
++    HPTPROVIDER hprov;
++    IStream *stream;
++    HANDLE hprn;
++    ULONG dm_size;
++    LONG size;
++    HRESULT hr;
++
++    if (!OpenPrinterW(default_name, &hprn, NULL))
++    {
++        skip("can't open %s\n", wine_dbgstr_w(default_name));
++        return;
++    }
++    size = DocumentPropertiesW(0, hprn, default_name, NULL, NULL, 0);
++    ok(size >= (LONG)sizeof(DEVMODEW), "got %ld\n", size);
++    drv_dm = calloc(1, size);
++    size = DocumentPropertiesW(0, hprn, default_name, drv_dm, NULL, DM_OUT_BUFFER);
++    ok(size == IDOK, "got %ld\n", size);
++    trace("driver DEVMODE: dmSize %u, dmDriverExtra %u\n", drv_dm->dmSize, drv_dm->dmDriverExtra);
++
++    hr = PTOpenProvider(default_name, 1, &hprov);
++    ok(hr == S_OK, "got %#lx\n", hr);
++
++    hr = CreateStreamOnHGlobal(NULL, TRUE, &stream);
++    ok(hr == S_OK, "got %#lx\n", hr);
++    hr = PTConvertDevModeToPrintTicket(hprov, drv_dm->dmSize + drv_dm->dmDriverExtra, drv_dm, kPTJobScope, stream);
++    ok(hr == S_OK, "got %#lx\n", hr);
++    IStream_Seek(stream, zero, STREAM_SEEK_SET, NULL);
++
++    dm = NULL;
++    dm_size = 0;
++    hr = PTConvertPrintTicketToDevMode(hprov, stream, kUserDefaultDevmode, kPTJobScope, &dm_size, &dm, NULL);
++    ok(hr == S_OK, "got %#lx\n", hr);
++    if (hr == S_OK)
++    {
++        /* applications pass the result back to DocumentProperties() as both input
++         * and output buffer, so it has to include the driver's private data */
++        ok(dm_size == dm->dmSize + dm->dmDriverExtra, "got %lu, expected %u\n", dm_size, dm->dmSize + dm->dmDriverExtra);
++        ok(dm->dmDriverExtra == drv_dm->dmDriverExtra, "got %u, expected %u\n", dm->dmDriverExtra, drv_dm->dmDriverExtra);
++        ok(dm->dmPaperSize == drv_dm->dmPaperSize, "got %d, expected %d\n", dm->dmPaperSize, drv_dm->dmPaperSize);
++
++        size = DocumentPropertiesW(0, hprn, default_name, dm, dm, DM_IN_BUFFER | DM_OUT_BUFFER);
++        ok(size == IDOK, "got %ld\n", size);
++        PTReleaseMemory(dm);
++    }
++
++    IStream_Release(stream);
++    PTCloseProvider(hprov);
++    free(drv_dm);
++    ClosePrinter(hprn);
++}
++
+ START_TEST(prntvpt)
+ {
+     DWORD size;
+@@ -143,6 +198,7 @@ START_TEST(prntvpt)
+ 
+     test_PTOpenProvider();
+     test_PTOpenProviderEx();
++    test_PTConvertPrintTicketToDevMode();
+ 
+     CoUninitialize();
+ }
+diff --git a/dlls/prntvpt/ticket.c b/dlls/prntvpt/ticket.c
+index 4bbea0d2e04..c3eee46481c 100644
+--- a/dlls/prntvpt/ticket.c
++++ b/dlls/prntvpt/ticket.c
+@@ -653,11 +653,8 @@ fail:
+ 
+ static void ticket_to_devmode(const struct ticket *ticket, DEVMODEW *dm)
+ {
+-    memset(dm, 0, sizeof(*dm));
+-
+-    dm->dmSize = sizeof(*dm);
+-    dm->dmFields = DM_ORIENTATION | DM_PAPERSIZE | DM_PAPERLENGTH | DM_PAPERWIDTH | DM_SCALE |
+-                   DM_COPIES | DM_DEFAULTSOURCE | DM_COLOR | DM_PRINTQUALITY | DM_YRESOLUTION | DM_COLLATE;
++    dm->dmFields |= DM_ORIENTATION | DM_PAPERSIZE | DM_PAPERLENGTH | DM_PAPERWIDTH | DM_SCALE |
++                    DM_COPIES | DM_DEFAULTSOURCE | DM_COLOR | DM_PRINTQUALITY | DM_YRESOLUTION | DM_COLLATE;
+     dm->dmOrientation = ticket->page.orientation;
+     dm->dmPaperSize = ticket->page.media.paper;
+     dm->dmPaperWidth = ticket->page.media.size.width / 100;
+@@ -669,6 +666,13 @@ static void ticket_to_devmode(const struct ticket *ticket, DEVMODEW *dm)
+     dm->dmPrintQuality = ticket->page.resolution.x;
+     dm->dmYResolution = ticket->page.resolution.y;
+     dm->dmCollate = ticket->document.collate;
++
++    /* the form name may still describe the driver's previous paper size */
++    if (dm->dmSize >= FIELD_OFFSET(DEVMODEW, dmFormName) + sizeof(dm->dmFormName))
++    {
++        dm->dmFormName[0] = 0;
++        dm->dmFields &= ~DM_FORMNAME;
++    }
+ }
+ 
+ static void devmode_to_ticket(const DEVMODEW *dm, struct ticket *ticket)
+@@ -727,6 +731,29 @@ static HRESULT initialize_ticket(struct prn_provider *prov, struct ticket *ticke
+     return hr;
+ }
+ 
++/* Return the driver's current DEVMODE, including its private part, so that
++ * callers can hand the result back to DocumentProperties() with the same buffer
++ * as input and output, like on Windows. Falls back to a public-only DEVMODE. */
++static DEVMODEW *get_driver_devmode(struct prn_provider *prov)
++{
++    DEVMODEW *dm;
++    LONG size;
++
++    size = DocumentPropertiesW(0, prov->hprn, prov->name, NULL, NULL, 0);
++    if (size >= (LONG)sizeof(DEVMODEW) && (dm = calloc(1, size)))
++    {
++        if (DocumentPropertiesW(0, prov->hprn, prov->name, dm, NULL, DM_OUT_BUFFER) > 0 &&
++            dm->dmSize >= sizeof(DEVMODEW) && dm->dmSize + dm->dmDriverExtra <= size)
++            return dm;
++        WARN("DocumentPropertiesW failed for %s\n", debugstr_w(prov->name));
++        free(dm);
++    }
++
++    if (!(dm = calloc(1, sizeof(*dm)))) return NULL;
++    dm->dmSize = sizeof(*dm);
++    return dm;
++}
++
+ HRESULT WINAPI PTConvertPrintTicketToDevMode(HPTPROVIDER provider, IStream *stream, EDefaultDevmodeType type,
+                                              EPrintTicketScope scope, ULONG *size, PDEVMODEW *dm, BSTR *error)
+ {
+@@ -745,11 +772,11 @@ HRESULT WINAPI PTConvertPrintTicketToDevMode(HPTPROVIDER provider, IStream *stre
+     hr = parse_ticket(stream, scope, &ticket);
+     if (hr != S_OK) return hr;
+ 
+-    *dm = malloc(sizeof(**dm));
++    *dm = get_driver_devmode(prov);
+     if (!*dm) return E_OUTOFMEMORY;
+ 
+     ticket_to_devmode(&ticket, *dm);
+-    *size = sizeof(**dm);
++    *size = (*dm)->dmSize + (*dm)->dmDriverExtra;
+ 
+     return S_OK;
+ }
+diff --git a/dlls/wined3d/context_gl.c b/dlls/wined3d/context_gl.c
+index e5b41ffc783..524c0491d3e 100644
+--- a/dlls/wined3d/context_gl.c
++++ b/dlls/wined3d/context_gl.c
+@@ -2336,7 +2336,11 @@ static void wined3d_context_gl_get_rt_size(const struct wined3d_context_gl *cont
+     const struct wined3d_texture *rt = context_gl->c.current_rt.texture;
+     unsigned int level;
+ 
+-    if (rt->swapchain)
++    /* The window size only matters when drawing to the window itself. When a
++     * swapchain texture is drawn to through an FBO, the window may be much
++     * smaller than the texture (or even zero-sized, or a message-only window),
++     * and using its size would clip the draw. */
++    if (rt->swapchain && !context_gl->current_fbo)
+     {
+         const struct wined3d_swapchain_desc *desc = &rt->swapchain->state.desc;
+ 
+diff --git a/dlls/wineps.drv/download.c b/dlls/wineps.drv/download.c
+index d25b0c844e4..1e64d42875d 100644
+--- a/dlls/wineps.drv/download.c
++++ b/dlls/wineps.drv/download.c
+@@ -320,7 +320,7 @@ BOOL PSDRV_WriteSetDownloadFont(print_ctx *ctx, BOOL vertical)
+ 
+         if(pdl->type == Type42) {
+             char g_name[MAX_G_NAME + 1];
+-            get_glyph_name(ctx->hdc, 0, g_name);
++            get_glyph_name(ctx->hdc, pdl, 0, g_name);
+             T42_download_glyph(ctx, pdl, 0, g_name);
+         }
+     }
+@@ -644,7 +644,321 @@ static void get_post2_custom_glyph_name(BYTE *post2header, DWORD size, WORD inde
+     name[name_length] = 0;
+ }
+ 
+-void get_glyph_name(HDC hdc, WORD index, char *name)
++static void init_glyph_text_from_gsub(HDC hdc, DOWNLOAD *pdl);
++
++/* Fonts with a format 3.0 'post' table carry no glyph names. Map glyph indices back
++ * to characters through the font's cmap, so the glyphs can be given AGL "uniXXXX"
++ * names; PostScript and PDF consumers use those to recover the text. */
++static void init_glyph_to_unicode(HDC hdc, DOWNLOAD *pdl)
++{
++    WCHAR chars[256];
++    WORD glyphs[256], num_glyphs;
++    GLYPHSET *gs;
++    DWORD size, i, j, k, n;
++
++    pdl->glyph_to_unicode_done = TRUE;
++
++    if (GetFontData(hdc, MS_MAKE_TAG('m','a','x','p'), 4, &num_glyphs, sizeof(num_glyphs)) != sizeof(num_glyphs))
++        return;
++    num_glyphs = GET_BE_WORD(&num_glyphs);
++    if (!num_glyphs || !(size = GetFontUnicodeRanges(hdc, NULL))) return;
++    if (!(gs = HeapAlloc(GetProcessHeap(), 0, size))) return;
++    if (!(pdl->glyph_to_unicode = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY,
++                                            num_glyphs * sizeof(*pdl->glyph_to_unicode))))
++    {
++        HeapFree(GetProcessHeap(), 0, gs);
++        return;
++    }
++    pdl->glyph_to_unicode_count = num_glyphs;
++
++    GetFontUnicodeRanges(hdc, gs);
++    for (i = 0; i < gs->cRanges; i++)
++    {
++        for (j = 0; j < gs->ranges[i].cGlyphs; j += n)
++        {
++            n = min(ARRAY_SIZE(chars), gs->ranges[i].cGlyphs - j);
++            for (k = 0; k < n; k++) chars[k] = gs->ranges[i].wcLow + j + k;
++            if (GetGlyphIndicesW(hdc, chars, n, glyphs, GGI_MARK_NONEXISTING_GLYPHS) == GDI_ERROR)
++                continue;
++            for (k = 0; k < n; k++)
++            {
++                /* keep the lowest code point when several map to the same glyph */
++                if (glyphs[k] && glyphs[k] < num_glyphs && !pdl->glyph_to_unicode[glyphs[k]])
++                    pdl->glyph_to_unicode[glyphs[k]] = chars[k];
++            }
++        }
++    }
++    HeapFree(GetProcessHeap(), 0, gs);
++    init_glyph_text_from_gsub(hdc, pdl);
++}
++
++
++/* GSUB: glyphs that are only reachable through substitutions (ligatures such as "Th",
++ * alternates, small caps) have no cmap entry. Work out the text they stand for from
++ * the glyphs they replace. */
++struct gsub_data
++{
++    const BYTE *data;
++    DWORD size;
++};
++
++static BOOL gsub_word(const struct gsub_data *gsub, DWORD offset, WORD *value)
++{
++    if (offset + 2 > gsub->size) return FALSE;
++    *value = GET_BE_WORD(gsub->data + offset);
++    return TRUE;
++}
++
++/* fills glyphs[] with the coverage table's glyphs, in coverage index order */
++static int coverage_glyphs(const struct gsub_data *gsub, DWORD offset, WORD *glyphs, int max)
++{
++    WORD format, count, start, end, i, g;
++    int n = 0;
++
++    if (!gsub_word(gsub, offset, &format) || !gsub_word(gsub, offset + 2, &count)) return 0;
++    if (format == 1)
++    {
++        for (i = 0; i < count && n < max; i++)
++            if (gsub_word(gsub, offset + 4 + i * 2, &glyphs[n])) n++;
++    }
++    else if (format == 2)
++    {
++        for (i = 0; i < count; i++)
++        {
++            if (!gsub_word(gsub, offset + 4 + i * 6, &start) || !gsub_word(gsub, offset + 6 + i * 6, &end))
++                break;
++            for (g = start; g <= end && n < max; g++)
++            {
++                glyphs[n++] = g;
++                if (g == 0xffff) break;
++            }
++        }
++    }
++    return n;
++}
++
++static int get_glyph_text(const DOWNLOAD *pdl, WORD glyph, WCHAR *text)
++{
++    UINT i;
++
++    if (glyph < pdl->glyph_to_unicode_count && pdl->glyph_to_unicode[glyph])
++    {
++        text[0] = pdl->glyph_to_unicode[glyph];
++        text[1] = 0;
++        return 1;
++    }
++    for (i = 0; i < pdl->glyph_text_count; i++)
++        if (pdl->glyph_text[i].glyph == glyph)
++        {
++            lstrcpyW(text, pdl->glyph_text[i].text);
++            return lstrlenW(text);
++        }
++    return 0;
++}
++
++static BOOL add_glyph_text(DOWNLOAD *pdl, WORD glyph, const WCHAR *text, int len)
++{
++    WCHAR dummy[MAX_GLYPH_TEXT + 1];
++    struct glyph_text *entry;
++
++    if (!len || len > MAX_GLYPH_TEXT || glyph >= pdl->glyph_to_unicode_count) return FALSE;
++    if (get_glyph_text(pdl, glyph, dummy)) return FALSE;
++
++    if (pdl->glyph_text_count == pdl->glyph_text_size)
++    {
++        UINT size = max(16, pdl->glyph_text_size * 2);
++        struct glyph_text *new_text;
++
++        if (pdl->glyph_text)
++            new_text = HeapReAlloc(GetProcessHeap(), 0, pdl->glyph_text, size * sizeof(*new_text));
++        else
++            new_text = HeapAlloc(GetProcessHeap(), 0, size * sizeof(*new_text));
++        if (!new_text) return FALSE;
++        pdl->glyph_text = new_text;
++        pdl->glyph_text_size = size;
++    }
++    entry = &pdl->glyph_text[pdl->glyph_text_count++];
++    entry->glyph = glyph;
++    memcpy(entry->text, text, len * sizeof(WCHAR));
++    entry->text[len] = 0;
++    return TRUE;
++}
++
++static BOOL apply_gsub_subtable(DOWNLOAD *pdl, const struct gsub_data *gsub, WORD type, DWORD offset,
++                                WORD *glyphs)
++{
++    WCHAR text[MAX_GLYPH_TEXT + 1], part[MAX_GLYPH_TEXT + 1];
++    WORD format, cov_offset, delta, count, set_offset, n_lig, lig_offset, lig_glyph, n_comp, g, sub;
++    int n, i, j, k, len, part_len;
++    BOOL changed = FALSE;
++
++    if (type == 7) /* extension */
++    {
++        WORD ext_type, hi, lo;
++
++        if (!gsub_word(gsub, offset + 2, &ext_type) || !gsub_word(gsub, offset + 4, &hi) ||
++            !gsub_word(gsub, offset + 6, &lo) || ext_type == 7)
++            return FALSE;
++        return apply_gsub_subtable(pdl, gsub, ext_type, offset + MAKELONG(lo, hi), glyphs);
++    }
++    if (type != 1 && type != 3 && type != 4) return FALSE;
++    if (!gsub_word(gsub, offset, &format) || !gsub_word(gsub, offset + 2, &cov_offset)) return FALSE;
++    n = coverage_glyphs(gsub, offset + cov_offset, glyphs, 0x10000);
++
++    for (i = 0; i < n; i++)
++    {
++        if (!(len = get_glyph_text(pdl, glyphs[i], text))) continue;
++
++        if (type == 1 && format == 1)
++        {
++            if (gsub_word(gsub, offset + 4, &delta))
++                changed |= add_glyph_text(pdl, (WORD)(glyphs[i] + delta), text, len);
++        }
++        else if (type == 1 && format == 2)
++        {
++            if (gsub_word(gsub, offset + 6 + i * 2, &sub))
++                changed |= add_glyph_text(pdl, sub, text, len);
++        }
++        else if (type == 3 && format == 1)
++        {
++            if (!gsub_word(gsub, offset + 6 + i * 2, &set_offset) ||
++                !gsub_word(gsub, offset + set_offset, &count)) continue;
++            for (j = 0; j < count; j++)
++                if (gsub_word(gsub, offset + set_offset + 2 + j * 2, &sub))
++                    changed |= add_glyph_text(pdl, sub, text, len);
++        }
++        else if (type == 4 && format == 1)
++        {
++            DWORD set;
++
++            if (!gsub_word(gsub, offset + 6 + i * 2, &set_offset)) continue;
++            set = offset + set_offset;
++            if (!gsub_word(gsub, set, &n_lig)) continue;
++            for (j = 0; j < n_lig; j++)
++            {
++                int total = len;
++                WCHAR lig[MAX_GLYPH_TEXT + 1];
++
++                if (!gsub_word(gsub, set + 2 + j * 2, &lig_offset) ||
++                    !gsub_word(gsub, set + lig_offset, &lig_glyph) ||
++                    !gsub_word(gsub, set + lig_offset + 2, &n_comp)) continue;
++                memcpy(lig, text, len * sizeof(WCHAR));
++                for (k = 1; k < n_comp; k++)
++                {
++                    if (!gsub_word(gsub, set + lig_offset + 2 + k * 2, &g) ||
++                        !(part_len = get_glyph_text(pdl, g, part)) || total + part_len > MAX_GLYPH_TEXT)
++                        break;
++                    memcpy(lig + total, part, part_len * sizeof(WCHAR));
++                    total += part_len;
++                }
++                if (k == n_comp)
++                    changed |= add_glyph_text(pdl, lig_glyph, lig, total);
++            }
++        }
++    }
++    return changed;
++}
++
++static void init_glyph_text_from_gsub(HDC hdc, DOWNLOAD *pdl)
++{
++    struct gsub_data gsub;
++    WORD list, n_lookups, lookup, type, n_sub, sub, *glyphs = NULL;
++    BYTE *data;
++    DWORD size;
++    int pass, i, j;
++    BOOL changed;
++
++    size = GetFontData(hdc, MS_MAKE_TAG('G','S','U','B'), 0, NULL, 0);
++    if (size == GDI_ERROR || size < 10) return;
++    if (!(data = HeapAlloc(GetProcessHeap(), 0, size))) return;
++    if (GetFontData(hdc, MS_MAKE_TAG('G','S','U','B'), 0, data, size) != size) goto done;
++    gsub.data = data;
++    gsub.size = size;
++
++    if (!gsub_word(&gsub, 8, &list) || !gsub_word(&gsub, list, &n_lookups)) goto done;
++    if (!(glyphs = HeapAlloc(GetProcessHeap(), 0, 0x10000 * sizeof(*glyphs)))) goto done;
++
++    /* substitutions can build on each other (an alternate of a ligature) */
++    for (pass = 0, changed = TRUE; changed && pass < 3; pass++)
++    {
++        changed = FALSE;
++        for (i = 0; i < n_lookups; i++)
++        {
++            if (!gsub_word(&gsub, list + 2 + i * 2, &lookup) ||
++                !gsub_word(&gsub, list + lookup, &type) ||
++                !gsub_word(&gsub, list + lookup + 4, &n_sub)) continue;
++            for (j = 0; j < n_sub; j++)
++                if (gsub_word(&gsub, list + lookup + 6 + j * 2, &sub))
++                    changed |= apply_gsub_subtable(pdl, &gsub, type, list + lookup + sub, glyphs);
++        }
++    }
++    TRACE("%u glyphs mapped through GSUB\n", pdl->glyph_text_count);
++done:
++    HeapFree(GetProcessHeap(), 0, glyphs);
++    HeapFree(GetProcessHeap(), 0, data);
++}
++
++/* Glyphs found through GSUB keep their g<index> name, which is unique; tell consumers
++ * such as Ghostscript what they stand for through the font's GlyphNames2Unicode
++ * dictionary, as Windows' PostScript driver does. */
++void PSDRV_WriteGlyphText(print_ctx *ctx, DOWNLOAD *pdl, WORD index, const char *name)
++{
++    static const char fmt[] = "/%s findfont /FontInfo get /GlyphNames2Unicode get /%s <";
++    WCHAR text[MAX_GLYPH_TEXT + 1];
++    char buf[512];
++    int len, i, pos;
++
++    if (!pdl || !pdl->glyph_text_count) return;
++    if (index < pdl->glyph_to_unicode_count && pdl->glyph_to_unicode[index]) return;
++    /* Ghostscript drops GlyphNames2Unicode entries longer than one character for
++     * simple fonts; ligatures get an ActualText span instead. */
++    if ((len = get_glyph_text(pdl, index, text)) != 1) return;
++
++    pos = snprintf(buf, sizeof(buf), fmt, pdl->ps_name, name);
++    if (pos < 0 || pos + len * 4 + 8 > (int)sizeof(buf)) return;
++    for (i = 0; i < len; i++)
++        pos += sprintf(buf + pos, "%04X", text[i]);
++    strcpy(buf + pos, "> put\n");
++    PSDRV_WriteSpool(ctx, buf, strlen(buf));
++}
++
++/* Ligatures such as "Th" or "fi" stand for more than one character. Wrap them in a
++ * marked-content span carrying their text, which PDF converters such as Ghostscript
++ * turn into /ActualText; the prolog makes pdfmark a no-op on printers. */
++static int write_actual_text_begin(print_ctx *ctx, DOWNLOAD *pdl, WORD index)
++{
++    WCHAR text[MAX_GLYPH_TEXT + 1];
++    char buf[64 + MAX_GLYPH_TEXT * 4];
++    int len, i, pos;
++
++    if (!pdl->glyph_text_count) return 0;
++    if (index < pdl->glyph_to_unicode_count && pdl->glyph_to_unicode[index]) return 0;
++    if ((len = get_glyph_text(pdl, index, text)) < 2) return 0;
++
++    pos = sprintf(buf, "[/Span <</ActualText <FEFF");
++    for (i = 0; i < len; i++)
++        pos += sprintf(buf + pos, "%04X", text[i]);
++    strcpy(buf + pos, ">>> /BDC pdfmark\n");
++    PSDRV_WriteSpool(ctx, buf, strlen(buf));
++    return len;
++}
++
++static void write_actual_text_end(print_ctx *ctx)
++{
++    static const char emc[] = "[/EMC pdfmark\n";
++    PSDRV_WriteSpool(ctx, emc, sizeof(emc) - 1);
++}
++
++static BOOL get_unicode_glyph_name(HDC hdc, DOWNLOAD *pdl, WORD index, char *name)
++{
++    if (!pdl) return FALSE;
++    if (!pdl->glyph_to_unicode_done) init_glyph_to_unicode(hdc, pdl);
++    if (index >= pdl->glyph_to_unicode_count || !pdl->glyph_to_unicode[index]) return FALSE;
++    snprintf(name, MAX_G_NAME + 1, "uni%04X", pdl->glyph_to_unicode[index]);
++    return TRUE;
++}
++
++void get_glyph_name(HDC hdc, DOWNLOAD *pdl, WORD index, char *name)
+ {
+     struct
+     {
+@@ -702,8 +1016,8 @@ void get_glyph_name(HDC hdc, WORD index, char *name)
+         else
+             get_post2_custom_glyph_name(post2header, size, glyphNameIndex - 258, name);
+     }
+-    else
+-        FIXME("PostScript Format %d.%d glyph names are currently unsupported.\n",
++    else if(!get_unicode_glyph_name(hdc, pdl, index, name))
++        TRACE("No name for glyph %d in a PostScript Format %d.%d font\n", index,
+               HIWORD(post_header->format), LOWORD(post_header->format));
+ 
+ cleanup:
+@@ -720,23 +1034,28 @@ BOOL PSDRV_WriteDownloadGlyphShow(print_ctx *ctx, const WORD *glyphs,
+ 				  UINT count)
+ {
+     UINT i;
++    int span;
+     char g_name[MAX_G_NAME + 1];
+     assert(ctx->font.fontloc == Download);
+ 
+     switch(ctx->font.fontinfo.Download->type) {
+     case Type42:
+     for(i = 0; i < count; i++) {
+-        get_glyph_name(ctx->hdc, glyphs[i], g_name);
++        get_glyph_name(ctx->hdc, ctx->font.fontinfo.Download, glyphs[i], g_name);
+ 	T42_download_glyph(ctx, ctx->font.fontinfo.Download, glyphs[i], g_name);
++        span = write_actual_text_begin(ctx, ctx->font.fontinfo.Download, glyphs[i]);
+ 	PSDRV_WriteGlyphShow(ctx, g_name);
++        if (span) write_actual_text_end(ctx);
+     }
+     break;
+ 
+     case Type1:
+     for(i = 0; i < count; i++) {
+-        get_glyph_name(ctx->hdc, glyphs[i], g_name);
++        get_glyph_name(ctx->hdc, ctx->font.fontinfo.Download, glyphs[i], g_name);
+ 	T1_download_glyph(ctx, ctx->font.fontinfo.Download, glyphs[i], g_name);
++        span = write_actual_text_begin(ctx, ctx->font.fontinfo.Download, glyphs[i]);
+ 	PSDRV_WriteGlyphShow(ctx, g_name);
++        if (span) write_actual_text_end(ctx);
+     }
+     break;
+ 
+@@ -789,6 +1108,8 @@ BOOL PSDRV_EmptyDownloadList(print_ctx *ctx, BOOL write_undef)
+ 	}
+ 
+ 	HeapFree(GetProcessHeap(), 0, pdl->ps_name);
++	HeapFree(GetProcessHeap(), 0, pdl->glyph_to_unicode);
++	HeapFree(GetProcessHeap(), 0, pdl->glyph_text);
+ 	old = pdl;
+ 	pdl = pdl->next;
+ 	HeapFree(GetProcessHeap(), 0, old);
+diff --git a/dlls/wineps.drv/ps.c b/dlls/wineps.drv/ps.c
+index 7a8feeaedb8..b1a6af49d15 100644
+--- a/dlls/wineps.drv/ps.c
++++ b/dlls/wineps.drv/ps.c
+@@ -77,7 +77,8 @@ static const char psprolog[] =
+ "} bind def\n"
+ "/B {pop pop pop pop} def\n"
+ "/N {newpath} def\n"
+-"/havetype42gdir {version cvi 2015 ge} bind def\n";
++"/havetype42gdir {version cvi 2015 ge} bind def\n"
++"/pdfmark where {pop} {userdict /pdfmark /cleartomark load put} ifelse\n";
+ 
+ static const char psbeginsetup[] =
+ "%%BeginSetup\n";
+diff --git a/dlls/wineps.drv/psdrv.h b/dlls/wineps.drv/psdrv.h
+index 4fe5db78e22..c310339b3b0 100644
+--- a/dlls/wineps.drv/psdrv.h
++++ b/dlls/wineps.drv/psdrv.h
+@@ -267,6 +267,13 @@ enum downloadtype {
+   Type1, Type42
+ };
+ 
++#define MAX_GLYPH_TEXT 8
++struct glyph_text
++{
++  WORD glyph;
++  WCHAR text[MAX_GLYPH_TEXT + 1];
++};
++
+ typedef struct _tagDOWNLOAD {
+   enum downloadtype type;
+   union {
+@@ -274,6 +281,11 @@ typedef struct _tagDOWNLOAD {
+     TYPE42 *Type42;
+   } typeinfo;
+   char *ps_name;
++  WCHAR *glyph_to_unicode; /* for fonts without glyph names, built on first use */
++  WORD glyph_to_unicode_count;
++  BOOL glyph_to_unicode_done;
++  struct glyph_text *glyph_text; /* ligatures and alternates found through GSUB */
++  UINT glyph_text_count, glyph_text_size;
+   struct _tagDOWNLOAD *next;
+ } DOWNLOAD;
+ 
+@@ -498,7 +510,8 @@ extern BOOL flush_spool(print_ctx *ctx);
+ extern DWORD write_spool(print_ctx *ctx, const void *data, DWORD num);
+ 
+ #define MAX_G_NAME 31 /* max length of PS glyph name */
+-extern void get_glyph_name(HDC hdc, WORD index, char *name);
++extern void get_glyph_name(HDC hdc, DOWNLOAD *pdl, WORD index, char *name);
++extern void PSDRV_WriteGlyphText(print_ctx *ctx, DOWNLOAD *pdl, WORD index, const char *name);
+ 
+ extern TYPE1 *T1_download_header(print_ctx *ctx, char *ps_name,
+                                  RECT *bbox, UINT emsize);
+diff --git a/dlls/wineps.drv/type1.c b/dlls/wineps.drv/type1.c
+index 1e69a513353..e212ab43289 100644
+--- a/dlls/wineps.drv/type1.c
++++ b/dlls/wineps.drv/type1.c
+@@ -80,6 +80,7 @@ TYPE1 *T1_download_header(print_ctx *ctx, char *ps_name, RECT *bbox, UINT emsize
+       " /FontMatrix [1 %ld div 0 0 1 %ld div 0 0] def\n"
+       " /FontBBox [%ld %ld %ld %ld] def\n"
+       " /FontType 1 def\n"
++      " /FontInfo 1 dict dup /GlyphNames2Unicode 16 dict put def\n"
+       " /Private 7 dict begin\n"
+       "  /RD {string currentfile exch readhexstring pop} def\n"
+       "  /ND {def} def\n"
+@@ -658,6 +659,7 @@ BOOL T1_download_glyph(print_ctx *ctx, DOWNLOAD *pdl, DWORD index, char *glyph_n
+     PSDRV_WriteBytes(ctx, bytes, len);
+     sprintf(buf, glyph_def_end);
+     PSDRV_WriteSpool(ctx, buf, strlen(buf));
++    PSDRV_WriteGlyphText(ctx, pdl, index, glyph_name);
+     str_free(charstring);
+ 
+     t1->glyph_sent[index] = TRUE;
+diff --git a/dlls/wineps.drv/type42.c b/dlls/wineps.drv/type42.c
+index 4f598962b73..e11853dbf8e 100644
+--- a/dlls/wineps.drv/type42.c
++++ b/dlls/wineps.drv/type42.c
+@@ -152,6 +152,7 @@ TYPE42 *T42_download_header(print_ctx *ctx, char *ps_name,
+ 	    " /FontMatrix [1 0 0 1 0 0] def\n"
+ 	    " /FontBBox [%f %f %f %f] def\n"
+ 	    " /FontType 42 def\n"
++	    " /FontInfo 1 dict dup /GlyphNames2Unicode 16 dict put def\n"
+ 	    " /CharStrings 256 dict begin\n"
+ 	    "  /.notdef 0 def\n"
+             " currentdict end def\n"
+@@ -326,7 +327,7 @@ BOOL T42_download_glyph(print_ctx *ctx, DOWNLOAD *pdl, DWORD index,
+ 	    sg_index = GET_BE_WORD(sg_start + 2);
+ 
+ 	    TRACE("Sending subglyph %04lx for glyph %04lx\n", sg_index, index);
+-	    get_glyph_name(ctx->hdc, sg_index, sg_name);
++	    get_glyph_name(ctx->hdc, pdl, sg_index, sg_name);
+ 	    T42_download_glyph(ctx, pdl, sg_index, sg_name);
+ 	    sg_start += 4;
+ 	    if(sg_flags & ARG_1_AND_2_ARE_WORDS)
+@@ -363,6 +364,7 @@ BOOL T42_download_glyph(print_ctx *ctx, DOWNLOAD *pdl, DWORD index,
+     PSDRV_WriteSpool(ctx, ">\n", 2);
+     sprintf(buf, glyph_def, pdl->ps_name, index, glyph_name, index);
+     PSDRV_WriteSpool(ctx, buf, strlen(buf));
++    PSDRV_WriteGlyphText(ctx, pdl, index, glyph_name);
+ 
+     t42->glyph_sent[index] = TRUE;
+     HeapFree(GetProcessHeap(), 0, buf);
+diff --git a/dlls/xpsprint/xpsprint.spec b/dlls/xpsprint/xpsprint.spec
+index 1fed74a9d5f..b3914ee6835 100644
+--- a/dlls/xpsprint/xpsprint.spec
++++ b/dlls/xpsprint/xpsprint.spec
+@@ -2,5 +2,3 @@
+ 5 stub @
+ 
+ @ stub DllMain
+-@ stub StartXpsPrintJob1
+-@ stub StartXpsPrintJob
+diff --git a/server/mapping.c b/server/mapping.c
+index a54e4639b11..b9aa989d35b 100644
+--- a/server/mapping.c
++++ b/server/mapping.c
+@@ -576,6 +576,53 @@ static int find_committed_range( struct memory_view *view, file_pos_t start, mem
+     return 0;
+ }
+ 
++/* Sections that are read-only and whose position in the image file isn't host page aligned
++ * can't be mmapped from the file, so every process would read them into its own private
++ * memory. For big sections we keep a page aligned copy in the shared temp file instead, so
++ * that all the processes mapping the image share the same pages.
++ * Keep in sync with is_shared_copy_section() in dlls/ntdll/unix/virtual.c */
++#define SHARED_COPY_MIN_SIZE 0x100000
++
++static int is_shared_copy_section( const IMAGE_SECTION_HEADER *sec, size_t file_start, size_t file_size )
++{
++    if (sec->Characteristics & (IMAGE_SCN_MEM_WRITE | IMAGE_SCN_MEM_SHARED)) return 0;
++    if (!sec->PointerToRawData || file_size < SHARED_COPY_MIN_SIZE) return 0;
++    if (!(file_start & host_page_mask)) return 0;        /* can be mapped directly */
++    if (sec->VirtualAddress & host_page_mask) return 0;  /* can't be mapped on a host page boundary */
++    return 1;
++}
++
++/* copy a section from the image file to the shared temp file, in chunks */
++static int copy_to_shared_file( int fd, int shared_fd, off_t read_pos, size_t size, off_t write_pos )
++{
++    const size_t chunk_size = 0x100000;
++    char *buffer;
++    size_t done = 0;
++    int ret = 1;
++
++    if (!(buffer = malloc( chunk_size ))) return 0;
++    while (done < size)
++    {
++        size_t chunk = min( size - done, chunk_size );
++        ssize_t res = pread( fd, buffer, chunk, read_pos + done );
++
++        if (res <= 0)
++        {
++            if (!res && size - done < 0x200) break;  /* partial sector at EOF is not an error */
++            ret = 0;
++            break;
++        }
++        if (pwrite( shared_fd, buffer, res, write_pos + done ) != res)
++        {
++            ret = 0;
++            break;
++        }
++        done += res;
++    }
++    free( buffer );
++    return ret;
++}
++
+ /* allocate and fill the temp file for a shared PE image mapping */
+ static int build_shared_mapping( struct mapping *mapping, size_t align_mask, int fd,
+                                  IMAGE_SECTION_HEADER *sec, unsigned int nb_sec )
+@@ -585,7 +632,8 @@ static int build_shared_mapping( struct mapping *mapping, size_t align_mask, int
+     unsigned int i;
+     mem_size_t total_size;
+     size_t file_size, map_size, max_size;
+-    off_t shared_pos, read_pos, write_pos;
++    off_t shared_pos, read_pos, write_pos, copy_pos;
++    size_t copy_base, copy_size;
+     char *buffer = NULL;
+     int shared_fd;
+     long toread;
+@@ -603,6 +651,19 @@ static int build_shared_mapping( struct mapping *mapping, size_t align_mask, int
+             total_size += map_size;
+         }
+     }
++
++    /* page aligned copies of big misaligned read-only sections go after the shared sections */
++
++    copy_base = round_size( total_size, host_page_mask );
++    copy_size = 0;
++    for (i = 0; i < nb_sec; i++)
++    {
++        get_section_sizes( &sec[i], align_mask, &map_size, &read_pos, &file_size );
++        if (is_shared_copy_section( &sec[i], read_pos, file_size ))
++            copy_size += round_size( file_size, host_page_mask );
++    }
++    if (copy_size) total_size = copy_base + copy_size;
++
+     if (!total_size) return 1;  /* nothing to do */
+ 
+     if ((mapping->shared = get_shared_file( mapping->fd ))) return 1;
+@@ -612,15 +673,23 @@ static int build_shared_mapping( struct mapping *mapping, size_t align_mask, int
+     if ((shared_fd = create_temp_file( total_size )) == -1) return 0;
+     if (!(file = create_file_for_fd( shared_fd, FILE_GENERIC_READ|FILE_GENERIC_WRITE, 0 ))) return 0;
+ 
+-    if (!(buffer = malloc( max_size ))) goto error;
++    if (!(buffer = malloc( max_size + 1 ))) goto error;
+ 
+     /* copy the shared sections data into the temp file */
+ 
+     shared_pos = 0;
++    copy_pos = copy_base;
+     for (i = 0; i < nb_sec; i++)
+     {
+-        if (!(sec[i].Characteristics & IMAGE_SCN_MEM_SHARED)) continue;
+-        if (!(sec[i].Characteristics & IMAGE_SCN_MEM_WRITE)) continue;
++        if (!(sec[i].Characteristics & IMAGE_SCN_MEM_SHARED) ||
++            !(sec[i].Characteristics & IMAGE_SCN_MEM_WRITE))
++        {
++            get_section_sizes( &sec[i], align_mask, &map_size, &read_pos, &file_size );
++            if (!is_shared_copy_section( &sec[i], read_pos, file_size )) continue;
++            if (!copy_to_shared_file( fd, shared_fd, read_pos, file_size, copy_pos )) goto error;
++            copy_pos += round_size( file_size, host_page_mask );
++            continue;
++        }
+         get_section_sizes( &sec[i], align_mask, &map_size, &read_pos, &file_size );
+         write_pos = shared_pos;
+         shared_pos += map_size;

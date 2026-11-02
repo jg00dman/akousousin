@@ -68,8 +68,9 @@ jobs:
     permissions:
       contents: write
     env:
-      WINE_BASE: 2528aff26208257fdbf980666a4f0e66d47563ce
-      WINE_VERSION: '11.21'
+      WINE_REPOSITORY: https://github.com/FaithLife-Community/wine.git
+      WINE_BASE: 9a962f8799c79149af0be85d8d8f7b92951c1cc5
+      WINE_VERSION: '11.21-logos'
       CI_IMAGE_ID: ${{ needs.environment.outputs.image-id }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683

@@ -5,8 +5,6 @@ wine_bin="$app_dir/usr/bin/wine"
 export WINESERVER="$app_dir/usr/bin/wineserver"
 export WINEPREFIX="${WINEPREFIX:-$HOME/.wine-opensapi-piper-test}"
 export WINEDEBUG="${WINEDEBUG:--all}"
-# Keep prefix initialization noninteractive; neither optional runtime is bundled.
-export WINEDLLOVERRIDES="mscoree,mshtml=;${WINEDLLOVERRIDES:-}"
 share="$app_dir/usr/share/opensapi"
 case "${1:-}" in
     --opensapi-register)
@@ -15,7 +13,10 @@ case "${1:-}" in
         registry=$(mktemp --suffix=.reg)
         trap 'rm -f "$registry"' EXIT HUP INT TERM
         python3 "$share/scripts/register-voice.py" --config "$config" --make-default --output "$registry"
-        timeout --signal=TERM --kill-after=10s 120s "$wine_bin" wineboot.exe -u
+        # Suppress optional Mono/Gecko setup only during prefix initialization.
+        # Normal application launches must retain native .NET/CLR overrides.
+        WINEDLLOVERRIDES="mscoree,mshtml=;${WINEDLLOVERRIDES:-}" \
+            timeout --signal=TERM --kill-after=10s 120s "$wine_bin" wineboot.exe -u
         timeout --signal=TERM --kill-after=10s 60s "$wine_bin" regedit.exe /S "Z:$registry"
         echo "Piper voice registered in $WINEPREFIX (server must run on 127.0.0.1:5000)."
         ;;

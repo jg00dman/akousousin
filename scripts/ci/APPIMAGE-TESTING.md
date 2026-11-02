@@ -1,7 +1,9 @@
-# Experimental Wine/Piper test build
+# Experimental Logos-patched Wine/Piper test build
 
-This is a prebuilt Wine 11.21 runtime with the experimental OpenSAPI TTS engine
-and C sample. You do not need to compile Wine. Piper and voice models are separate
+This is a prebuilt Wine 11.21 runtime containing the complete
+`FaithLife-Community/wine` `logos-11.21` branch at
+`9a962f8799c79149af0be85d8d8f7b92951c1cc5`, plus the experimental OpenSAPI TTS
+engine and C sample. See `WINE-SOURCE.md` for all 15 included branch commits. You do not need to compile Wine. Piper and voice models are separate
 downloads and are not included in this release.
 
 Requirements: x86-64 Linux, glibc 2.35 or newer (Ubuntu 22.04, Mint 21, Debian 12
@@ -15,8 +17,8 @@ Download the `.AppImage`, this file, and `SHA256SUMS`. Verify the downloaded fil
 against its entry in `SHA256SUMS`, then:
 
 ```sh
-chmod +x wine-opensapi-piper-11.21-x86_64.AppImage
-export OPENSAPI_IMAGE="$PWD/wine-opensapi-piper-11.21-x86_64.AppImage"
+chmod +x wine-opensapi-piper-11.21-logos-x86_64.AppImage
+export OPENSAPI_IMAGE="$PWD/wine-opensapi-piper-11.21-logos-x86_64.AppImage"
 export APPIMAGE_EXTRACT_AND_RUN=1
 export WINEPREFIX="$HOME/.wine-opensapi-piper-test"
 "$OPENSAPI_IMAGE" --opensapi-info
@@ -43,7 +45,18 @@ cleared for redistribution by this project. This release contains no model.
 
 ## 3. Test in a second terminal
 
-Set `OPENSAPI_IMAGE`, `APPIMAGE_EXTRACT_AND_RUN`, and `WINEPREFIX` as above, then:
+Shell variables are per terminal. In this second terminal, set them again
+(use the directory containing your downloaded AppImage):
+
+```sh
+cd ~/opensapi
+export OPENSAPI_IMAGE="$PWD/wine-opensapi-piper-11.21-logos-x86_64.AppImage"
+export APPIMAGE_EXTRACT_AND_RUN=1
+export WINEPREFIX="$HOME/.wine-opensapi-piper-test"
+test -x "$OPENSAPI_IMAGE" && "$OPENSAPI_IMAGE" --opensapi-info
+```
+
+Keep the Piper server running in the first terminal, then:
 
 ```sh
 "$OPENSAPI_IMAGE" --opensapi-register "$PWD/voices/en_US-ljspeech-medium.onnx.json"
@@ -64,6 +77,23 @@ For diagnostics:
 WINEDEBUG=+sapi,+winhttp "$OPENSAPI_IMAGE" --opensapi-wav "$PWD/debug.wav" \
     'Testing speech output.' >sapi-debug.log 2>&1
 ```
+
+## Using an existing Logos/.NET test prefix
+
+This build includes every commit from the pinned Logos branch; CI does not
+install or launch Logos. Use your existing working Logos/.NET **test** prefix
+and its usual launch arguments. Set `WINEPREFIX` to that prefix before registering
+the Piper voice and launching Logos with this AppImage. The standalone prefix
+above is for the initial audio check and does not contain Logos or native .NET.
+
+Normal AppRun program launches preserve your DLL overrides and native .NET
+configuration. Mono/Gecko suppression is scoped to the explicit voice-registration
+prefix-initialization command. Native .NET is not installed or bundled by this
+package. This runtime still runs 64-bit Windows applications only; it does not
+supply WoW64 for 32-bit installers or helpers.
+
+Successful deterministic CI tests do not establish Logos startup, document
+rendering, video, printing or Read Aloud. Test those on your Kubuntu desktop.
 
 ## What the build verifies
 
@@ -95,6 +125,7 @@ does not prove neural synthesis, audible playback, or Logos compatibility.
 Pause/resume, speech events, word highlighting, and several SAPI XML features
 remain unsupported. Stop/cancel may be delayed by a synchronous HTTP request.
 
-The matching patched Wine source archive and patch are release assets. The
+The matching patched Wine source archive, Piper patch, complete Logos-branch
+diff and `WINE-SOURCE.md` provenance are release assets. The
 OpenSAPI source and test instructions are on the `codex/piper-sapi-prototype`
 branch of https://github.com/jg00dman/opensapi.

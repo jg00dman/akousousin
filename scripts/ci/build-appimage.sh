@@ -1,8 +1,9 @@
 #!/bin/bash
 set -Eeuo pipefail
 project_dir=$(pwd)
-wine_base=${WINE_BASE:-2528aff26208257fdbf980666a4f0e66d47563ce}
-wine_version=${WINE_VERSION:-11.21}
+wine_repository=${WINE_REPOSITORY:-https://github.com/FaithLife-Community/wine.git}
+wine_base=${WINE_BASE:-9a962f8799c79149af0be85d8d8f7b92951c1cc5}
+wine_version=${WINE_VERSION:-11.21-logos}
 jobs=${BUILD_JOBS:-$(nproc)}
 [[ "$jobs" =~ ^[1-9][0-9]*$ ]] || { echo 'BUILD_JOBS must be a positive integer' >&2; exit 2; }
 # No CI desktop dialogs or optional runtime downloads. Piper stays external.
@@ -52,7 +53,7 @@ if [ -d wine-src/.git ]; then
     echo 'Reusing matching patched Wine source'
 else
 git init wine-src
-git -C wine-src remote add origin https://github.com/jg00dman/wine.git
+git -C wine-src remote add origin "$wine_repository"
 git -C wine-src fetch --depth=1 origin "$wine_base"
 git -C wine-src checkout --detach FETCH_HEAD
 test "$(git -C wine-src rev-parse HEAD)" = "$wine_base"
@@ -105,10 +106,15 @@ chmod +x AppDir/AppRun
 cp LICENSE AppDir/usr/share/licenses/opensapi/LGPL-2.1.txt
 cp wine-src/COPYING.LIB AppDir/usr/share/licenses/opensapi/Wine-COPYING.LIB
 cp scripts/ci/type2-runtime.LICENSE AppDir/usr/share/licenses/opensapi/AppImage-runtime-MIT.txt
+cp scripts/ci/WINE-SOURCE.md "$share/"
 cat > "$share/BUILD-INFO.txt" <<EOF
 Experimental OpenSAPI Piper SAPI engine
-Wine version: $wine_version
-Wine base: $wine_base
+Package version: $wine_version
+Wine source version: $(cat wine-src/VERSION)
+Wine source repository: $wine_repository
+Wine source commit: $wine_base
+Wine upstream base before the 15 Logos commits: 2528aff26208257fdbf980666a4f0e66d47563ce
+Piper patch SHA256: $(sha256sum patches/wine-piper.patch | cut -d' ' -f1)
 OpenSAPI revision: $(git rev-parse HEAD)
 Architecture: x86-64 Windows applications only; no WoW64/32-bit support
 Built on Ubuntu 22.04; requires glibc 2.35 or newer and normal Wine host libraries.
@@ -156,7 +162,8 @@ grep -qx 'OK' build/packaged-integration.log
     archives)
 tar -C AppDir -cJf "dist/wine-opensapi-piper-${wine_version}-x86_64.tar.xz" .
 tar --exclude=.git -cJf "dist/wine-opensapi-piper-${wine_version}-source.tar.xz" wine-src
-cp patches/wine-piper.patch dist/
+cp patches/wine-piper.patch patches/wine-logos-11.21.patch dist/
+cp scripts/ci/WINE-SOURCE.md dist/WINE-SOURCE.md
 cp scripts/ci/APPIMAGE-TESTING.md dist/APPIMAGE-TESTING.md
 cp scripts/ci/APPIMAGE-TESTING.md build/RELEASE-NOTES.md
 cp "$share/BUILD-INFO.txt" dist/
