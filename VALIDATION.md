@@ -1,5 +1,36 @@
 # Prototype validation
 
+## Current AppImage CI validation
+
+[Run 41365675371](https://github.com/jg00dman/opensapi/actions/runs/41365675371) succeeded for OpenSAPI commit
+`bc62ec5633e8f73e5f1c5c73b542d69e81d0b121` and published
+[the experimental test release](https://github.com/jg00dman/opensapi/releases/tag/piper-test-41365675371-1). It includes the AppImage, an AppDir
+tarball, checksums, matching patched Wine source, the patch, and test instructions.
+
+* All 13 integration tests passed against the build-tree Wine runtime.
+* All 13 integration tests passed against packaged Wine, with AppImage extraction,
+  version and voice-registration checks also passing.
+* The Wine base is `2528aff26208257fdbf980666a4f0e66d47563ce` (11.21), with
+  `patches/wine-piper.patch` applied during CI. No push to the Wine fork is needed.
+* Fresh compilation took 19 minutes 58 seconds. Reusing its compatible checkpoint
+  completed the compile step in one second. Dependency setup is cached separately;
+  configuration, compilation, installation, tests and packaging are visible steps.
+* A log-streaming pipe could wait on background Wine processes after a command
+  exited. The corrected wrapper streams a file while tracking the command PID;
+  local checks cover normal completion, nonzero exits, timeouts and inherited
+  output handles. Both real integration runs then completed successfully.
+
+These are deterministic synthetic-audio tests, not real Piper speech or audible
+playback. Piper and voice models are not bundled. No model is cleared for
+redistribution by this project. The package targets x86-64 Linux with glibc 2.35
+or newer; Logos and WoW64/32-bit execution remain unverified. Wine was built only
+in GitHub Actions, not in the current cloud workspace.
+
+## Historical cloud-workspace validation
+
+The following records describe the previous headless development environment.
+Its local build paths and installed tools do not describe the current workspace.
+
 The Wine changes are saved locally on `codex/piper-sapi-prototype`, commit
 `b688f135551`. The OpenSAPI repository also carries the complete patch, so its
 source backup is sufficient to reproduce the Wine edits at the base below.
@@ -11,7 +42,7 @@ Validated in this cloud workspace against Wine commit
 `2528aff26208257fdbf980666a4f0e66d47563ce` (11.21), x86-64 Linux, with a
 MinGW-w64 GCC 14 compiler. The Wine source checkout contains the patch directly.
 
-## Completed
+### Completed in the previous workspace
 
 * Built the modified `sapi.dll`, a matching targeted Wine runtime, and both C probes.
   No warnings were emitted for `piper.c`.
@@ -61,23 +92,18 @@ WINEPREFIX=/workspace/opensapi/build/test-prefix-v2 \
 Logs are retained in `build/integration.log`, `build/wine-token-tests.log`, and
 `build/wine-tts-tests.log`. Build outputs and disposable prefixes are ignored by Git.
 
-## Still unverified
+### Historical limitations and remaining checks
 
 The actual voice download failed with a proxy `403 Forbidden` for Hugging Face.
 No real Piper TTS model was downloaded, no neural speech was synthesized, and no
 audible playback was tested. The smoke-test runner itself was exercised against
 the deterministic substitute; that does not establish real Piper speech works.
 
-The network configuration draft now includes `huggingface.co`,
-`cdn-lfs.huggingface.co`, `cdn-lfs-us-1.hf.co`, and `cas-bridge.xethub.hf.co`,
-preserving the existing package-manager presets. The save succeeded, but it did
-not activate or publish these changes. Review and save them in environment
-settings, then publish the environment. Retry the model download after the policy
-is applied and run the real-server steps and `scripts/smoke-piper.py` in the README.
+The previous environment proposed Hugging Face download-host additions for a
+real-model test. Those are not needed for the current AppImage CI workflow,
+which does not download Piper or voice models.
 
-Desktop playback, Logos, the VisualFBEditor sample, WoW64/32-bit execution, and
-AppImage packaging have not been validated in this cloud machine. The GitHub
-AppImage workflow was started as run `41248009427` and will validate its own
-package before publishing an experimental prerelease. Its status must be checked
-independently; starting the run is not proof it succeeded. No upstream PR has
-been submitted.
+Desktop playback, Logos, the VisualFBEditor sample, and WoW64/32-bit execution
+remain unverified. AppImage packaging is now covered by the successful CI run
+above. The initial run `41248009427` timed out; its exact stalled command has not
+been confirmed from its diagnostic files. No upstream PR has been submitted.

@@ -1,12 +1,14 @@
-# Testing the prototype tomorrow
+# Testing the prototype
 
 For a prebuilt AppImage, first check the
 [GitHub build](https://github.com/jg00dman/opensapi/actions/workflows/appimage.yml)
 and [Releases](https://github.com/jg00dman/opensapi/releases), then follow
 [APPIMAGE-TESTING.md](scripts/ci/APPIMAGE-TESTING.md). A successful workflow publishes
 a test package that includes the sample program; you do not need to build Wine
-locally. The initial build was started as run `41248009427`; completion was pending
-when these instructions were written.
+locally. [Run 41365675371](https://github.com/jg00dman/opensapi/actions/runs/41365675371) succeeded and
+published [this experimental release](https://github.com/jg00dman/opensapi/releases/tag/piper-test-41365675371-1). Both sets of 13 deterministic
+integration tests passed. Piper and voice models remain separate; real speech
+and audible playback have not been verified by CI.
 
 The rest of this document covers building from source and using the headless
 cloud build. Neither the VisualFBEditor sample nor Logos is needed for the first
@@ -22,8 +24,8 @@ of your choice. The bundle can alternatively restore the project with:
 git clone /path/to/opensapi.bundle opensapi
 ```
 
-The Wine patch is already applied in the cloud checkout; do not apply it twice.
-For a fresh desktop checkout, use the exact base revision:
+For a fresh desktop source checkout, use the exact base revision and apply the
+patch once:
 
 ```sh
 mkdir -p "$HOME/opensapi-test"
@@ -136,9 +138,10 @@ If the WAVs sound right but `play` is silent, investigate Wine's audio-device
 configuration. Pause/resume, speech events, and word highlighting are not yet
 implemented; they are not acceptance criteria for this first experiment.
 
-## Existing cloud workspace
+## Historical cloud workspace
 
-You can rerun the already-built deterministic tests here with:
+These paths refer to the previous development environment, not the current
+CI-only cloud setup. The previous workspace used these commands:
 
 ```sh
 cd /workspace/opensapi
@@ -149,6 +152,6 @@ sh scripts/build-probes.sh
 sh scripts/test-wine.sh
 ```
 
-For real synthesis in the cloud, first apply the saved download-domain changes in
-environment settings. See `VALIDATION.md`. Successful cloud WAV synthesis would
-still not validate desktop speaker playback.
+Use the prebuilt AppImage for the current test workflow. The historical source
+validation is recorded in `VALIDATION.md`; no Wine compilation is required in
+the current cloud environment.

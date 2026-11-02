@@ -2,7 +2,10 @@
 
 For a step-by-step test session, start with [TESTING.md](TESTING.md).
 
-For a prebuilt test package, see [AppImage testing](scripts/ci/APPIMAGE-TESTING.md).
+For a prebuilt test package, [download the validated AppImage](https://github.com/jg00dman/opensapi/releases/download/piper-test-41365675371-1/wine-opensapi-piper-11.21-x86_64.AppImage)
+and follow [AppImage testing](scripts/ci/APPIMAGE-TESTING.md).
+[The experimental release](https://github.com/jg00dman/opensapi/releases/tag/piper-test-41365675371-1) includes checksums, matching patched Wine
+source, the patch, and logs for both passing 13-test integration runs.
 The [GitHub workflow](https://github.com/jg00dman/opensapi/actions/workflows/appimage.yml)
 builds Wine, checks the packaged runtime, and publishes a unique experimental
 prerelease after successful checks. Downloads appear under
@@ -23,8 +26,7 @@ have been settled for any particular bundle.
 ## Patch and build
 
 The patch targets the selected Wine 11.21 tree at
-`2528aff26208257fdbf980666a4f0e66d47563ce`. The working copy in `/workspace/wine`
-already contains the changes. For another clean copy of that revision:
+`2528aff26208257fdbf980666a4f0e66d47563ce`. For a clean copy of that revision:
 
 ```sh
 git -C /path/to/wine apply /path/to/opensapi/patches/wine-piper.patch
@@ -155,7 +157,8 @@ prove the spoken words or pronunciation are correct.
 * This Wine revision separately has stubs for pause/resume and engine-site event
   delivery, and does not parse SAPI XML or SSML break elements. The engine does not
   fix them. Logos has not been tested.
-* Desktop playback, 32-bit/WoW64, and AppImage packaging need separate validation.
+* Desktop playback and 32-bit/WoW64 still need separate validation. The released
+  AppImage passed the deterministic build-tree and packaged-runtime CI checks.
 
 The existing `Wine-Builds` and `WINE_AppImage` workflows remain available for a
 future WoW64/full bundle. The OpenSAPI workflow builds the patch directly because
