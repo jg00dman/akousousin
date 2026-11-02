@@ -59,11 +59,14 @@ exe=${exes[0]}
 mkdir -p "$WORK_DIR/logs"
 exec 9>>"$WORK_DIR/.lock"
 flock -n 9 || die 'A bisect or diagnostic run is already in progress'
-while IFS= read -r pid; do
-  if grep -zFxq "WINEPREFIX=$WINEPREFIX" "/proc/$pid/environ" 2>/dev/null; then
-    die 'Logos is already running in this prefix; close it first'
-  fi
-done < <(pgrep -u "$(id -u)" -f 'Logos[.]exe' || true)
+logos_running() {
+  local pid
+  while IFS= read -r pid; do
+    if grep -zFxq "WINEPREFIX=$WINEPREFIX" "/proc/$pid/environ" 2>/dev/null; then return 0; fi
+  done < <(pgrep -u "$(id -u)" -f 'Logos[.]exe' || true)
+  return 1
+}
+if logos_running; then die 'Logos is already running in this prefix; close it first'; fi
 
 STAMP=$(date +%Y%m%d-%H%M%S)
 OUT=$WORK_DIR/logs/sapi-$STAMP
@@ -78,6 +81,10 @@ echo 'Try Read Aloud, then close Logos to collect the logs.'
 status=0
 (cd "$(dirname "$exe")" && exec "${launch[@]}" "$WINE" "$exe") >"$OUT/wine.log" 2>&1 || status=$?
 printf 'Logos/Wine exit status: %s\n' "$status" >>"$OUT/run-info.txt"
+# The initial Logos.exe is a bootstrapper and can exit while System/Logos.exe
+# is still running. Do not summarize or archive its inherited log prematurely.
+if logos_running; then echo 'Waiting for the Logos window to close...'; fi
+while logos_running; do sleep 1; done
 if [[ -n $server ]]; then
   "${launch[@]}" timeout 10s "$server" -w >"$OUT/wineserver-wait.log" 2>&1 || true
 fi
