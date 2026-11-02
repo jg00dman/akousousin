@@ -89,8 +89,18 @@ jobs:
       - name: Identify compatible Wine build checkpoint
         id: build-key
         env:
-          INPUT_HASH: ${{ hashFiles('patches/wine-piper.patch', 'scripts/ci/build-appimage.sh') }}
-        run: echo "key=wine-build-v1-${RUNNER_OS}-${RUNNER_ARCH}-${CI_IMAGE_ID#sha256:}-${WINE_BASE}-${INPUT_HASH}" >> "$GITHUB_OUTPUT"
+          INPUT_HASH: ${{ hashFiles('patches/wine-piper.patch', 'scripts/ci/configure-wine.sh') }}
+        run: |
+          prefix="${RUNNER_OS}-${RUNNER_ARCH}-${CI_IMAGE_ID#sha256:}-${WINE_BASE}"
+          echo "key=wine-build-v2-${prefix}-${INPUT_HASH}" >> "$GITHUB_OUTPUT"
+          # One-time migration of the successful 356c76c checkpoint. Its exact
+          # source/patch, toolchain and configure flags match this recipe.
+          # Never restore it for a different patch or configuration.
+          if [ "$WINE_BASE" = 2528aff26208257fdbf980666a4f0e66d47563ce ] &&
+             [ "$(sha256sum patches/wine-piper.patch | cut -d' ' -f1)" = e0d7bba62108d8d451dc13e544014ce62de0d6bfcdffefe417c9863f045806f1 ] &&
+             [ "$(sha256sum scripts/ci/configure-wine.sh | cut -d' ' -f1)" = f8728ccf0e1c554a7b6e153af5c13ee6eaf742428dde64a1cd9e806f5f01be8e ]; then
+            echo "legacy-key=wine-build-v1-${prefix}-01503c5d6d4d04e3eda048e8a499245d7b0a151cf6c45b4ae08cb94d795c7680" >> "$GITHUB_OUTPUT"
+          fi
       - name: Restore compiled Wine checkpoint
         uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684
         with:
@@ -98,6 +108,7 @@ jobs:
             wine-src
             wine-build
           key: ${{ steps.build-key.outputs.key }}
+          restore-keys: ${{ steps.build-key.outputs.legacy-key }}
       - name: Prepare exact Wine source and apply patch
         timeout-minutes: 10
         run: bash scripts/ci/run-stage.sh source

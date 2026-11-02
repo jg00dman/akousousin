@@ -79,8 +79,9 @@ to refresh its signed distribution packages.
 Source, configuration, compilation, installation, probes, both integration runs,
 and packaging are separate workflow steps. The compiled source/build directories
 are checkpointed immediately after compilation, keyed by the exact Wine base,
-patch, build script and verified toolchain image ID. A later test/packaging failure
-can reuse that checkpoint on rerun. Cache eviction causes a clean rebuild, not a
+patch, configure recipe and verified toolchain image ID. A later test/packaging failure
+can reuse that checkpoint on rerun, including after changes to the test or
+packaging orchestration. Cache eviction causes a clean rebuild, not a
 skipped test. No Wine prefix or test result is reused.
 
 Stage output is streamed and retained as log artifacts, compilation uses the

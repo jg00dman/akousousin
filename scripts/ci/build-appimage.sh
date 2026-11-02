@@ -27,8 +27,19 @@ run_stage() {
     shift 2
     local started=$SECONDS
     echo "::group::$stage ($(date -u +%FT%TZ), limit $limit)"
-    # pipefail keeps failures/timeouts visible even when tee succeeds.
-    timeout --signal=TERM --kill-after=30s "$limit" "$@" 2>&1 | tee "$project_dir/build/$stage.log"
+    # Wine services can retain inherited stdout after wineboot exits. Stream
+    # the log independently so those background processes cannot hold a pipe
+    # open past the command's timeout or turn a completed command into a hang.
+    local log="$project_dir/build/$stage.log"
+    local command_pid tail_pid result
+    : > "$log"
+    timeout --signal=TERM --kill-after=30s "$limit" "$@" > "$log" 2>&1 &
+    command_pid=$!
+    tail --pid="$command_pid" -n +1 -f "$log" &
+    tail_pid=$!
+    if wait "$command_pid"; then result=0; else result=$?; fi
+    wait "$tail_pid"
+    if [ "$result" -ne 0 ]; then return "$result"; fi
     echo "Completed $stage in $((SECONDS - started)) seconds"
     echo '::endgroup::'
 }
@@ -55,8 +66,7 @@ if [ -f wine-build/.opensapi-configured ]; then
     echo 'Reusing configured build from matching toolchain/source cache'
 else
     cd wine-build
-    run_stage configure 10m ../wine-src/configure --enable-win64 --disable-tests --prefix=/usr \
-        --without-oss --disable-winemenubuilder CFLAGS='-O2' CXXFLAGS='-O2'
+    run_stage configure 10m bash "$project_dir/scripts/ci/configure-wine.sh"
     if grep -q 'No sound system was found' ../build/configure.log; then
         echo 'Audio support is required for this desktop test build.' >&2
         exit 1
