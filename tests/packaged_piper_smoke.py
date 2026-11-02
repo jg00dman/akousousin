@@ -61,7 +61,8 @@ with (work / 'backend.log').open('w') as log:
         subprocess.run([image, '--opensapi-register', str(model) + '.json'], env=env, check=True, timeout=190)
         output = work / 'real-piper-sapi.wav'
         print('Request real neural speech through packaged Wine SAPI', flush=True)
-        subprocess.run([image, '--opensapi-wav', str(output), 'Open SAPI is speaking through the packaged Piper service.'],
+        text = 'Open SAPI is speaking through the packaged Piper service.'
+        subprocess.run([image, '--opensapi-wav', str(output), text],
                        env=env, check=True, timeout=75)
         with wave.open(str(output), 'rb') as wav:
             assert (wav.getnchannels(), wav.getsampwidth(), wav.getframerate()) == (1, 2, 22050)

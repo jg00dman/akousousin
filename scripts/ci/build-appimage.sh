@@ -236,7 +236,7 @@ ln -sf "$project_dir/dist/$image" build/appimage-bin/wineserver
 run_stage appimage-wineserver-dispatch 1m env APPIMAGE_EXTRACT_AND_RUN=1 "$project_dir/build/appimage-bin/wineserver" -k
         ;;
     real-piper-test)
-run_stage real-packaged-piper 7m xvfb-run -a python3 tests/test_packaged_piper.py "$project_dir/dist/$image"
+run_stage real-packaged-piper 7m xvfb-run -a python3 tests/packaged_piper_smoke.py "$project_dir/dist/$image"
         ;;
     archives)
 tar -C AppDir -cJf "dist/wine-opensapi-piper-${wine_version}-x86_64.tar.xz" .
