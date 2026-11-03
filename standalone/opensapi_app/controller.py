@@ -182,8 +182,8 @@ def run(path):
                 finally:
                     tick.busy = False
             threading.Thread(target=reap, daemon=True).start()
-        if state.closed:
-            app.quit()
+        if state.closed and not connections:
+            QTimer.singleShot(500, app.quit)
         if tray:
             config = settings.load(path)
             health = state.service.health(config['port'])

@@ -1,4 +1,4 @@
-"""Test program-only packages; download a voice only into disposable CI test data, never an artifact."""
+"""Test packaged SAPI, the approved starter voice, shared sessions and controller lifecycle."""
 import hashlib
 import os
 from pathlib import Path
@@ -55,16 +55,14 @@ else:
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     install = [str(executable), '--wine-prefix', str(prefix), '--wine', str(wine), '--wine-compat',
                '--install-only', '--settings', str(settings_path)]
-# Package has already been built. Voice weights below stay exclusively under build/test-voice.
+# Fresh settings must bootstrap the approved voice from the actual package.
+subprocess.run([str(executable), '--settings', str(settings_path), '--status'], env=env, check=True, timeout=60)
 sys.path[:0] = [str(ROOT / 'standalone'), str(ROOT / 'backend')]
-from opensapi_app import catalogue, settings
+from opensapi_app import settings
 from opensapi_app.service import Service
 config = settings.load(settings_path)
-entry = catalogue.catalogue(resource)['en_US-ljspeech-medium']
-voice = catalogue.install(entry, WORK / 'test-voice', reviewed=True)
-config['voices']['en_US-ljspeech-medium'] = voice
-config['language_voices']['en_US'] = 'en_US-ljspeech-medium'
-settings.save(settings_path, config)
+assert config['voice'] == 'en_US-ljspeech-medium'
+assert Path(config['voices'][config['voice']]['path']).is_file(), 'Bundled default voice was not installed'
 subprocess.run(install, env=env, check=True, timeout=180)
 for name in ['sapi-probe.exe', 'engine-probe.exe']:
     shutil.copy(resource / name, ROOT / 'build' / name)
@@ -79,8 +77,9 @@ config = settings.load(settings_path)
 service = Service(settings_path)
 def public(*args):
     completed = subprocess.run([str(executable), '--settings', str(settings_path), *args], env=env,
-                               check=True, capture_output=True, text=True, timeout=100)
-    print(completed.stdout, flush=True)
+                               check=False, capture_output=True, text=True, timeout=100)
+    print(completed.stdout, completed.stderr, flush=True)
+    completed.check_returncode()
     return __import__('json').loads(completed.stdout.splitlines()[-1])
 try:
     assert public('--acquire-session', 'logos-ci', '--owner-pid', str(os.getpid()))['running']
