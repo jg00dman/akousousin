@@ -25,13 +25,12 @@
 #include <objbase.h>
 #include <initguid.h>
 #include <winhttp.h>
-#include <sperror.h>
 #include <sapi.h>
+#include <sperror.h>
 #include <sapiddk.h>
 #include "engine.h"
 
 
-#define CONTAINING_RECORD(address,type,field) ((type *)((char *)(address) - offsetof(type, field)))
 #define WARN(...) ((void)0)
 
 #define MAX_WAV_SIZE (64 * 1024 * 1024)
@@ -44,6 +43,8 @@ struct piper_engine
     LONG ref;
     ISpObjectToken *token;
     DWORD rate, port;
+    WCHAR voice[128];
+    DWORD language, route;
 };
 
 static struct piper_engine *impl_from_engine(ISpTTSEngine *iface)
@@ -91,7 +92,7 @@ static ULONG WINAPI engine_Release(ISpTTSEngine *iface)
 }
 
 /* Convert a length-delimited UTF-16 fragment into a JSON string. */
-static char *make_request(const SPVTEXTFRAG *frag, LONG rate)
+static char *make_request(const SPVTEXTFRAG *frag, LONG rate, struct piper_engine *engine)
 {
     static const char hex[] = "0123456789abcdef";
     char *utf8, *json, *p;
@@ -102,7 +103,7 @@ static char *make_request(const SPVTEXTFRAG *frag, LONG rate)
         !(len = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, frag->pTextStart,
                                    frag->ulTextLen, NULL, 0, NULL, NULL))) return NULL;
     if (!(utf8 = malloc(len))) return NULL;
-    if (!(json = malloc((size_t)len * 6 + 100)))
+    if (!(json = malloc((size_t)len * 6 + 512)))
     {
         free(utf8);
         return NULL;
@@ -131,6 +132,16 @@ static char *make_request(const SPVTEXTFRAG *frag, LONG rate)
     /* Approximate SAPI's rate range with Piper length_scale in [0.5, 2]. */
     scale = rate >= 0 ? 100000 / (10 + rate) : 1000 * (10 - rate);
     sprintf(p, "\",\"length_scale\":%u.%04u}", scale / 10000, scale % 10000);
+    if (engine->voice[0])
+    {
+        char voice[128];
+        WideCharToMultiByte(CP_UTF8,0,engine->voice,-1,voice,sizeof(voice),NULL,NULL);
+        p = json + strlen(json) - 1;
+        p += sprintf(p, ",\"voice\":\"%s\",\"sample_rate\":%lu", voice, engine->rate);
+        if (engine->route && frag->State.LangID && frag->State.LangID != engine->language)
+            p += sprintf(p, ",\"language\":%u", frag->State.LangID);
+        strcpy(p, "}");
+    }
     free(utf8);
     return json;
 }
@@ -380,7 +391,7 @@ static HRESULT WINAPI engine_Speak(ISpTTSEngine *iface, DWORD flags, REFGUID fmt
         if (!frag->pTextStart) return E_POINTER;
         if (frag->ulTextLen > MAX_TEXT_LENGTH) return E_INVALIDARG;
         if (FAILED(hr = ISpTTSEngineSite_GetRate(site, &rate))) return hr;
-        if (!(json = make_request(frag, rate))) return E_INVALIDARG;
+        if (!(json = make_request(frag, rate, engine))) return E_INVALIDARG;
         hr = fetch_wav(engine, json, site, &wav, &size);
         free(json);
         if (hr != S_OK) return hr == S_FALSE ? S_OK : hr;
@@ -447,6 +458,22 @@ static HRESULT WINAPI token_SetObjectToken(ISpObjectWithToken *iface, ISpObjectT
     size = sizeof(rate);
     result = RegGetValueW(key, NULL, L"SampleRate", RRF_RT_REG_DWORD, NULL, &rate, &size);
     if (!result) { size = sizeof(port); result = RegGetValueW(key, NULL, L"Port", RRF_RT_REG_DWORD, NULL, &port, &size); }
+    if (!result)
+    {
+        DWORD i;
+        size = sizeof(engine->voice);
+        RegGetValueW(key,NULL,L"VoiceID",RRF_RT_REG_SZ,NULL,engine->voice,&size);
+        for (i = 0; engine->voice[i]; i++)
+            if (!(engine->voice[i] >= 'a' && engine->voice[i] <= 'z') &&
+                !(engine->voice[i] >= 'A' && engine->voice[i] <= 'Z') &&
+                !(engine->voice[i] >= '0' && engine->voice[i] <= '9') &&
+                engine->voice[i] != '_' && engine->voice[i] != '-')
+            { RegCloseKey(key); return E_INVALIDARG; }
+        size = sizeof(engine->language);
+        RegGetValueW(key,NULL,L"LanguageID",RRF_RT_REG_DWORD,NULL,&engine->language,&size);
+        size = sizeof(engine->route);
+        RegGetValueW(key,NULL,L"RouteLanguages",RRF_RT_REG_DWORD,NULL,&engine->route,&size);
+    }
     RegCloseKey(key);
     if (result) return HRESULT_FROM_WIN32(result);
     if (rate < 8000 || rate > 192000 || !port || port > 65535) return E_INVALIDARG;
