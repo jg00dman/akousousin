@@ -372,6 +372,9 @@ class Panel:
                     lambda _: self.status.set('Uninstalled; original registration restored. Voice downloads were retained.'))
 
     def start_server(self):
+        if not self.config['voices']:
+            messagebox.showinfo('Speech service', 'Import or download a voice in Voice library first.')
+            return
         if not self.save():
             return
         def begin():
@@ -385,6 +388,9 @@ class Panel:
                     parallel=True)
 
     def play(self):
+        if not self.config['voices']:
+            messagebox.showinfo('Preview', 'Import or download a voice in Voice library first.')
+            return
         if not self.save():
             return
         text = self.preview.get()

@@ -106,6 +106,9 @@ if sys.platform != 'win32':
     system_notices(analysis)
 
 shutil.copy(ROOT / 'standalone/README.md', PACKAGE / 'README.md')
+# ONNX Runtime ships unused demonstration graphs; they are not required for inference.
+for sample in (PACKAGE / '_internal/onnxruntime/datasets').glob('*.onnx'):
+    sample.unlink()
 if list(PACKAGE.rglob('*.onnx')):
     raise RuntimeError('Model weights must not be redistributed in this program-only package')
 if sys.platform == 'win32':
