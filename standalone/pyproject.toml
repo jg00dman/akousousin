@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+[project]
+name = "opensapi-control-panel"
+version = "0.3.0b1"
+requires-python = ">=3.12"
+license = {text = "GPL-3.0-or-later"}
+dependencies = ["opensapi-backend==0.2.0b1"]
+[project.scripts]
+opensapi = "opensapi_app.main:main"
+[tool.setuptools.packages.find]
+include = ["opensapi_app*"]
