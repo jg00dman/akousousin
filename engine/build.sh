@@ -9,3 +9,5 @@ cc=${CC_PE:-x86_64-w64-mingw32-gcc}
     -o build/standalone-engine/sapi-probe.exe -lole32 -loleaut32 -lsapi -luuid
 "$cc" -std=c11 -D_WIN32_WINNT=0x0601 -Wall -Wextra -Wno-unused-parameter -municode -Iengine/include \
     tests/engine-probe.c -o build/standalone-engine/engine-probe.exe -lole32 -lsapi -luuid
+"$cc" -std=c11 -D_WIN32_WINNT=0x0601 -Wall engine/compat-probe.c \
+    -o build/standalone-engine/compat-probe.exe -lole32 -ladvapi32 -lsapi -luuid
