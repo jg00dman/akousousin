@@ -45,9 +45,9 @@ jobs:
           path: build/standalone-engine
       - name: Install Linux packaging/test tools
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends squashfs-tools xvfb xauth
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends squashfs-tools xvfb xauth libxcb-cursor0 libxkbcommon-x11-0
       - name: Install pinned Python backend and packager
-        run: python -m pip install ./backend pyinstaller==6.16.0 pillow
+        run: python -m pip install ./backend ./standalone pyinstaller==6.16.0 pillow
       - name: Unit tests
         shell: bash
         run: PYTHONPATH=standalone:backend python -m unittest discover -s standalone/tests -v

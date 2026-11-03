@@ -10,7 +10,7 @@ import urllib.request
 import uuid
 import secrets
 
-from . import settings
+from . import runtime
 
 
 def command(*args):
@@ -22,9 +22,10 @@ class Service:
         self.settings = Path(settings)
         self.process = None
         self.instance = uuid.uuid4().hex
-        self.record = self.settings.with_suffix('.server.json')
-        self.control = self.settings.with_suffix('.control')
-        self.log = self.settings.with_suffix('.server.log')
+        base = runtime.directory() / runtime.name(self.settings).split('/')[-1]
+        self.record = base.with_suffix('.server.json')
+        self.control = base.with_suffix('.control')
+        self.log = runtime.log_path()
         self.log.parent.mkdir(parents=True, exist_ok=True)
 
     def health(self, port):
@@ -52,8 +53,7 @@ class Service:
         with os.fdopen(descriptor, 'w') as secret:
             secret.write(token)
         self.record.write_text(json.dumps({'instance': self.instance, 'settings': str(self.settings.resolve()), 'port': port}))
-        runtime = settings.load(self.settings).get('runtime')
-        invocation = [runtime] if runtime else command()
+        invocation = command()
         with self.log.open('ab') as output:
             options = {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == 'nt' else {
                 'start_new_session': True}

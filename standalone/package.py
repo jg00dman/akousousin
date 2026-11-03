@@ -56,9 +56,18 @@ if sys.platform != 'win32':
     (compat / 'provenance.json').write_text(json.dumps({'version': '11.21', 'source_commit':
          '3b19eb0e45ac5f57301073fc9e721cac7829dc93', 'release': 'piper-test-41467603154-1'}, indent=2))
 
+# Original OpenSAPI artwork, shared by the AppImage, Tk window and tray.
+from PIL import Image, ImageDraw
+icon = Image.new('RGBA', (128, 128))
+draw = ImageDraw.Draw(icon)
+draw.rounded_rectangle((0, 0, 127, 127), radius=24, fill='#087e82')
+for x, low, high in ((30, 52, 76), (47, 36, 92), (64, 26, 102), (81, 40, 88), (98, 56, 72)):
+    draw.line((x, low, x, high), fill='white', width=7)
+icon.save(RESOURCE / 'opensapi.png')
+
 commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
 (RESOURCE / 'build.json').write_text(json.dumps({'build': commit[:12] + '-' + sys.platform,
-                                               'commit': commit, 'version': '0.3.0b1'}, indent=2))
+                                               'commit': commit, 'version': '0.4.0b1'}, indent=2))
 subprocess.run([sys.executable, '-m', 'PyInstaller', '--clean', '--noconfirm', '--onedir', '--name', 'opensapi',
                 '--distpath', str(BUILD / 'frozen'), '--workpath', str(BUILD / 'freeze'), '--specpath', str(BUILD),
                 '--paths', str(ROOT / 'standalone'), '--paths', str(ROOT / 'backend'),
@@ -141,6 +150,10 @@ else:
     subprocess.run(['git', 'archive', '--format=tar.gz', '--output', str(SOURCE / 'opensapi-source.tar.gz'), 'HEAD'], check=True)
     fetch('https://github.com/OHF-Voice/piper1-gpl/archive/refs/tags/v1.8.0.tar.gz', SOURCE / 'piper-1.8.0.tar.gz')
     fetch('https://github.com/espeak-ng/espeak-ng/archive/724808c.tar.gz', SOURCE / 'espeak-ng.tar.gz')
+    # Matching LGPL Qt/PySide sources for the tray and local IPC libraries.
+    for module in ('qtbase', 'qtsvg', 'qtwayland', 'qtdeclarative', 'qtshadertools', 'qttools'):
+        fetch(f'https://github.com/qt/{module}/archive/refs/tags/v6.8.3.tar.gz', SOURCE / f'{module}-6.8.3.tar.gz')
+    fetch('https://github.com/pyside/pyside-setup/archive/refs/tags/v6.8.3.tar.gz', SOURCE / 'pyside-setup-6.8.3.tar.gz')
     with tarfile.open(OUT / 'OpenSAPI-corresponding-sources.tar.gz', 'w:gz') as archive:
         archive.add(SOURCE, arcname='sources')
 

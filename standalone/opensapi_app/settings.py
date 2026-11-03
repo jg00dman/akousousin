@@ -56,3 +56,33 @@ def lcid(language):
 
 def language_for_lcid(value):
     return locale.windows_locale.get(value, '')
+
+
+def register(path, prefix, wine):
+    value = load(path)
+    entry = {'prefix': str(prefix) if prefix else '', 'wine': wine or ''}
+    value['registrations'] = [r for r in value.get('registrations', []) if r['prefix'] != entry['prefix']]
+    value['registrations'].append(entry)
+    save(path, value)
+
+
+def select_voice(path, identifier):
+    value = load(path)
+    voice = value['voices'][identifier]
+    value['voice'] = identifier
+    value['language_voices'][voice['language']] = identifier
+    save(path, value)
+    # Updating a default needs no DLL replacement. Applications may cache their
+    # SAPI voice until restarted, just as they do with Windows voice settings.
+    from .install import Installer, VOICES, FULL_TOKEN
+    pending = []
+    for entry in value.get('registrations', []):
+        installer = Installer(Path(__file__).parent, entry['prefix'] or None, entry['wine'] or None)
+        token = FULL_TOKEN + identifier
+        if installer.execute('reg.exe', 'query', token, '/reg:64', check=False).returncode:
+            pending.append(entry['prefix'] or 'Windows')
+            continue
+        for key, item in ((VOICES, 'DefaultDefaultTokenId'),
+                          (r'HKCU\SOFTWARE\Microsoft\Speech\Voices', 'DefaultTokenId')):
+            installer.execute('reg.exe', 'add', key, '/v', item, '/t', 'REG_SZ', '/d', token, '/f', '/reg:64')
+    return pending

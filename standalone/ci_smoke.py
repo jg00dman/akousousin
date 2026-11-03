@@ -23,6 +23,7 @@ env.update(PYTHONPATH=str(ROOT / 'standalone') + os.pathsep + str(ROOT / 'backen
            OPENSAPI_RESOURCES=str(resource), OPENSAPI_STANDALONE='1',
            OPENSAPI_CLSID='{EA7A00AB-0FB7-4DEB-81C5-550D854F390F}',
            OPENSAPI_TOKEN=r'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Speech\Voices\Tokens\OpenSAPI-Piper-en_US-ljspeech-medium',
+           XDG_STATE_HOME=str(WORK / 'state'), QT_QPA_PLATFORM='offscreen',
            WINEPREFIX=str(prefix), XDG_CONFIG_HOME=str(WORK / 'config'), XDG_DATA_HOME=str(WORK / 'data'))
 if native:
     env['LOCALAPPDATA'] = str(WORK / 'appdata')
@@ -75,22 +76,32 @@ for script, log in [('tests/test_integration.py', 'integration.log'), ('tests/te
     print((WORK / log).read_text(), flush=True)
     result.check_returncode()
 config = settings.load(settings_path)
-config['runtime'] = str(executable)
-settings.save(settings_path, config)
 service = Service(settings_path)
+def public(*args):
+    completed = subprocess.run([str(executable), '--settings', str(settings_path), *args], env=env,
+                               check=True, capture_output=True, text=True, timeout=100)
+    print(completed.stdout, flush=True)
+    return __import__('json').loads(completed.stdout.splitlines()[-1])
 try:
-    service.start(config['port'])
+    assert public('--acquire-session', 'logos-ci', '--owner-pid', str(os.getpid()))['running']
+    assert public('--acquire-session', 'second-ci', '--owner-pid', str(os.getpid()))['sessions'] == 2
     wav = WORK / 'real-sapi.wav'
     command = [str(executable), '--settings', str(settings_path), '--sapi-wav', str(wav), 'Standalone Open SAPI is speaking.']
     subprocess.run(command, env=env, check=True, timeout=90)
     with wave.open(str(wav), 'rb') as audio:
         assert audio.getnchannels() == 1 and audio.getsampwidth() == 2 and audio.getframerate() == 22050
         assert audio.getnframes() > 2205 and any(audio.readframes(audio.getnframes()))
-    assert Service(settings_path).stop(config['port']), 'Reopened panel could not stop its own server'
-    service.start(config['port'])
-    assert service.health(config['port'])['ready']
+    assert public('--release-session', 'logos-ci')['running']
+    assert public('--release-session', 'second-ci')['closed']
+    import time
+    time.sleep(2)
+    assert not public('--status')['running']
+    assert public('--start-server')['independent']
+    public('--acquire-session', 'logos-ci', '--owner-pid', str(os.getpid()))
+    assert public('--release-session', 'logos-ci')['running'], 'Independent service was stopped by Logos release'
 finally:
-    Service(settings_path).stop(config['port'])
+    public('--quit')
+assert not (WORK / 'data/OpenSAPI/runtimes').exists(), 'An extracted runtime was retained'
 subprocess.run([str(executable), '--settings', str(settings_path), '--smoke-test'], env=env, check=True, timeout=30)
 if not native:
     os.environ.update({k: v for k, v in env.items() if k in ('XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'OPENSAPI_RESOURCES')})

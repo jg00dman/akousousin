@@ -4,9 +4,8 @@ import multiprocessing
 import sys
 from pathlib import Path
 
-from . import resources, settings
+from . import resources, runtime, settings
 from .install import Installer
-from .service import Service
 
 
 def main():
@@ -20,6 +19,15 @@ def main():
     parser.add_argument('--uninstall', action='store_true', help='Restore backed-up registry settings and DLLs')
     parser.add_argument('--wine-compat', action='store_true', help='Force the Wine 11.21 SAPI compatibility DLL')
     parser.add_argument('--settings', type=Path, default=settings.config_path())
+    parser.add_argument('--protocol-version', action='store_true', help='Print launcher protocol version')
+    parser.add_argument('--configure', action='store_true', help='Open shared speech preferences')
+    parser.add_argument('--acquire-session', metavar='ID', help='Start/reuse speech for this application session')
+    parser.add_argument('--release-session', metavar='ID', help='Release an application session')
+    parser.add_argument('--owner-pid', type=int, help='Process owning the acquired session')
+    parser.add_argument('--status', action='store_true')
+    parser.add_argument('--quit', action='store_true', help='Stop Piper and quit OpenSAPI')
+    parser.add_argument('--controller', action='store_true', help=argparse.SUPPRESS)
+    parser.add_argument('--panel', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--start-server', action='store_true')
     parser.add_argument('--stop-server', action='store_true')
     parser.add_argument('--serve', action='store_true', help=argparse.SUPPRESS)
@@ -27,9 +35,16 @@ def main():
     parser.add_argument('--control-file', help=argparse.SUPPRESS)
     parser.add_argument('--smoke-test', action='store_true', help=argparse.SUPPRESS)
     args = parser.parse_args()
+    if args.protocol_version:
+        print('2')
+        return
     if args.serve:
         from .backend import serve
         serve(args.settings, args.instance, args.control_file)
+        return
+    if args.controller:
+        from .controller import run
+        run(args.settings)
         return
     config = resources.bootstrap(args.settings)
     if args.wine_prefix:
@@ -45,6 +60,7 @@ def main():
     if args.wine_prefix or args.install or args.install_only:
         manifest = Installer(resources.root(), args.wine_prefix or None, args.wine,
                              args.wine_compat).install(config)
+        settings.register(args.settings, args.wine_prefix, args.wine)
         print(f'OpenSAPI installed. Recovery record: {manifest}')
         if args.install_only and not args.sapi_wav:
             return
@@ -56,14 +72,21 @@ def main():
                                    '0', '100', args.sapi_wav[1], timeout=75)
         print(result.stdout)
         return
-    if args.start_server:
-        resources.persistent_runtime(args.settings)
-        Service(args.settings).start(config['port'])
-        print('Piper ready on loopback.')
-        return
-    if args.stop_server:
-        stopped = Service(args.settings).stop(config['port'])
-        print('Owned server stopping.' if stopped else 'No server owned by this profile was stopped.')
+    import json
+    import os
+    request = None
+    if args.acquire_session:
+        request = {'command': 'acquire', 'session': args.acquire_session, 'pid': args.owner_pid or os.getppid()}
+    elif args.release_session:
+        request = {'command': 'release', 'session': args.release_session}
+    elif args.start_server or args.stop_server or args.quit or args.status:
+        operation = 'start' if args.start_server else 'stop' if args.stop_server else 'quit' if args.quit else 'status'
+        request = {'command': operation}
+    elif not args.panel and not args.smoke_test:
+        request = {'command': 'configure', 'independent': not args.configure}
+    if request:
+        response = runtime.call(args.settings, request, launch=request['command'] not in ('release', 'stop', 'quit', 'status'))
+        print(json.dumps(response or {'running': False, 'sessions': 0}))
         return
     from .panel import Panel
     panel = Panel(args.settings)

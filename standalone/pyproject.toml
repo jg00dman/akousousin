@@ -3,10 +3,10 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 [project]
 name = "opensapi-control-panel"
-version = "0.3.0b1"
+version = "0.4.0b1"
 requires-python = ">=3.12,<3.13"
 license = {text = "GPL-3.0-or-later"}
-dependencies = ["opensapi-backend==0.2.0b1"]
+dependencies = ["opensapi-backend==0.2.0b1", "PySide6-Essentials==6.8.3", "psutil==7.0.0"]
 [project.scripts]
 opensapi = "opensapi_app.main:main"
 [tool.setuptools.packages.find]

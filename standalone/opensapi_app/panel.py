@@ -12,7 +12,8 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 import urllib.request
 import webbrowser
 
-from . import catalogue, resources, settings
+from . import catalogue, resources, runtime, settings
+from .languages import label
 from .install import Installer
 from .service import Service
 
@@ -31,6 +32,10 @@ class Panel:
         self.busy = 0
         self.root = tk.Tk()
         self.root.title('OpenSAPI — Speech for your applications')
+        icon = resources.root() / 'opensapi.png'
+        if icon.exists():
+            self.window_icon = tk.PhotoImage(file=str(icon))
+            self.root.iconphoto(True, self.window_icon)
         self.root.geometry('1160x820')
         self.root.minsize(940, 700)
         self.root.configure(bg='#f4f5f3')
@@ -70,7 +75,7 @@ class Panel:
         self.volume = tk.DoubleVar(value=self.config['volume'] * 100)
         self.noise = tk.DoubleVar(value=self.config['noise_scale'])
         self.noise_w = tk.DoubleVar(value=self.config['noise_w_scale'])
-        self.language = tk.StringVar(value=self.config['book_language'] or 'Follow application')
+        self.language = tk.StringVar(value=label(self.config['book_language']) if self.config['book_language'] else 'Follow application')
         self.port = tk.IntVar(value=self.config['port'])
         self.build_overview()
         self.build_library()
@@ -154,10 +159,10 @@ class Panel:
         self.default_label.pack(anchor='w', pady=(0, 12))
         ttk.Entry(frame, textvariable=self.preview).pack(fill='x', pady=8)
         ttk.Button(frame, text='▶  Play sample', style='Accent.TButton', command=self.play).pack(anchor='w', pady=8)
-        for label, variable, low, high in [('Default speed', self.speed, .5, 2), ('Volume', self.volume, 0, 100)]:
+        for caption, variable, low, high in [('Default speed', self.speed, .5, 2), ('Volume', self.volume, 0, 100)]:
             row = ttk.Frame(frame, style='Card.TFrame')
             row.pack(fill='x', pady=8)
-            ttk.Label(row, text=label, width=18, style='Card.TLabel').pack(side='left')
+            ttk.Label(row, text=caption, width=18, style='Card.TLabel').pack(side='left')
             ttk.Scale(row, variable=variable, from_=low, to=high).pack(side='left', fill='x', expand=True)
             ttk.Spinbox(row, textvariable=variable, from_=low, to=high, increment=.1 if high == 2 else 1,
                         width=7).pack(side='right', padx=(12, 0))
@@ -168,7 +173,7 @@ class Panel:
 
     def update_default(self):
         voice = self.config['voices'].get(self.config['voice'])
-        self.default_label.configure(text=f"{voice['name']} · {voice['language']} · {voice['quality']}" if voice else 'Choose a voice in Voice library')
+        self.default_label.configure(text=f"{voice['name']} · {label(voice['language'])} · {voice['quality']}" if voice else 'Choose a voice in Voice library')
 
     def build_library(self):
         page = self.pages['Voice library']
@@ -180,7 +185,7 @@ class Panel:
         ttk.Entry(row, textvariable=self.search).pack(side='left', fill='x', expand=True)
         self.filter = tk.StringVar(value='All languages')
         languages = sorted({v['language']['code'] for v in self.library.values()})
-        choices = ttk.Combobox(row, textvariable=self.filter, values=['All languages', *languages], width=16, state='readonly')
+        choices = ttk.Combobox(row, textvariable=self.filter, values=['All languages', *(label(code) for code in languages)], width=16, state='readonly')
         choices.pack(side='left', padx=8)
         choices.bind('<<ComboboxSelected>>', lambda *_: self.refresh_library())
         self.installed_only = tk.BooleanVar()
@@ -210,7 +215,7 @@ class Panel:
             installed = key in self.config['voices']
             if self.installed_only.get() and not installed:
                 continue
-            if self.filter.get() != 'All languages' and entry['language']['code'] != self.filter.get():
+            if self.filter.get() != 'All languages' and label(entry['language']['code']) != self.filter.get():
                 continue
             fields = f"{key} {entry['language']['name_english']} {entry['language']['name_native']}".casefold()
             if needle and needle not in fields:
@@ -219,7 +224,7 @@ class Panel:
             status = ('Installed' if installed else 'Language resources unavailable'
                       if entry['language'].get('family') in catalogue.UNSUPPORTED_AUXILIARY
                       else 'Reviewed free-use' if key in catalogue.APPROVED else 'Licence review required')
-            self.tree.insert('', 'end', iid=key, text=entry['name'], values=(entry['language']['code'],
+            self.tree.insert('', 'end', iid=key, text=entry['name'], values=(label(entry['language']['code']),
                              entry['quality'], f'{size:.0f} MB', status))
 
     def selected(self):
@@ -265,10 +270,10 @@ class Panel:
             key = self.selected()
             if key not in self.config['voices']:
                 raise ValueError('Download this voice first')
+            self.worker(lambda: runtime.call(self.path, {'command': 'voice', 'voice': key}),
+                        lambda result: self.status.set('Default saved. Restart applications if needed; apply registration for newly added voices.'))
             self.config['voice'] = key
-            language = self.config['voices'][key]['language']
-            self.config['language_voices'][language] = key
-            settings.save(self.path, self.config)
+            self.config['language_voices'][self.config['voices'][key]['language']] = key
             self.update_default()
             self.refresh_languages()
             self.status.set('Default saved. Apply to your prefix/Windows registration in Settings.')
@@ -309,7 +314,7 @@ class Panel:
         ttk.Label(frame, text='Book language', style='Card.TLabel').pack(anchor='w')
         languages = sorted({v['language'] for v in self.config['voices'].values()})
         self.language_combo = ttk.Combobox(frame, textvariable=self.language,
-                                           values=['Follow application', *languages], state='readonly')
+                                           values=['Follow application', *(label(code) for code in languages)], state='readonly')
         self.language_combo.pack(fill='x', pady=10)
         ttk.Label(frame, text='Follow application uses language IDs supplied through SAPI. It does not guess the language of individual words. Select a language manually for an entire book.',
                   wraplength=780, style='Card.TLabel').pack(anchor='w', pady=12)
@@ -319,17 +324,17 @@ class Panel:
         self.language_rows.heading('voice', text='Preferred voice')
         self.language_rows.pack(fill='x', pady=10)
         for language, voice in sorted(self.config['language_voices'].items()):
-            self.language_rows.insert('', 'end', text=language, values=(voice,))
+            self.language_rows.insert('', 'end', text=label(language), values=(voice,))
         ttk.Label(frame, text='Make default in Voice library also sets that language’s preferred voice. Unavailable language preferences fall back to the requested/default voice. Latin appears only if you import or obtain a suitable model.',
                   wraplength=780, style='Card.TLabel').pack(anchor='w', pady=12)
         ttk.Button(frame, text='Save language preference', command=self.save).pack(anchor='e')
 
     def refresh_languages(self):
         languages = sorted({v['language'] for v in self.config['voices'].values()})
-        self.language_combo.configure(values=['Follow application', *languages])
+        self.language_combo.configure(values=['Follow application', *(label(code) for code in languages)])
         self.language_rows.delete(*self.language_rows.get_children())
         for language, voice in sorted(self.config['language_voices'].items()):
-            self.language_rows.insert('', 'end', text=language, values=(voice,))
+            self.language_rows.insert('', 'end', text=label(language), values=(voice,))
 
     def build_settings(self):
         page = self.pages['Settings']
@@ -365,7 +370,8 @@ class Panel:
             self.config.update(speed=float(self.speed.get()), volume=float(self.volume.get()) / 100,
                                noise_scale=float(self.noise.get()), noise_w_scale=float(self.noise_w.get()),
                                port=int(self.port.get()), wine_prefix=self.prefix.get(), wine=self.wine.get(),
-                               book_language='' if self.language.get() == 'Follow application' else self.language.get())
+                               book_language=next((code for code in {v['language'] for v in self.config['voices'].values()}
+                                                   if label(code) == self.language.get()), ''))
             settings.save(self.path, self.config)
             self.status.set('Preferences saved. They apply to new speech.')
             return True
@@ -377,8 +383,10 @@ class Panel:
         if not self.save():
             return
         prefix, wine = self.config['wine_prefix'] or None, self.config['wine'] or None
-        self.worker(lambda: Installer(resources.root(), prefix, wine).install(self.config),
-                    lambda _: self.status.set('Installed. Restart the Windows application to use the new default.'))
+        def installed(_):
+            settings.register(self.path, prefix, wine)
+            self.status.set('Installed. Restart the Windows application to use the new default.')
+        self.worker(lambda: Installer(resources.root(), prefix, wine).install(self.config), installed)
 
     def uninstall(self):
         if not messagebox.askyesno('Uninstall OpenSAPI', 'Restore original DLLs and speech registration in this installation?'):
@@ -394,12 +402,11 @@ class Panel:
         if not self.save():
             return
         def begin():
-            resources.persistent_runtime(self.path)
-            return self.service.start(self.config['port'])
+            return runtime.call(self.path, {'command': 'start'})
         self.worker(begin, lambda _: self.status.set('Server ready. It can keep running when this panel closes.'))
 
     def stop_server(self):
-        self.worker(lambda: self.service.stop(self.config['port']),
+        self.worker(lambda: runtime.call(self.path, {'command': 'stop'}, launch=False),
                     lambda stopped: self.status.set('Server stopping.' if stopped else 'No server owned by this profile was stopped.'),
                     parallel=True)
 
@@ -411,8 +418,7 @@ class Panel:
             return
         text = self.preview.get()
         def preview():
-            resources.persistent_runtime(self.path)
-            self.service.start(self.config['port'])
+            runtime.call(self.path, {'command': 'start'})
             request = urllib.request.Request(f'http://127.0.0.1:{self.config["port"]}/synthesize',
                         json.dumps({'text': text, 'voice': self.config['voice']}).encode(),
                         {'Content-Type': 'application/json'})
