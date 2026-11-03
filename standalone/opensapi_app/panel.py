@@ -22,6 +22,10 @@ class Panel:
         self.path = Path(path)
         self.config = resources.bootstrap(path)
         self.library = catalogue.catalogue(resources.root())
+        for key, voice in self.config['voices'].items():
+            self.library.setdefault(key, {'key': key, 'name': voice['name'], 'quality': voice.get('quality', 'local'),
+                                         'files': {}, 'language': {'code': voice['language'],
+                                         'name_english': voice['language'], 'name_native': voice['language']}})
         self.service = Service(path)
         self.events = queue.Queue()
         self.busy = 0

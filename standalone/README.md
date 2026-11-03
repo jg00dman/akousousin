@@ -32,6 +32,22 @@ then use the panel without administrator rights. `--uninstall` restores saved
 registration. The engine is standard Windows/SAPI code and uses only public
 Win32 APIs. This beta is 64-bit only.
 
+For an existing Logos setup:
+
+1. Close Logos and launch the AppImage with the prefix/Wine flags above.
+2. In **Voice library**, use **Import local model** for your existing `.onnx`
+   (its matching `.onnx.json` must be alongside it), or review/download a voice.
+3. Select the installed voice and click **Make default**.
+4. In **Settings**, click **Install / apply voice registration**.
+5. In **Overview**, click **Start server**, then **Play sample**. Leave the
+   service running and launch Logos with the same Wine executable/AppImage.
+6. Remove a launcher’s forced `sapi=b` override if using the compatibility DLL.
+   Prefix registration then selects `native,builtin` automatically.
+
+The OpenSAPI AppImage installs speech support; it is not a replacement Wine
+launcher. Keep using your working Logos Wine package. You can close the panel
+while its server runs, reopen it later, and choose **Stop server**.
+
 After installation, import an existing voice or review and download a voice from
 its upstream source. Engine-only installation registers no unusable placeholder
 voice and leaves the existing speech defaults unchanged until a voice is selected.
