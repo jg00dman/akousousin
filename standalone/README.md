@@ -44,6 +44,12 @@ For an existing Logos setup:
 6. Remove a launcher’s forced `sapi=b` override if using the compatibility DLL.
    Prefix registration then selects `native,builtin` automatically.
 
+To reopen the configuration app later, run it without installation flags:
+
+```
+APPIMAGE_EXTRACT_AND_RUN=1 ./OpenSAPI-x86_64.AppImage
+```
+
 The OpenSAPI AppImage installs speech support; it is not a replacement Wine
 launcher. Keep using your working Logos Wine package. You can close the panel
 while its server runs, reopen it later, and choose **Stop server**.

@@ -62,6 +62,9 @@ class Installer:
             if prefix:
                 raise ValueError('--wine-prefix is for Linux; use --install on Windows')
             self.directory = Path(os.environ['PROGRAMFILES']) / 'OpenSAPI'
+        # Wine commonly runs with an administrative token and ignores per-user COM classes.
+        # HKLM here belongs exclusively to the selected prefix; Windows keeps per-user registration.
+        self.class_key = CLASS.replace('HKCU', 'HKLM', 1) if self.prefix else CLASS
         self.manifest = self.directory / 'install-state.json'
         self.backups = self.directory / 'backups'
         self.state = json.loads(self.manifest.read_text()) if self.manifest.exists() else {
@@ -182,9 +185,9 @@ class Installer:
                                  '/t', 'REG_SZ', '/d', 'native,builtin', '/f', '/reg:64')
             engine = self.directory / 'opensapi-piper.dll'
             self.put(self.resource / 'opensapi-piper.dll', engine)
-            self.remember_key(CLASS)
+            self.remember_key(self.class_key)
             engine_path = r'C:\Program Files\OpenSAPI\opensapi-piper.dll' if self.prefix else str(engine)
-            text = f'[{CLASS.replace("HKCU", "HKEY_CURRENT_USER")}\\InprocServer32]\n@="{quote(engine_path)}"\n"ThreadingModel"="Both"\n\n'
+            text = f'[{self.class_key.replace("HKCU", "HKEY_CURRENT_USER").replace("HKLM", "HKEY_LOCAL_MACHINE")}\\InprocServer32]\n@="{quote(engine_path)}"\n"ThreadingModel"="Both"\n\n'
             for identifier, voice in config['voices'].items():
                 if not re.fullmatch('[A-Za-z0-9_-]+', identifier):
                     raise ValueError('Invalid voice identifier')
@@ -207,6 +210,9 @@ class Installer:
 
 '''
             self.registry(text)
+            activation = self.execute(self.windows(self.resource / 'compat-probe.exe'), '--engine', check=False)
+            if activation.returncode:
+                raise RuntimeError('Installed OpenSAPI engine could not be activated: ' + activation.stdout + activation.stderr)
             defaults = [(VOICES, 'DefaultDefaultTokenId'), (r'HKCU\SOFTWARE\Microsoft\Speech\Voices', 'DefaultTokenId')] if config['voices'] else []
             for key, name in defaults:
                 self.remember_value(key, name)

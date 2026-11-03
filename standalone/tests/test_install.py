@@ -152,3 +152,17 @@ class InstallTests(unittest.TestCase):
         self.app.uninstall()
         self.assertTrue(path.is_symlink())
         self.assertEqual(path.resolve(), original)
+
+    def test_failed_engine_activation_rolls_back_install(self):
+        execute = self.app.execute
+        def reject(*args, **kwargs):
+            if '--engine' in args:
+                return subprocess.CompletedProcess(args, 2, 'Class not registered', '')
+            return execute(*args, **kwargs)
+        self.app.execute = reject
+        with self.assertRaisesRegex(RuntimeError, 'could not be activated'):
+            self.app.install(self.config)
+        self.assertFalse(self.app.manifest.exists())
+        self.assertFalse((self.app.directory / 'opensapi-piper.dll').exists())
+        for key, value in self.original.items():
+            self.assertEqual(self.app.reg[key], value)
