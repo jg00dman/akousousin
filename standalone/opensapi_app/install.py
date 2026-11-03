@@ -82,8 +82,18 @@ class Installer:
 
     def execute(self, *args, check=True, timeout=45):
         command = [self.wine, *map(str, args)] if self.prefix else list(map(str, args))
-        return subprocess.run(command, env=self.environment(), capture_output=True, text=True,
-                              encoding='utf-8', errors='replace', timeout=timeout, check=check)
+        # Wine services can inherit stdout beyond the command's lifetime. Capture to
+        # files so command completion does not wait for an unrelated service's EOF.
+        with tempfile.TemporaryFile() as output, tempfile.TemporaryFile() as errors:
+            result = subprocess.run(command, env=self.environment(), stdout=output, stderr=errors,
+                                    timeout=timeout, check=False)
+            output.seek(0)
+            errors.seek(0)
+            completed = subprocess.CompletedProcess(command, result.returncode,
+                output.read().decode('utf-8', errors='replace'), errors.read().decode('utf-8', errors='replace'))
+        if check:
+            completed.check_returncode()
+        return completed
 
     def windows(self, path):
         return 'Z:' + str(Path(path).resolve()) if self.prefix else str(Path(path).resolve())

@@ -50,6 +50,8 @@ else:
     # Benchmarks must measure speech/cancellation, not repeated Wine session startup.
     # Keep the disposable test session alive; retain the original three-second assertions.
     subprocess.run([env['WINESERVER'], '-p600'], env=env, check=True, timeout=15)
+    subprocess.run([str(wine), 'cmd.exe', '/c', 'exit'], env=env, check=True, timeout=60,
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     install = [str(executable), '--wine-prefix', str(prefix), '--wine', str(wine), '--wine-compat',
                '--install-only', '--settings', str(settings_path)]
 # Package has already been built. Voice weights below stay exclusively under build/test-voice.

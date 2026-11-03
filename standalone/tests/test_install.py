@@ -126,7 +126,7 @@ class InstallTests(unittest.TestCase):
             Installer(self.resource, self.prefix, '/wine')
 
     def test_commands_preserve_prefix_and_never_use_shell(self):
-        with patch('subprocess.run') as run:
+        with patch('subprocess.run', return_value=subprocess.CompletedProcess([], 0)) as run:
             Installer.execute(self.app, 'reg.exe', 'query', VOICES)
         self.assertEqual(run.call_args.args[0][0], '/custom/Wine.AppImage')
         self.assertEqual(run.call_args.kwargs['env']['WINEPREFIX'], str(self.prefix))
@@ -166,3 +166,13 @@ class InstallTests(unittest.TestCase):
         self.assertFalse((self.app.directory / 'opensapi-piper.dll').exists())
         for key, value in self.original.items():
             self.assertEqual(self.app.reg[key], value)
+
+    def test_command_does_not_wait_for_background_service_output_eof(self):
+        import sys
+        import time
+        self.app.wine = sys.executable
+        started = time.monotonic()
+        script = "import subprocess,sys;subprocess.Popen([sys.executable,'-c','import time;time.sleep(2)']);print('ready')"
+        result = Installer.execute(self.app, '-c', script, timeout=1)
+        self.assertEqual(result.stdout.strip(), 'ready')
+        self.assertLess(time.monotonic() - started, 1.5)
