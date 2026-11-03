@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+app_dir=${APPDIR:-$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)}
+export OPENSAPI_RESOURCES="$app_dir/usr/lib/opensapi/resources"
+exec "$app_dir/usr/lib/opensapi/opensapi" "$@"

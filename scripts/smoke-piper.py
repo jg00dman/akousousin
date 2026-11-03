@@ -32,8 +32,9 @@ def main():
     parser.add_argument("--text", default="Hello from OpenSAPI. This is a real Piper speech test.")
     args = parser.parse_args()
     rate = json.loads(args.config.read_text())["audio"]["sample_rate"]
-    wine = os.environ["WINE"]
-    if "WINEPREFIX" not in os.environ:
+    native = os.environ.get("OPENSAPI_NATIVE_WINDOWS") == "1"
+    wine = os.environ.get("WINE", "")
+    if not native and "WINEPREFIX" not in os.environ:
         parser.error("Set WINEPREFIX to the prefix with your registered Piper voice")
     output = args.output_dir.resolve()
     output.mkdir(parents=True, exist_ok=True)
@@ -50,7 +51,8 @@ def main():
     (output / "direct.wav").write_bytes(direct)
     print(f"Piper HTTP: {duration:.2f} seconds of non-silent PCM", flush=True)
     probe = Path(__file__).resolve().parents[1] / "build/sapi-probe.exe"
-    subprocess.run([wine, str(probe), "Z:" + str(output / "sapi.wav"), "0", "100", args.text],
+    subprocess.run(([] if native else [wine]) + [str(probe),
+                    str(output / "sapi.wav") if native else "Z:" + str(output / "sapi.wav"), "0", "100", args.text],
                    check=True, timeout=90)
     duration = inspect_wav((output / "sapi.wav").read_bytes(), rate)
     print(f"Wine SAPI: {duration:.2f} seconds of non-silent PCM")

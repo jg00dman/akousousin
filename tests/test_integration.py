@@ -90,7 +90,9 @@ class IntegrationTests(unittest.TestCase):
     def run_probe(self, *, direct=False, rate=0, volume=100, text='Hello "Piper" \\ café 世界\n', mode="", fail=False):
         output = Path(self.temp.name) / ("out.raw" if direct else "out.wav")
         exe = ROOT / "build" / ("engine-probe.exe" if direct else "sapi-probe.exe")
-        args = [os.environ["WINE"], str(exe), "Z:" + str(output), str(rate), str(volume), text]
+        native = os.environ.get('OPENSAPI_NATIVE_WINDOWS') == '1'
+        args = ([] if native else [os.environ['WINE']]) + [str(exe),
+                str(output) if native else 'Z:' + str(output), str(rate), str(volume), text]
         if direct or mode:
             args.append(mode)
         result = subprocess.run(args, capture_output=True, text=True, timeout=90)
@@ -102,7 +104,10 @@ class IntegrationTests(unittest.TestCase):
         with wave.open(str(output), "rb") as wav:
             self.assertEqual((wav.getnchannels(), wav.getsampwidth(), wav.getframerate()), (1, 2, 22050))
             self.assertEqual(wav.readframes(wav.getnframes()), PCM)
-        self.assertEqual(Handler.requests[-1], {"text": 'Hello "Piper" \\ café 世界\n', "length_scale": 1.0})
+        expected = {"text": 'Hello "Piper" \\ café 世界\n', "length_scale": 1.0}
+        if os.environ.get('OPENSAPI_STANDALONE'):
+            expected.update(voice='en_US-ljspeech-medium', sample_rate=22050)
+        self.assertEqual(Handler.requests[-1], expected)
 
     def test_async_and_rate(self):
         self.run_probe(mode="async", rate=10)

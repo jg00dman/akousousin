@@ -62,6 +62,7 @@ int wmain(int argc, WCHAR **argv)
     SPVTEXTFRAG silence = {0}, tail;
     WAVEFORMATEX *format;
     GUID id;
+    WCHAR token_id[1024];
     HRESULT hr;
     if (argc != 6) return 2;
     rate = wcstol(argv[2], NULL, 10);
@@ -81,7 +82,9 @@ int wmain(int argc, WCHAR **argv)
     {
         hr = CoCreateInstance(&CLSID_SpObjectToken, NULL, CLSCTX_INPROC_SERVER, &IID_ISpObjectToken, (void **)&token);
         if (FAILED(hr)) return 2;
-        hr = ISpObjectToken_SetId(token, NULL, L"HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Speech\\Voices\\Tokens\\OpenSAPI-Piper", FALSE);
+        if (!GetEnvironmentVariableW(L"OPENSAPI_TOKEN", token_id, 1024))
+            wcscpy(token_id, L"HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Speech\\Voices\\Tokens\\OpenSAPI-Piper");
+        hr = ISpObjectToken_SetId(token, NULL, token_id, FALSE);
         if (FAILED(hr)) return 2;
         hr = ISpTTSEngine_QueryInterface(engine, &IID_ISpObjectWithToken, (void **)&with_token);
         if (FAILED(hr)) return 2;

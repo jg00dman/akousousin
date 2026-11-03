@@ -70,7 +70,8 @@ int wmain(int argc, wchar_t **argv)
     BOOL async = argc > 5 && !wcscmp(argv[5], L"async");
     BOOL use_default = argc > 5 && !wcscmp(argv[5], L"default");
     BOOL play = argc > 5 && !wcscmp(argv[5], L"play");
-    BOOL missing = argc > 5 && !wcscmp(argv[5], L"missing");
+    BOOL missing_token = argc > 5 && !wcscmp(argv[5], L"missing-token");
+    BOOL missing = missing_token || (argc > 5 && !wcscmp(argv[5], L"missing"));
     BOOL automation = argc > 5 && !wcscmp(argv[5], L"automation");
 
     if (argc < 5)
@@ -104,6 +105,17 @@ int wmain(int argc, wchar_t **argv)
     {
         HRESULT hr;
         if (selected || count) return 2;
+        if (missing_token)
+        {
+            WCHAR token_id[1024];
+            if (!GetEnvironmentVariableW(L"OPENSAPI_TOKEN", token_id, 1024)) return 2;
+            check(CoCreateInstance(&CLSID_SpObjectToken, NULL, CLSCTX_INPROC_SERVER,
+                                  &IID_ISpObjectToken, (void **)&token), "create absent token test");
+            hr = ISpObjectToken_SetId(token, NULL, token_id, FALSE);
+            ISpObjectToken_Release(token);
+            CoUninitialize();
+            return hr == SPERR_NOT_FOUND ? 0 : 2;
+        }
         check(CoCreateInstance(&CLSID_SpVoice, NULL, CLSCTX_INPROC_SERVER,
                               &IID_ISpVoice, (void **)&voice), "create voice without token");
         hr = ISpVoice_Speak(voice, argv[4], SPF_IS_NOT_XML, NULL);

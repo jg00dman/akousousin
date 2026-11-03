@@ -56,6 +56,11 @@ class FailureHandler(Handler):
         super().do_POST()
 
 
+def execute_wine(*args, **kwargs):
+    command = list(args) if os.environ.get('OPENSAPI_NATIVE_WINDOWS') else [os.environ['WINE'], *args]
+    return subprocess.run(command, **kwargs)
+
+
 class FailureTests(unittest.TestCase):
     run_probe = integration.IntegrationTests.run_probe
 
@@ -115,11 +120,11 @@ class FailureTests(unittest.TestCase):
 
     def test_backend_not_listening(self):
         # Use an unbound alternate port; restore the registered token even on failure.
-        wine = os.environ['WINE']
-        key = r'HKLM\SOFTWARE\Microsoft\Speech\Voices\Tokens\OpenSAPI-Piper'
+        wine = os.environ.get('WINE', '')
+        key = os.environ.get('OPENSAPI_TOKEN', r'HKLM\SOFTWARE\Microsoft\Speech\Voices\Tokens\OpenSAPI-Piper')
         def port(value):
-            subprocess.run([wine, 'reg.exe', 'add', key, '/v', 'Port', '/t', 'REG_DWORD',
-                            '/d', str(value), '/f', '/reg:64'], check=True, capture_output=True, timeout=20)
+            execute_wine('reg.exe', 'add', key, '/v', 'Port', '/t', 'REG_DWORD',
+                            '/d', str(value), '/f', '/reg:64', check=True, capture_output=True, timeout=20)
         with socket.socket() as reserve:
             reserve.bind(('127.0.0.1', 0))
             unused = reserve.getsockname()[1]
@@ -140,20 +145,20 @@ class FailureTests(unittest.TestCase):
     def test_missing_registered_voice_and_stale_default(self):
         if not (Path(os.environ['WINEPREFIX']) / '.opensapi-test-prefix').exists():
             self.fail('Refusing registry mutation outside disposable CI prefix')
-        wine = os.environ['WINE']
-        key = r'HKLM\SOFTWARE\Microsoft\Speech\Voices\Tokens\OpenSAPI-Piper'
+        wine = os.environ.get('WINE', '')
+        key = os.environ.get('OPENSAPI_TOKEN', r'HKLM\SOFTWARE\Microsoft\Speech\Voices\Tokens\OpenSAPI-Piper')
         backup = Path(self.temp.name) / 'token.reg'
-        subprocess.run([wine, 'reg.exe', 'export', key, 'Z:' + str(backup), '/y'], check=True,
+        execute_wine('reg.exe', 'export', key, str(backup) if os.environ.get('OPENSAPI_NATIVE_WINDOWS') else 'Z:' + str(backup), '/y', check=True,
                        capture_output=True, timeout=20)
         try:
-            subprocess.run([wine, 'reg.exe', 'delete', key, '/f', '/reg:64'], check=True,
+            execute_wine('reg.exe', 'delete', key, '/f', '/reg:64', check=True,
                            capture_output=True, timeout=20)
-            result = subprocess.run([wine, str(ROOT / 'build/sapi-probe.exe'), 'unused', '0', '100',
-                                     'No registered voice', 'missing'], capture_output=True, text=True, timeout=10)
+            result = execute_wine(str(ROOT / 'build/sapi-probe.exe'), 'unused', '0', '100',
+                                     'No registered voice', 'missing-token' if os.environ.get('OPENSAPI_NATIVE_WINDOWS') else 'missing', capture_output=True, text=True, timeout=10)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn('voices: 0', result.stdout)
         finally:
-            subprocess.run([wine, 'regedit.exe', '/S', 'Z:' + str(backup)], check=True,
+            execute_wine('regedit.exe', '/S', str(backup) if os.environ.get('OPENSAPI_NATIVE_WINDOWS') else 'Z:' + str(backup), check=True,
                            capture_output=True, timeout=20)
 
 
