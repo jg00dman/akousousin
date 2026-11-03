@@ -90,10 +90,20 @@ def result(data):
     return value
 
 
+_application = None
+
+
+def initialize():
+    global _application
+    if os.name == 'nt' and _application is None:
+        from PySide6.QtCore import QCoreApplication
+        _application = QCoreApplication.instance() or QCoreApplication([])
+
+
 def windows_call(path, request, launch):
-    from PySide6.QtCore import QCoreApplication, QIODevice
+    from PySide6.QtCore import QIODevice
     from PySide6.QtNetwork import QLocalSocket
-    application = QCoreApplication.instance() or QCoreApplication([])
+    initialize()
     socket = QLocalSocket()
     socket.connectToServer(name(path), QIODevice.ReadWrite)
     if not socket.waitForConnected(500):
@@ -120,7 +130,6 @@ def windows_call(path, request, launch):
                 return result(data)
         if socket.state() == QLocalSocket.UnconnectedState:
             break
-    del application
     raise TimeoutError('OpenSAPI controller did not respond')
 
 

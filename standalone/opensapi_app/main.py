@@ -88,6 +88,7 @@ def main():
         response = runtime.call(args.settings, request, launch=request['command'] not in ('release', 'stop', 'quit', 'status'))
         print(json.dumps(response or {'running': False, 'sessions': 0}))
         return
+    runtime.initialize()
     from .panel import Panel
     panel = Panel(args.settings)
     if args.smoke_test:

@@ -1,98 +1,101 @@
-# OpenSAPI standalone beta
+# OpenSAPI shared speech beta
 
-[Verified prerelease downloads](https://github.com/jg00dman/opensapi/releases/tag/standalone-beta-41712034012-1) · [Package tests](https://github.com/jg00dman/opensapi/actions/runs/41712034012) · [Successful publication](https://github.com/jg00dman/opensapi/actions/runs/41712964353).
+One speech service and configuration per operating-system user. This beta contains
+the standalone 64-bit SAPI engine, control panel, tray and Piper/Waitress backend.
+It includes the reviewed en_US-ljspeech-medium starter voice, its model card,
+checksum provenance and licence declarations. No Wine runtime or other voice weights
+are bundled. Existing selected voices are preserved.
 
-This package contains a standard 64-bit Windows COM speech engine DLL, a control
-panel, and a local Waitress/Piper service. No voice model weights are redistributed in this package.
-It does not contain a Wine runtime. Existing beta branches/main are unchanged.
+## Linux installation and storage
 
-Linux (x86-64, glibc 2.35+, same Ubuntu 22.04 target):
+OuDedetai installs the AppImage to `~/.local/share/OpenSAPI/OpenSAPI-x86_64.AppImage`.
+For manual installation, put the downloaded AppImage there and make it executable.
+The Ubuntu 22.04 / x86-64 / glibc 2.35+ build target is unchanged.
 
-```
-chmod +x OpenSAPI-x86_64.AppImage
-APPIMAGE_EXTRACT_AND_RUN=1 ./OpenSAPI-x86_64.AppImage \
-  --wine-prefix /absolute/path/to/existing/prefix \
-  --wine /absolute/path/to/your/Wine.AppImage
-```
+- Preferences: `~/.config/OpenSAPI/settings.json`.
+- Downloaded voices: `~/.local/share/OpenSAPI/voices/`.
+- Imported models remain in the location you explicitly select.
+- Logs: `~/.local/state/OpenSAPI/opensapi.log`.
+- Private session/socket/control files: `$XDG_RUNTIME_DIR/OpenSAPI/`, with a
+  private `/tmp/opensapi-<uid>/OpenSAPI/` fallback when no runtime directory exists.
 
-The prefix must already be initialized and 64-bit. Close applications first.
-This installs and opens the panel; add `--install-only` for a non-GUI install.
-`--uninstall --wine-prefix ... --wine ...` restores original speech registration
-and replaced DLLs. Voice downloads and panel preferences are retained.
+XDG directory overrides are respected. Piper and Python stay inside the AppImage.
+Its temporary extraction remains alive while OpenSAPI runs; no additional runtime
+copy is stored in the data directory. Existing `runtimes/` copies from older betas
+are no longer used. Old OuDedetai-specific settings are not copied implicitly.
 
-The installer probes SAPI registry enumeration. Where the generic fix is missing,
-a Wine-only compatibility sapi.dll is supplied for Wine 11.21, with its exact
-matching source. `--wine-compat` forces that compatibility path for testing. Other
-Wine versions with the missing method require their own compatible core DLL;
-the installer refuses to guess. A launcher forcing `sapi=b` overrides prefix
-registry preferences; remove that forced override when a compatibility DLL is
-required. Native Windows sapi.dll is never replaced.
+Close Logos before registering an existing initialized 64-bit Wine prefix:
 
-Windows: extract the ZIP and run opensapi.exe for the panel. Run it from an
-administrator terminal with `--install --install-only` to register voice tokens;
-then use the panel without administrator rights. `--uninstall` restores saved
-registration. The engine is standard Windows/SAPI code and uses only public
-Win32 APIs. This beta is 64-bit only.
-
-For an existing Logos setup:
-
-1. Close Logos and launch the AppImage with the prefix/Wine flags above.
-2. In **Voice library**, use **Import local model** for your existing `.onnx`
-   (its matching `.onnx.json` must be alongside it), or review/download a voice.
-3. Select the installed voice and click **Make default**.
-4. In **Settings**, click **Install / apply voice registration**.
-5. In **Overview**, click **Start server**, then **Play sample**. Leave the
-   service running and launch Logos with the same Wine executable/AppImage.
-6. Remove a launcher’s forced `sapi=b` override if using the compatibility DLL.
-   Prefix registration then selects `native,builtin` automatically.
-
-To reopen the configuration app later, run it without installation flags:
-
-```
-APPIMAGE_EXTRACT_AND_RUN=1 ./OpenSAPI-x86_64.AppImage
+```bash
+export APPIMAGE_EXTRACT_AND_RUN=1
+IMAGE="$HOME/.local/share/OpenSAPI/OpenSAPI-x86_64.AppImage"
+chmod +x "$IMAGE"
+"$IMAGE" --wine-prefix "$HOME/wine-bisect-prefix/data/wine64_bottle" \
+  --wine "$HOME/opensapi/wine-opensapi-piper-11.21-logos-x86_64.AppImage" --install-only
+"$IMAGE"
 ```
 
-The OpenSAPI AppImage installs speech support; it is not a replacement Wine
-launcher. Keep using your working Logos Wine package. You can close the panel
-while its server runs, reopen it later, and choose **Stop server**.
+The bundled LJSpeech voice is ready on a fresh installation. To use another
+voice, import its `.onnx` file (matching `.onnx.json` alongside), or review and
+download one in Voice library. Select Make default, then Settings → Install /
+apply voice registration. Overview → Start server → Play sample tests real Piper and
+playback. Next test Logos Read Aloud using the same Wine package.
 
-After installation, import an existing voice or review and download a voice from
-its upstream source. Engine-only installation registers no unusable placeholder
-voice and leaves the existing speech defaults unchanged until a voice is selected.
+## Tray and lifecycle
 
-The panel offers Start/Stop, preview, searchable language/voice catalogue, local
-model import, default voice, speed, volume and Piper noise controls. It does not
-advertise unsupported pitch adjustment. Preferences are saved per user. Model
-and runtime files required by a background server are copied outside ephemeral
-AppImage mounts; closing the panel can leave its server running. Only a server
-with this profile's private control token can be stopped by this panel.
+The original OpenSAPI waveform artwork is shared by the AppImage, window and tray.
+A tray badge reports stopped, starting, running or error. Its menu provides
+Start/Stop, installed voices grouped by readable language names, Configure, Quit.
+Default changes apply to subsequent speech; applications caching a SAPI voice may
+need restarting. Newly downloaded voices need registration through Settings.
 
-One inference worker/model is loaded at a time to limit memory use. Standard
-SAPI language hints can select language preferences; a manual book-language
-selection is also available. This does not infer the language of isolated words
-or promise that Logos supplies language markers. Different model sample rates
-are converted to the format negotiated with SAPI. Missing/unavailable voices,
-HTTP failures and inference timeouts return errors rather than silent success.
+Closing the configuration panel leaves OpenSAPI/Piper running. Tray Quit stops
+Piper and exits OpenSAPI, warning when application sessions are active. An
+application releasing the last session also stops Piper and exits OpenSAPI when
+OpenSAPI was started automatically. An independent/manual start is left running.
+On desktops without a tray, the panel and command interface remain usable.
 
-The pinned catalogue preserves upstream metadata. LJSpeech has the project's
-reviewed repository-MIT/public-domain-data provenance. Other voices may have
-non-commercial, attribution or additional conditions: review their individual
-model/dataset terms before downloading. A catalogue entry is not a blanket
-redistribution approval. Downloaded cards and provenance are retained. Latin
-requires an appropriate model and is not invented or substituted in the catalogue.
+## Launcher interface, version 2
 
-DLL installation stores a recovery record in the selected prefix's
-`drive_c/Program Files/OpenSAPI/`. It preserves prior defaults/registration and
-any replaced DLLs. It refuses to uninstall over subsequently modified DLLs.
-Prefix selection is explicit and no Windows credentials are collected or bundled.
+```bash
+"$IMAGE" --protocol-version                         # prints 2
+"$IMAGE" --configure                                # configuration, no independent ownership
+"$IMAGE" --acquire-session unique-id --owner-pid PID  # start/reuse and wait until ready
+"$IMAGE" --release-session unique-id                 # release only that session
+"$IMAGE" --status                                    # JSON status, does not start anything
+"$IMAGE" --start-server                              # independent/manual start
+"$IMAGE" --stop-server                               # explicit backend stop, tray remains
+"$IMAGE" --quit                                      # explicit stop and exit
+```
 
-Source licensing: engine LGPL-2.1-or-later; panel/service GPL-3.0-or-later;
-Piper/eSpeak and embedded-dependency notices are in licenses/. The accompanying
-sources archive includes our source/build scripts and the exact compatibility
-Wine, Piper and eSpeak sources. Windows and Wine behavior are tested separately;
-passing WAV checks does not establish audible playback or every Logos behavior.
+Use a distinct random ID per application session; repeat acquisition is idempotent.
+The owner must be a running process. OpenSAPI checks its creation time and reaps
+sessions whose owners exit, including launcher crashes. One session ending never
+stops another's speech. The public commands return nonzero on errors; launchers
+can still run their application without speech. Only OpenSAPI manipulates its own
+private controller files. `--settings` remains a diagnostic/test override.
 
-Optional Arabic/Hebrew preprocessing model weights are also excluded from the
-program-only distribution; those languages are marked unavailable in this beta
-until a separate resource-download/licence path is provided. Other catalogue
-entries remain subject to their individual model licences.
+## Compatibility and rollback
+
+This beta supports 64-bit callers only. Wine 11.21 prefixes missing the generic
+SAPI enumeration fix receive a prefix-local compatibility DLL, with originals
+backed up. Other Wine versions needing that fix are refused rather than guessed.
+Remove launcher-forced `sapi=b` when the compatibility DLL is required.
+
+Settings → Uninstall & restore (or `--uninstall --wine-prefix ... --wine ...`)
+restores original registry settings/defaults and replaced DLLs. It keeps voices
+and preferences. Native Windows system SAPI is never replaced: extract the
+Windows ZIP, use the same control panel/tray, and register with `--install` from
+an administrator terminal. Windows data/config are under LocalAppData/OpenSAPI.
+
+Language routing uses SAPI hints or a manually selected book language; automatic
+foreign-word detection and full localisation are not implemented. Standard Piper
+has no general pitch slider. Arabic/Hebrew auxiliary models are not distributed
+and those languages remain unavailable in this program-only beta. Model licences
+vary; upstream cards and provenance are retained when downloading.
+
+Sources/licences accompany the release: engine LGPL-2.1-or-later; panel/Piper
+GPL-3.0-or-later; Qt/PySide LGPL-3.0 and third-party notices. The source archive
+includes matching Wine, Piper, eSpeak, Qt and PySide sources. Automated deterministic
+WAV checks, real Piper output and session tests do not establish audible playback
+or every Logos desktop behavior; test in a backed-up prefix.

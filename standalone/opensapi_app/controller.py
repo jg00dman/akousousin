@@ -79,6 +79,7 @@ def run(path):
     app = QApplication([]) if graphical else QCoreApplication([])
     if graphical:
         app.setQuitOnLastWindowClosed(False)
+        app.setWindowIcon(QIcon(str(resources.root() / 'opensapi.png')))
     lock = QLockFile(str(runtime.directory() / (os.path.basename(runtime.name(path)) + '.lock')))
     if not lock.tryLock(0):
         return
@@ -140,6 +141,7 @@ def run(path):
     tray = QSystemTrayIcon() if graphical else None
     if tray:
         tray.setToolTip('OpenSAPI')
+        tray.setIcon(QIcon(str(resources.root() / 'opensapi.png')))
         menu = QMenu()
         toggle = menu.addAction('Start')
         toggle.triggered.connect(lambda: submit({'command': 'stop' if toggle.text() == 'Stop' else 'start'}))

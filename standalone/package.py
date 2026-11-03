@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import tempfile
 import urllib.request
 import zipfile
 
@@ -39,6 +40,14 @@ for file in (ROOT / 'build/standalone-engine').glob('*'):
 shutil.copytree(ROOT / 'standalone/resources', RESOURCE, dirs_exist_ok=True)
 # Program-only distribution: catalogue metadata is included, never model weights.
 # Users import a local voice or download from upstream after licence review.
+
+# The user explicitly approved this one reviewed starter voice for redistribution.
+# Catalogue downloads preserve its upstream model card and MIT/public-domain provenance.
+from opensapi_app import catalogue
+with tempfile.TemporaryDirectory(dir=BUILD) as temporary:
+    entry = catalogue.catalogue(ROOT / 'standalone/resources')['en_US-ljspeech-medium']
+    voice = catalogue.install(entry, Path(temporary), reviewed=True)
+    shutil.copytree(Path(voice['path']).parent, RESOURCE / 'voices', dirs_exist_ok=True)
 
 if sys.platform != 'win32':
     published = 'https://github.com/jg00dman/opensapi/releases/download/piper-test-41467603154-1/'
@@ -122,8 +131,9 @@ for sample in (PACKAGE / '_internal/onnxruntime/datasets').glob('*.onnx'):
 # weights external in this beta, including those auxiliary language resources.
 for optional in ('piper/tashkeel/model.onnx', 'piper/hebrew/nakdimon.onnx'):
     (PACKAGE / '_internal' / optional).unlink(missing_ok=True)
-if list(PACKAGE.rglob('*.onnx')):
-    raise RuntimeError('Model weights must not be redistributed in this program-only package')
+models = [file.relative_to(PACKAGE).as_posix() for file in PACKAGE.rglob('*.onnx')]
+if models != ['resources/voices/en_US-ljspeech-medium.onnx']:
+    raise RuntimeError('Only the explicitly approved LJSpeech starter voice may be bundled')
 if sys.platform == 'win32':
     with zipfile.ZipFile(OUT / 'OpenSAPI-Windows-x86_64.zip', 'w', zipfile.ZIP_DEFLATED) as archive:
         for file in PACKAGE.rglob('*'):

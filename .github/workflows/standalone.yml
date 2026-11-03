@@ -52,7 +52,7 @@ jobs:
         shell: bash
         run: PYTHONPATH=standalone:backend python -m unittest discover -s standalone/tests -v
         if: runner.os == 'Linux'
-      - name: Build program-only package with licences and sources (no models)
+      - name: Build package with reviewed LJSpeech starter voice, licences and sources
         run: python standalone/package.py
       - name: Wine installer, COM engine, real speech and panel tests
         if: runner.os == 'Linux'
@@ -60,7 +60,7 @@ jobs:
       - name: Native Windows SAPI, installer and panel tests
         if: runner.os == 'Windows'
         run: python standalone/ci_smoke.py
-      - name: Upload program packages and diagnostic evidence (no model weights)
+      - name: Upload packages and diagnostic evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -73,6 +73,7 @@ jobs:
             build/standalone-ci/*.log
             build/standalone-ci/*.wav
             build/standalone-ci/*.png
+            build/standalone-ci/**/opensapi.log
 
   release:
     if: github.event_name == 'workflow_dispatch' && inputs.publish
@@ -98,7 +99,7 @@ jobs:
           cp standalone/README.md release-assets/TESTING.md
           cp patches/wine-piper.patch release-assets/wine-piper-original.patch
           (cd release-assets && sha256sum -- *.AppImage *.zip *.tar.gz TESTING.md *.patch > SHA256SUMS)
-      - name: Publish standalone beta (programs only, no voice weights)
+      - name: Publish standalone beta with the approved LJSpeech starter voice
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

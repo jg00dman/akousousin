@@ -25,6 +25,7 @@ def load(path):
     value = json.loads(json.dumps(DEFAULTS))
     if Path(path).exists():
         value.update(json.loads(Path(path).read_text(encoding='utf-8')))
+    value.pop('runtime', None)
     validate(value)
     return value
 

@@ -33,4 +33,3 @@ def bootstrap(path):
         config['language_voices'].setdefault('en_US', voice)
         settings.save(path, config)
     return config
-
