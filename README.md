@@ -1,5 +1,7 @@
 # OpenSAPI: Piper speech for Wine (beta)
 
+On `codex/standalone-control-panel`, test the [standalone beta](https://github.com/jg00dman/opensapi/releases/tag/standalone-beta-41712034012-1): a prefix installer, control panel and Piper server, with models kept separate. Read [standalone/README.md](standalone/README.md) for installation, configuration and rollback. This branch contains the prototype and deployable-Piper history; the Wine packages below remain available separately.
+
 For a step-by-step test session, start with [TESTING.md](TESTING.md).
 
 Download the [Wine deployment beta](https://github.com/jg00dman/opensapi/releases/tag/piper-test-41467603154-1)

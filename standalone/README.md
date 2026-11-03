@@ -1,5 +1,7 @@
 # OpenSAPI standalone beta
 
+[Verified prerelease downloads](https://github.com/jg00dman/opensapi/releases/tag/standalone-beta-41712034012-1) · [Package tests](https://github.com/jg00dman/opensapi/actions/runs/41712034012) · [Successful publication](https://github.com/jg00dman/opensapi/actions/runs/41712964353).
+
 This package contains a standard 64-bit Windows COM speech engine DLL, a control
 panel, and a local Waitress/Piper service. No voice model weights are redistributed in this package.
 It does not contain a Wine runtime. Existing beta branches/main are unchanged.
