@@ -211,7 +211,9 @@ class Panel:
             if needle and needle not in fields:
                 continue
             size = sum(f['size_bytes'] for p, f in entry['files'].items() if p.endswith('.onnx')) / 1000000
-            status = 'Installed' if installed else 'Reviewed free-use' if key in catalogue.APPROVED else 'Licence review required'
+            status = ('Installed' if installed else 'Language resources unavailable'
+                      if entry['language'].get('family') in catalogue.UNSUPPORTED_AUXILIARY
+                      else 'Reviewed free-use' if key in catalogue.APPROVED else 'Licence review required')
             self.tree.insert('', 'end', iid=key, text=entry['name'], values=(entry['language']['code'],
                              entry['quality'], f'{size:.0f} MB', status))
 

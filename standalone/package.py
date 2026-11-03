@@ -109,6 +109,10 @@ shutil.copy(ROOT / 'standalone/README.md', PACKAGE / 'README.md')
 # ONNX Runtime ships unused demonstration graphs; they are not required for inference.
 for sample in (PACKAGE / '_internal/onnxruntime/datasets').glob('*.onnx'):
     sample.unlink()
+# Piper also ships optional Arabic/Hebrew preprocessing models; keep all neural
+# weights external in this beta, including those auxiliary language resources.
+for optional in ('piper/tashkeel/model.onnx', 'piper/hebrew/nakdimon.onnx'):
+    (PACKAGE / '_internal' / optional).unlink(missing_ok=True)
 if list(PACKAGE.rglob('*.onnx')):
     raise RuntimeError('Model weights must not be redistributed in this program-only package')
 if sys.platform == 'win32':

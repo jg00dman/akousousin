@@ -67,3 +67,8 @@ Piper/eSpeak and embedded-dependency notices are in licenses/. The accompanying
 sources archive includes our source/build scripts and the exact compatibility
 Wine, Piper and eSpeak sources. Windows and Wine behavior are tested separately;
 passing WAV checks does not establish audible playback or every Logos behavior.
+
+Optional Arabic/Hebrew preprocessing model weights are also excluded from the
+program-only distribution; those languages are marked unavailable in this beta
+until a separate resource-download/licence path is provided. Other catalogue
+entries remain subject to their individual model licences.

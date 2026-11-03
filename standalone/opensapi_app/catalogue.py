@@ -9,6 +9,7 @@ import urllib.request
 
 REVISION = 'b4e358ffcb232591bf73a540e70f7de528e4174a'
 BASE = f'https://huggingface.co/rhasspy/piper-voices/resolve/{REVISION}'
+UNSUPPORTED_AUXILIARY = {'ar', 'he'}
 APPROVED = {'en_US-ljspeech-medium': 'Repository MIT declaration; public-domain LJ Speech; trained from scratch'}
 
 
@@ -35,6 +36,8 @@ def card(entry):
 
 def install(entry, directory, reviewed=False):
     key = entry['key']
+    if entry['language']['family'] in UNSUPPORTED_AUXILIARY:
+        raise ValueError('Arabic/Hebrew preprocessing models are not distributed in this program-only beta')
     if not re.fullmatch(r'[A-Za-z0-9_-]+', key):
         raise ValueError('Invalid voice identifier')
     if key not in APPROVED and not reviewed:
