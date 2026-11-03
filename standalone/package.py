@@ -144,7 +144,7 @@ else:
     with tarfile.open(OUT / 'OpenSAPI-corresponding-sources.tar.gz', 'w:gz') as archive:
         archive.add(SOURCE, arcname='sources')
 
-with (OUT / 'SHA256SUMS').open('w') as sums:
+with (OUT / 'SHA256SUMS').open('w', encoding='ascii', newline='\n') as sums:
     for file in sorted(OUT.iterdir()):
         if file.suffix in ('.AppImage', '.zip', '.gz'):
             sums.write(hashlib.file_digest(file.open('rb'), 'sha256').hexdigest() + '  ' + file.name + '\n')

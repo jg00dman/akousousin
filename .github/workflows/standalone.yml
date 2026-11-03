@@ -92,7 +92,7 @@ jobs:
         run: |
           mkdir release-assets
           for directory in release-input/*/standalone-dist; do
-            (cd "$directory" && sha256sum --check SHA256SUMS)
+            (cd "$directory" && tr -d '\r' < SHA256SUMS | sha256sum --check -)
             find "$directory" -maxdepth 1 -type f \( -name '*.AppImage' -o -name '*.zip' -o -name '*.tar.gz' \) -exec cp {} release-assets/ \;
           done
           cp standalone/README.md release-assets/TESTING.md
