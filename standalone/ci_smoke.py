@@ -47,6 +47,9 @@ else:
                    check=True, timeout=120)
     subprocess.run([env['WINESERVER'], '-w'], env=env, check=True, timeout=90)
     assert (prefix / 'system.reg').is_file(), 'Wine initialization did not persist its registry'
+    # Benchmarks must measure speech/cancellation, not repeated Wine session startup.
+    # Keep the disposable test session alive; retain the original three-second assertions.
+    subprocess.run([env['WINESERVER'], '-p600'], env=env, check=True, timeout=15)
     install = [str(executable), '--wine-prefix', str(prefix), '--wine', str(wine), '--wine-compat',
                '--install-only', '--settings', str(settings_path)]
 # Package has already been built. Voice weights below stay exclusively under build/test-voice.
@@ -63,6 +66,7 @@ subprocess.run(install, env=env, check=True, timeout=180)
 for name in ['sapi-probe.exe', 'engine-probe.exe']:
     shutil.copy(resource / name, ROOT / 'build' / name)
 for script, log in [('tests/test_integration.py', 'integration.log'), ('tests/test_failures.py', 'failure-recovery.log')]:
+    print(f'Running {script}', flush=True)
     with (WORK / log).open('w', encoding='utf-8') as output:
         result = subprocess.run([sys.executable, str(ROOT / script)], env=env, stdout=output,
                                 stderr=subprocess.STDOUT, timeout=300)
@@ -98,6 +102,9 @@ command = [str(executable), '--uninstall', '--settings', str(settings_path)]
 if not native:
     command += ['--wine-prefix', str(prefix), '--wine', str(wine)]
 subprocess.run(command, env=env, check=True, timeout=90)
+if not native:
+    subprocess.run([env['WINESERVER'], '-k'], env=env, check=True, timeout=15)
+    subprocess.run([env['WINESERVER'], '-w'], env=env, check=True, timeout=30)
 if native:
     for path, sha in originals.items():
         assert hashlib.sha256(path.read_bytes()).hexdigest() == sha, 'Windows system SAPI was modified'
