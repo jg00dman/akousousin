@@ -1,6 +1,11 @@
 name: Standalone OpenSAPI
 on:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish a unique experimental prerelease after all tests pass
+        type: boolean
+        default: false
   push:
     branches: [codex/standalone-control-panel]
     paths: [engine/**, standalone/**, .github/workflows/standalone.yml]
@@ -68,3 +73,36 @@ jobs:
             build/standalone-ci/*.log
             build/standalone-ci/*.wav
             build/standalone-ci/*.png
+
+  release:
+    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    needs: [engine, package]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: opensapi-standalone-*
+          path: release-input
+      - name: Prepare checked release assets
+        shell: bash
+        run: |
+          mkdir release-assets
+          for directory in release-input/*; do
+            (cd "$directory" && sha256sum --check SHA256SUMS)
+            find "$directory" -maxdepth 1 -type f \( -name '*.AppImage' -o -name '*.zip' -o -name '*.tar.gz' \) -exec cp {} release-assets/ \;
+          done
+          cp standalone/README.md release-assets/TESTING.md
+          cp patches/wine-piper.patch release-assets/wine-piper-original.patch
+          (cd release-assets && sha256sum -- *.AppImage *.zip *.tar.gz TESTING.md *.patch > SHA256SUMS)
+      - name: Publish standalone beta (programs only, no voice weights)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="standalone-beta-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          gh release create "$tag" --verify-tag --repo "$GITHUB_REPOSITORY" \
+            --prerelease --title "OpenSAPI standalone beta ${GITHUB_RUN_ID}" \
+            --notes-file standalone/RELEASE-NOTES.md release-assets/*

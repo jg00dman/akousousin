@@ -32,6 +32,10 @@ if native:
         Path(os.environ['WINDIR']) / 'System32/Speech/Common/sapi.dll'] if p.exists()}
     install = [str(executable), '--install', '--install-only', '--settings', str(settings_path)]
 else:
+    executable = ROOT / 'standalone-dist/OpenSAPI-x86_64.AppImage'
+    os.environ['APPIMAGE_EXTRACT_AND_RUN'] = '1'
+    env['APPIMAGE_EXTRACT_AND_RUN'] = '1'
+    subprocess.run([str(executable), '--help'], env=env, check=True, timeout=60)
     runtime = ROOT / 'build/standalone-package/downloads/wine-runtime.tar.xz'
     wine_dir = WORK / 'wine'
     wine_dir.mkdir(exist_ok=True)
