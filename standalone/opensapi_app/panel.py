@@ -198,7 +198,7 @@ class Panel:
         ttk.Button(row, text='Review licence & download', command=self.download).pack(side='left', padx=3)
         ttk.Button(row, text='Make default', style='Accent.TButton', command=self.make_default).pack(side='left', padx=3)
         ttk.Button(row, text='Import local model', command=self.import_model).pack(side='left', padx=3)
-        ttk.Label(page, text='Catalogue: Piper voices, pinned revision. Licences vary by voice; the bundled LJSpeech voice has reviewed provenance. Other downloads require your licence review.',
+        ttk.Label(page, text='Catalogue: Piper voices, pinned revision. Licences vary by voice; LJSpeech has reviewed provenance; models download separately. Other downloads require your licence review.',
                   wraplength=820).pack(anchor='w', pady=10)
 
     def refresh_library(self):

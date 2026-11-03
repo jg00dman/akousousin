@@ -45,6 +45,8 @@ else:
                WINEDLLOVERRIDES='mscoree,mshtml=;sapi=n,b', WINEDEBUG='-all')
     subprocess.run([str(wine), 'wineboot.exe', '-u'], env=env | {'WINEDLLOVERRIDES': 'mscoree,mshtml='},
                    check=True, timeout=120)
+    subprocess.run([env['WINESERVER'], '-w'], env=env, check=True, timeout=90)
+    assert (prefix / 'system.reg').is_file(), 'Wine initialization did not persist its registry'
     install = [str(executable), '--wine-prefix', str(prefix), '--wine', str(wine), '--wine-compat',
                '--install-only', '--settings', str(settings_path)]
 # Package has already been built. Voice weights below stay exclusively under build/test-voice.

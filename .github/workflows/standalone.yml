@@ -91,7 +91,7 @@ jobs:
         shell: bash
         run: |
           mkdir release-assets
-          for directory in release-input/*; do
+          for directory in release-input/*/standalone-dist; do
             (cd "$directory" && sha256sum --check SHA256SUMS)
             find "$directory" -maxdepth 1 -type f \( -name '*.AppImage' -o -name '*.zip' -o -name '*.tar.gz' \) -exec cp {} release-assets/ \;
           done
