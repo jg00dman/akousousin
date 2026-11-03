@@ -1,5 +1,8 @@
 name: Publish tested standalone OpenSAPI
 on:
+  push:
+    branches: [codex/standalone-control-panel]
+    paths: [.github/workflows/publish-standalone.yml]
   workflow_dispatch:
     inputs:
       tested_run:
@@ -11,6 +14,7 @@ permissions:
   contents: write
 jobs:
   publish:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     steps:
