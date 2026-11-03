@@ -62,7 +62,8 @@ int wmain(int argc, WCHAR **argv)
     SPVTEXTFRAG silence = {0}, tail;
     WAVEFORMATEX *format;
     GUID id;
-    WCHAR token_id[1024];
+    WCHAR token_id[1024], class_id[64];
+    CLSID engine_clsid = piper_clsid;
     HRESULT hr;
     if (argc != 6) return 2;
     rate = wcstol(argv[2], NULL, 10);
@@ -76,7 +77,9 @@ int wmain(int argc, WCHAR **argv)
     output = CreateFileW(argv[1], GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
     if (output == INVALID_HANDLE_VALUE) return 2;
     CoInitializeEx(NULL, COINIT_MULTITHREADED);
-    hr = CoCreateInstance(&piper_clsid, NULL, CLSCTX_INPROC_SERVER, &IID_ISpTTSEngine, (void **)&engine);
+    if (GetEnvironmentVariableW(L"OPENSAPI_CLSID", class_id, 64))
+        if (FAILED(CLSIDFromString(class_id, &engine_clsid))) return 2;
+    hr = CoCreateInstance(&engine_clsid, NULL, CLSCTX_INPROC_SERVER, &IID_ISpTTSEngine, (void **)&engine);
     if (FAILED(hr)) { fprintf(stderr, "engine creation failed: %#lx\n", hr); return 2; }
     if (wcscmp(argv[5], L"uninitialized"))
     {

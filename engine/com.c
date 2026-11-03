@@ -4,7 +4,7 @@
 #include <objbase.h>
 #include <sapi.h>
 #include "engine.h"
-static const CLSID piper_clsid = {0x7c8b3f91,0x6f72,0x4c5b,{0xa6,0x0f,0x2e,0x89,0x5a,0xb1,0x43,0xd2}};
+static const CLSID piper_clsid = {0xea7a00ab,0x0fb7,0x4deb,{0x81,0xc5,0x55,0x0d,0x85,0x4f,0x39,0x0f}};
 const GUID SPDFID_WaveFormatEx = {0xc31adbae, 0x527f, 0x4ff5, {0xa2, 0x30, 0xf6, 0x2b, 0xb6, 0x1f, 0xf7, 0x0c}};
 LONG opensapi_objects;
 static LONG locks;
@@ -35,7 +35,7 @@ __declspec(dllexport) HRESULT WINAPI DllRegisterServer(void)
 {
     WCHAR path[32768]; HKEY key; LONG ret;
     if (!GetModuleFileNameW(module,path,32768)) return HRESULT_FROM_WIN32(GetLastError());
-    ret=RegCreateKeyExW(HKEY_CURRENT_USER,L"Software\\Classes\\CLSID\\{7C8B3F91-6F72-4C5B-A60F-2E895AB143D2}\\InprocServer32",0,NULL,0,KEY_WRITE|KEY_WOW64_64KEY,NULL,&key,NULL);
+    ret=RegCreateKeyExW(HKEY_CURRENT_USER,L"Software\\Classes\\CLSID\\{EA7A00AB-0FB7-4DEB-81C5-550D854F390F}\\InprocServer32",0,NULL,0,KEY_WRITE|KEY_WOW64_64KEY,NULL,&key,NULL);
     if(ret) return HRESULT_FROM_WIN32(ret);
     ret=RegSetValueExW(key,NULL,0,REG_SZ,(BYTE*)path,(lstrlenW(path)+1)*sizeof(WCHAR));
     if(!ret) ret=RegSetValueExW(key,L"ThreadingModel",0,REG_SZ,(BYTE*)L"Both",sizeof(L"Both"));
@@ -44,9 +44,9 @@ __declspec(dllexport) HRESULT WINAPI DllRegisterServer(void)
 __declspec(dllexport) HRESULT WINAPI DllUnregisterServer(void)
 {
     WCHAR path[32768],installed[32768];DWORD size=sizeof(installed);LONG ret;
-    const WCHAR *key=L"Software\\Classes\\CLSID\\{7C8B3F91-6F72-4C5B-A60F-2E895AB143D2}";
+    const WCHAR *key=L"Software\\Classes\\CLSID\\{EA7A00AB-0FB7-4DEB-81C5-550D854F390F}";
     if(!GetModuleFileNameW(module,path,32768)) return E_FAIL;
-    ret=RegGetValueW(HKEY_CURRENT_USER,L"Software\\Classes\\CLSID\\{7C8B3F91-6F72-4C5B-A60F-2E895AB143D2}\\InprocServer32",NULL,RRF_RT_REG_SZ,NULL,installed,&size);
+    ret=RegGetValueW(HKEY_CURRENT_USER,L"Software\\Classes\\CLSID\\{EA7A00AB-0FB7-4DEB-81C5-550D854F390F}\\InprocServer32",NULL,RRF_RT_REG_SZ,NULL,installed,&size);
     if(ret==ERROR_FILE_NOT_FOUND) return S_OK;
     if(ret || lstrcmpiW(path,installed)) return S_FALSE;
     return HRESULT_FROM_WIN32(RegDeleteTreeW(HKEY_CURRENT_USER,key));

@@ -131,3 +131,24 @@ class InstallTests(unittest.TestCase):
         self.assertEqual(run.call_args.args[0][0], '/custom/Wine.AppImage')
         self.assertEqual(run.call_args.kwargs['env']['WINEPREFIX'], str(self.prefix))
         self.assertNotIn('shell', run.call_args.kwargs)
+
+    def test_engine_only_install_does_not_change_existing_voice_defaults(self):
+        self.config['voices'] = {}
+        self.app.install(self.config)
+        self.assertEqual(self.app.reg[VOICES], self.original[VOICES])
+        self.assertFalse(any(key.startswith(VOICES + r'\Tokens\OpenSAPI-Piper-') for key in self.app.reg))
+        self.app.uninstall()
+        self.assertEqual(self.app.reg[CLASS + r'\InprocServer32'], self.original[CLASS + r'\InprocServer32'])
+
+    def test_builtin_symlink_is_replaced_atomically_and_restored(self):
+        original = Path(self.temp.name) / 'wine-builtin.dll'
+        original.write_bytes(b'original-runtime')
+        path = self.prefix / 'drive_c/windows/system32/sapi.dll'
+        path.symlink_to(original)
+        self.app.force_compat = True
+        self.app.install(self.config)
+        self.assertFalse(path.is_symlink())
+        self.assertEqual(original.read_bytes(), b'original-runtime')
+        self.app.uninstall()
+        self.assertTrue(path.is_symlink())
+        self.assertEqual(path.resolve(), original)

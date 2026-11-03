@@ -3,11 +3,12 @@ import json
 import os
 from pathlib import Path
 import queue
+import re
 import shutil
 import subprocess
 import threading
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
 import urllib.request
 import webbrowser
 
@@ -275,9 +276,18 @@ class Panel:
         if not model:
             return
         try:
-            config = json.loads(Path(model + '.json').read_text())
-            key = Path(model).stem
-            language = config.get('language', {}).get('code', 'en_US')
+            config = json.loads(Path(model + '.json').read_text(encoding='utf-8'))
+            key = re.sub('[^A-Za-z0-9_-]', '_', Path(model).stem)[:110]
+            if key in self.config['voices'] and self.config['voices'][key]['path'] != model:
+                import uuid
+                key += '_' + uuid.uuid4().hex[:8]
+            language = config.get('language', {}).get('code')
+            if not language:
+                language = simpledialog.askstring('Model language', 'Language code, for example en_US or de_DE:', parent=self.root)
+                if not language:
+                    return
+            if language.split('_')[0] in catalogue.UNSUPPORTED_AUXILIARY:
+                raise ValueError('This language needs optional preprocessing resources not distributed in this beta')
             self.config['voices'][key] = {'path': model, 'sample_rate': config['audio']['sample_rate'],
                                           'language': language, 'name': key, 'quality': 'local'}
             settings.save(self.path, self.config)

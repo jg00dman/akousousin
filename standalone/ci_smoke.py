@@ -21,10 +21,12 @@ prefix.mkdir(exist_ok=True)
 env = os.environ.copy()
 env.update(PYTHONPATH=str(ROOT / 'standalone') + os.pathsep + str(ROOT / 'backend'),
            OPENSAPI_RESOURCES=str(resource), OPENSAPI_STANDALONE='1',
+           OPENSAPI_CLSID='{EA7A00AB-0FB7-4DEB-81C5-550D854F390F}',
            OPENSAPI_TOKEN=r'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Speech\Voices\Tokens\OpenSAPI-Piper-en_US-ljspeech-medium',
            WINEPREFIX=str(prefix), XDG_CONFIG_HOME=str(WORK / 'config'), XDG_DATA_HOME=str(WORK / 'data'))
 if native:
     env['LOCALAPPDATA'] = str(WORK / 'appdata')
+    env['OPENSAPI_NATIVE_WINDOWS'] = '1'
     originals = {p: hashlib.sha256(p.read_bytes()).hexdigest() for p in [
         Path(os.environ['WINDIR']) / 'System32/sapi.dll',
         Path(os.environ['WINDIR']) / 'System32/Speech/Common/sapi.dll'] if p.exists()}

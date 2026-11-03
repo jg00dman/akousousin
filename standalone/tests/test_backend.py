@@ -97,4 +97,4 @@ class RoutingTests(unittest.TestCase):
         self.assertFalse(stopping.is_set())
         env['HTTP_X_OPENSAPI_CONTROL'] = 'private-token'
         app(env, lambda *args: status.append(args[0]))
-        self.assertTrue(stopping.is_set())
+        self.assertTrue(stopping.wait(1))

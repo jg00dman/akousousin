@@ -65,6 +65,6 @@ def install(entry, directory, reviewed=False):
                       'reviewed_by_user': reviewed, 'project_review': APPROVED.get(key, '')}
         (stage / 'provenance.json').write_text(json.dumps(provenance, indent=2), encoding='utf-8')
         shutil.move(str(stage), str(target))
-    cfg = json.loads((target / (key + '.onnx.json')).read_text())
+    cfg = json.loads((target / (key + '.onnx.json')).read_text(encoding='utf-8'))
     return {'path': str(target / (key + '.onnx')), 'language': entry['language']['code'],
             'sample_rate': cfg['audio']['sample_rate'], 'name': entry['name'], 'quality': entry['quality']}

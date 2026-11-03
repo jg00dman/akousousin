@@ -37,6 +37,10 @@ class Service:
             return None
 
     def start(self, port):
+        if self.record.exists():
+            record = json.loads(self.record.read_text())
+            if record.get('port', port) != port:
+                self.stop(record['port'])
         existing = self.health(port)
         if existing:
             if existing.get('settings') != str(self.settings.resolve()):
@@ -44,9 +48,10 @@ class Service:
             return existing
         token = secrets.token_hex(32)
         descriptor = os.open(self.control, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        os.chmod(self.control, 0o600)
         with os.fdopen(descriptor, 'w') as secret:
             secret.write(token)
-        self.record.write_text(json.dumps({'instance': self.instance, 'settings': str(self.settings.resolve())}))
+        self.record.write_text(json.dumps({'instance': self.instance, 'settings': str(self.settings.resolve()), 'port': port}))
         runtime = settings.load(self.settings).get('runtime')
         invocation = [runtime] if runtime else command()
         with self.log.open('ab') as output:
@@ -65,6 +70,10 @@ class Service:
         raise RuntimeError(f'Server did not become ready. See {self.log}')
 
     def stop(self, port):
+        if self.record.exists():
+            record = json.loads(self.record.read_text())
+            if record.get('settings') == str(self.settings.resolve()):
+                port = record.get('port', port)
         status = self.health(port)
         if status:
             try:

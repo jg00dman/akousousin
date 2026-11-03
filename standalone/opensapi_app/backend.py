@@ -134,7 +134,9 @@ def application(router, instance, control="", stopping=None):
                 if not control or not hmac.compare_digest(env.get('HTTP_X_OPENSAPI_CONTROL', ''), control):
                     status, body = '403 Forbidden', b'{"error":"Not owned by this panel"}'
                 else:
-                    stopping.set()
+                    timer = threading.Timer(.5, stopping.set)
+                    timer.daemon = True
+                    timer.start()
                     body = b'{"stopping":true}'
             elif env['PATH_INFO'] == '/synthesize'  and env['REQUEST_METHOD'] == 'POST':
                 size = int(env.get('CONTENT_LENGTH', '0'))

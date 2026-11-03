@@ -10,7 +10,7 @@ import tempfile
 
 from .settings import lcid
 
-CLSID = '{7C8B3F91-6F72-4C5B-A60F-2E895AB143D2}'
+CLSID = '{EA7A00AB-0FB7-4DEB-81C5-550D854F390F}'
 CLASS = 'HKCU\\Software\\Classes\\CLSID\\' + CLSID
 VOICES = r'HKLM\SOFTWARE\Microsoft\Speech\Voices'
 TOKEN_BASE = VOICES + r'\Tokens\OpenSAPI-Piper-'
