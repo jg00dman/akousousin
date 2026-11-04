@@ -184,11 +184,17 @@ class Module:
             config = settings.load(self.path)
             voice = options.get('synthesis_voice')
             if voice in (None, 'NULL'):
-                language = options.get('language', '').replace('-', '_')
-                voice = config['language_voices'].get(language)
+                language = options.get('language', '').replace('-', '_').casefold()
+                preferred = {key.replace('-', '_').casefold(): value
+                             for key, value in config['language_voices'].items()}
+                voice = preferred.get(language)
                 if not voice:
                     voice = next((key for key, entry in config['voices'].items()
-                                  if entry['language'].split('_')[0] == language), config['voice'])
+                                  if entry['language'].replace('-', '_').casefold() == language), None)
+                if not voice:
+                    voice = next((key for key, entry in config['voices'].items()
+                                  if entry['language'].split('_')[0].casefold() == language.split('_')[0]),
+                                 config['voice'])
             if voice not in config['voices']:
                 raise ValueError('Voice not installed')
             rate = int(options.get('rate', 0)) / 100

@@ -140,3 +140,20 @@ class DispatcherTests(unittest.TestCase):
             self.assertNotIn('AddModule "akousousin"', path.read_text())
             self.assertIn('DefaultModule "espeak-ng"', path.read_text())
             self.assertIn('AddModule "other"', path.read_text())
+
+
+    @patch('akousousin_app.speech_dispatcher.runtime.call')
+    @patch('akousousin_app.speech_dispatcher.fetch')
+    def test_language_tags_are_case_insensitive_with_regional_fallback(self, fetch, wake):
+        fetch.return_value = audio(22050)
+        config = settings.load(self.path)
+        config['voices']['german'] = {'name': 'German', 'language': 'de_DE', 'sample_rate': 22050}
+        config['language_voices']['de_DE'] = 'german'
+        settings.save(self.path, config)
+        for language in ('DE-de', 'de-AT', 'de'):
+            module = Module(self.path, output=io.BytesIO())
+            module.audio_server = True
+            module.options['language'] = language
+            module.speak('Hallo')
+            module.task.join(2)
+            self.assertEqual(json.loads(fetch.call_args.args[1])['voice'], 'german')
