@@ -45,7 +45,7 @@ jobs:
           path: build/standalone-engine
       - name: Install Linux packaging/test tools
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends squashfs-tools xvfb xauth libxcb-cursor0 libxkbcommon-x11-0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 libegl1 libgl1 libopengl0
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends squashfs-tools xvfb xauth libxcb-cursor0 libxkbcommon-x11-0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 libegl1 libgl1 libopengl0 speech-dispatcher speech-dispatcher-audio-plugins
       - name: Install pinned Python backend and packager
         run: python -m pip install ./backend ./standalone pyinstaller==6.16.0 pillow
       - name: Unit tests
@@ -61,6 +61,15 @@ jobs:
       - name: Wine installer, COM engine, real speech and panel tests
         if: runner.os == 'Linux'
         run: xvfb-run -a python standalone/ci_smoke.py
+      - name: Real Speech Dispatcher module and interruption tests
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          export APPIMAGE_EXTRACT_AND_RUN=1
+          export XDG_CONFIG_HOME="$PWD/build/dispatcher-ci/config"
+          export XDG_DATA_HOME="$PWD/build/dispatcher-ci/data"
+          export XDG_STATE_HOME="$PWD/build/dispatcher-ci/state"
+          python standalone/ci_speech_dispatcher.py standalone-dist/Akousousin-x86_64.AppImage build/dispatcher-ci/settings.json
       - name: Native Windows SAPI, installer and panel tests
         if: runner.os == 'Windows'
         run: python standalone/ci_smoke.py
@@ -81,6 +90,7 @@ jobs:
             standalone-dist/*.zip
             standalone-dist/*.gz
             standalone-dist/SHA256SUMS
+            build/dispatcher-ci/**
             build/standalone-ci/*.log
             build/standalone-ci/*.wav
             build/standalone-ci/*.png
