@@ -147,10 +147,10 @@ class Module:
             if not self.busy or self.cancelled.is_set():
                 return
             self.cancelled.set()
+            request_id = self.request_id
             self.busy = False
             self.send('704 PAUSE\n' if paused else '703 STOP\n')
         # Never wait for an unresponsive backend in the command-reading thread.
-        request_id = self.request_id
         def cancel():
             try:
                 config = settings.load(self.path)
@@ -177,9 +177,10 @@ class Module:
     def render(self, text, options, cancelled, request_id):
         try:
             runtime.call(self.path, {'command': 'wake'})
-            if cancelled.is_set():
-                return
-            self.send('701 BEGIN\n')
+            with self.lock:
+                if cancelled.is_set():
+                    return
+                self.send('701 BEGIN\n')
             config = settings.load(self.path)
             voice = options.get('synthesis_voice')
             if voice in (None, 'NULL'):
