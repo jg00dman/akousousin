@@ -123,6 +123,13 @@ if sys.platform != 'win32':
                 system_notices(item)
     system_notices(analysis)
 
+# The tray uses PNG artwork, not Qt PDF rendering. Do not ship an unused
+# PDF plugin and its large Chromium-derived renderer.
+for file in PACKAGE.rglob('*'):
+    if file.is_file() and (file.name in ('libqpdf.so', 'qpdf.dll') or
+                           file.name.startswith(('libQt6Pdf', 'Qt6Pdf'))):
+        file.unlink()
+
 shutil.copy(ROOT / 'standalone/README.md', PACKAGE / 'README.md')
 # ONNX Runtime ships unused demonstration graphs; they are not required for inference.
 for sample in (PACKAGE / '_internal/onnxruntime/datasets').glob('*.onnx'):
@@ -161,7 +168,7 @@ else:
     fetch('https://github.com/OHF-Voice/piper1-gpl/archive/refs/tags/v1.8.0.tar.gz', SOURCE / 'piper-1.8.0.tar.gz')
     fetch('https://github.com/espeak-ng/espeak-ng/archive/724808c.tar.gz', SOURCE / 'espeak-ng.tar.gz')
     # Matching LGPL Qt/PySide sources for the tray and local IPC libraries.
-    for module in ('qtbase', 'qtsvg', 'qtwayland', 'qtdeclarative', 'qtshadertools', 'qttools'):
+    for module in ('qtbase', 'qtsvg', 'qtwayland', 'qtdeclarative', 'qtshadertools', 'qttools', 'qtimageformats'):
         fetch(f'https://github.com/qt/{module}/archive/refs/tags/v6.8.3.tar.gz', SOURCE / f'{module}-6.8.3.tar.gz')
     fetch('https://github.com/pyside/pyside-setup/archive/refs/tags/v6.8.3.tar.gz', SOURCE / 'pyside-setup-6.8.3.tar.gz')
     with tarfile.open(OUT / 'OpenSAPI-corresponding-sources.tar.gz', 'w:gz') as archive:

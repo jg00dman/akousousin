@@ -160,15 +160,15 @@ def run(path):
                 action.setChecked(identifier == config['voice'])
                 action.triggered.connect(lambda checked=False, key=identifier: submit({'command': 'voice', 'voice': key}))
         voices.aboutToShow.connect(populate)
-        menu.addAction('Configure…', lambda: submit({'command': 'configure', 'independent': True}))
+        menu.addAction('Configure…', lambda: submit({'command': 'configure'}))
         def quit_requested():
-            if state.owners and QMessageBox.question(None, 'Quit OpenSAPI?',
+            if (state.owners or state.service.health(settings.load(path)['port'])) and QMessageBox.question(None, 'Quit OpenSAPI?',
                     'Speech is in use. Quit and stop Piper, interrupting speech?') != QMessageBox.Yes:
                 return
             submit({'command': 'quit'})
         menu.addAction('Quit', quit_requested)
         tray.setContextMenu(menu)
-        tray.activated.connect(lambda reason: submit({'command': 'configure', 'independent': True})
+        tray.activated.connect(lambda reason: submit({'command': 'configure'})
                                if reason == QSystemTrayIcon.DoubleClick else None)
         tray.show()
 

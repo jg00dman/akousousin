@@ -185,7 +185,7 @@ class Panel:
         ttk.Entry(row, textvariable=self.search).pack(side='left', fill='x', expand=True)
         self.filter = tk.StringVar(value='All languages')
         languages = sorted({v['language']['code'] for v in self.library.values()})
-        choices = ttk.Combobox(row, textvariable=self.filter, values=['All languages', *(label(code) for code in languages)], width=16, state='readonly')
+        choices = ttk.Combobox(row, textvariable=self.filter, values=['All languages', *(label(code) for code in languages)], width=26, state='readonly')
         choices.pack(side='left', padx=8)
         choices.bind('<<ComboboxSelected>>', lambda *_: self.refresh_library())
         self.installed_only = tk.BooleanVar()
@@ -194,7 +194,7 @@ class Panel:
         self.tree = ttk.Treeview(page, columns=('language', 'quality', 'size', 'status'), show='tree headings', height=12)
         self.tree.heading('#0', text='Voice')
         self.tree.column('#0', width=160)
-        for name, width in [('language', 140), ('quality', 80), ('size', 80), ('status', 230)]:
+        for name, width in [('language', 190), ('quality', 80), ('size', 80), ('status', 230)]:
             self.tree.heading(name, text=name.title())
             self.tree.column(name, width=width)
         self.tree.pack(fill='both', expand=True, pady=8)
