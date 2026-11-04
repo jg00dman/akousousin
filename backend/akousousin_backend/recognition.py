@@ -85,6 +85,8 @@ def worker(pipe, config):
         pipe.send((True, {'model': active, 'fallback': fallback}))
         while True:
             request = pipe.recv()
+            if request is None:
+                break
             language = request['language']
             if language is not None and language not in model.supported_languages:
                 pipe.send((False, 'Unsupported language for selected model'))
@@ -94,8 +96,8 @@ def worker(pipe, config):
                                                vad_filter=True, beam_size=1,
                                                condition_on_previous_text=False)
             text = ''.join(segment.text for segment in segments).strip()
-            pipe.send((True, {'text': text, 'language': info.language,
-                              'language_probability': info.language_probability,
+            pipe.send((True, {'text': text, 'language': info.language if text else None,
+                              'language_probability': info.language_probability if text and not language else None,
                               'language_source': 'explicit' if language else 'detected',
                               'model': active, 'fallback': fallback}))
     except (EOFError, BrokenPipeError):
@@ -116,9 +118,38 @@ class Recognizer(Synthesizer):
         super().__init__('', timeout, startup_timeout, target)
         self.model = {'root': str(root if root is not None else model_root()), 'model': model}
 
+    def start(self):
+        self.close()
+        ctx = mp.get_context('spawn')
+        self.pipe, child = ctx.Pipe()
+        self.process = ctx.Process(target=self.target, args=(child, self.model), daemon=True)
+        self.process.start()
+        child.close()
+        try:
+            if not self.pipe.poll(self.startup_timeout):
+                raise TimeoutError('Whisper model loading timed out')
+            ok, self.rate = self.pipe.recv()
+            if not ok:
+                raise RuntimeError(self.rate)
+        except BaseException:
+            self.close()
+            raise
+
+    def close(self):
+        # Let idle native runtimes release their multiprocessing resources. A
+        # failed or hung request still uses the bounded terminate/kill path.
+        if self.process is not None and self.pipe is not None and not self.lock.locked():
+            try:
+                if self.process.is_alive():
+                    self.pipe.send(None)
+                    self.process.join(2)
+            except (EOFError, BrokenPipeError, OSError):
+                pass
+        super().close()
+
     @property
     def status(self):
-        return self.rate  # Worker startup metadata, using the shared process lifecycle.
+        return self.rate
 
     def transcribe(self, wav, language=None):
         pcm = read_wav(wav)

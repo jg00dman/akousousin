@@ -22,7 +22,9 @@ For example, an explicit development-time download with `huggingface_hub`:
 ```python
 from huggingface_hub import snapshot_download
 from akousousin_backend.recognition import model_root
-snapshot_download('Systran/faster-whisper-small', local_dir=model_root() / 'small')
+snapshot_download('Systran/faster-whisper-small',
+                  revision='536b0662742c02347bc0e980a01041f333bce120',
+                  local_dir=model_root() / 'small')
 # Optional: snapshot_download('mobiuslabsgmbh/faster-whisper-large-v3-turbo',
 #                            local_dir=model_root() / 'turbo')
 ```
@@ -76,3 +78,24 @@ Tests run without downloading models:
 ```sh
 PYTHONPATH=backend python -m unittest discover -s backend/tests -v
 ```
+
+## Real inference validation
+
+In addition to the dependency-free lifecycle tests, opt-in tests exercise the real
+CPU model, language detection, Windows LCID language locking, silence, missing
+Turbo fallback and missing-model failure. They require provisioned local assets:
+
+```sh
+HF_HUB_OFFLINE=1 PYTHONPATH=backend \
+AKS_TEST_WHISPER_MODELS=/path/to/models \
+AKS_TEST_WHISPER_JFK_WAV=/path/to/jfk.wav \
+AKS_TEST_WHISPER_GERMAN_WAV=/path/to/german.wav \
+python -m unittest discover -s backend/tests -v
+```
+
+The JFK fixture is OpenAI Whisper's `tests/jfk.flac`, converted using
+`ffmpeg -i jfk.flac -ac 1 -ar 16000 -c:a pcm_s16le jfk.wav`. German is optional;
+when supplied, its expected phrases are `Guten Morgen` and `deutschen Text`.
+See [validation evidence](WHISPER-VALIDATION.md) for the actual fixtures, versions,
+results and deployment gaps. Mock capture tests verify invocation, PCM formatting,
+timeout handling and forced cleanup; they do not validate a live audio server.

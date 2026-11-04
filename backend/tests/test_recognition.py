@@ -2,11 +2,12 @@ import io
 from pathlib import Path
 import tempfile
 import time
+import subprocess
 import unittest
 import wave
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 
-from akousousin_backend.recognition import Recognizer, language_token, load_model, read_wav, model_root
+from akousousin_backend.recognition import Recognizer, language_token, load_model, read_wav, model_root, capture
 
 
 def wav(rate=16000, seconds=.1):
@@ -22,6 +23,8 @@ def fake_worker(pipe, config):
     try:
         while True:
             request = pipe.recv()
+            if request is None:
+                return
             if request['language'] == 'de':
                 time.sleep(10)
             if request['language'] == 'fr':
@@ -70,6 +73,34 @@ class RecognitionTests(unittest.TestCase):
             import os
             if os.name != 'nt':
                 self.assertEqual(model_root(), Path('/example/Akousousin/models/whisper'))
+
+    @unittest.skipIf(__import__('os').name == 'nt', 'Linux capture adapter')
+    def test_capture_timeout_preserves_pcm_and_stops_process(self):
+        process = Mock()
+        process.communicate.side_effect = [subprocess.TimeoutExpired('parec', 1), (b'\x01\x00' * 16000, b'')]
+        process.poll.return_value = 0
+        with patch('akousousin_backend.recognition.subprocess.Popen', return_value=process) as launch:
+            data = capture(1, 'test microphone')
+        self.assertEqual(len(read_wav(data)), 32000)
+        self.assertIn('--device=test microphone', launch.call_args.args[0])
+        self.assertIn('--rate=16000', launch.call_args.args[0])
+        process.terminate.assert_called_once()
+
+    @unittest.skipIf(__import__('os').name == 'nt', 'Linux capture adapter')
+    def test_capture_failure_and_forced_cleanup(self):
+        process = Mock()
+        process.communicate.return_value = (b'', b'connection refused')
+        process.poll.return_value = 1
+        with patch('akousousin_backend.recognition.subprocess.Popen', return_value=process):
+            with self.assertRaisesRegex(RuntimeError, 'connection refused'):
+                capture(1)
+        process.communicate.side_effect = [subprocess.TimeoutExpired('parec', 1),
+                                           subprocess.TimeoutExpired('parec', 3), (b'', b'')]
+        process.poll.return_value = None
+        with patch('akousousin_backend.recognition.subprocess.Popen', return_value=process):
+            with self.assertRaises(subprocess.TimeoutExpired):
+                capture(1)
+        process.kill.assert_called_once()
 
     def test_timeout_death_and_recovery(self):
         recognizer = Recognizer(timeout=.1, target=fake_worker)
