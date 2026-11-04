@@ -1,0 +1,31 @@
+name: Prepare pinned Wine compatibility inputs
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/standalone-control-panel]
+    paths: [.github/workflows/prepare-compatibility.yml]
+permissions:
+  contents: write
+jobs:
+  prepare:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - name: Copy existing, checksum-pinned compatibility inputs (no Wine build)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=wine-compat-11.21-3b19eb0e45ac
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then exit 0; fi
+          mkdir inputs
+          gh api -H 'Accept: application/octet-stream' "repos/$GITHUB_REPOSITORY/releases/assets/702177773" > inputs/wine-runtime-11.21-logos-x86_64.tar.xz
+          gh api -H 'Accept: application/octet-stream' "repos/$GITHUB_REPOSITORY/releases/assets/702177764" > inputs/wine-source-11.21-logos.tar.xz
+          cd inputs
+          cat > SHA256SUMS <<'SUMS'
+          e9e2559bbf34348d1cc9a5cf15530fd62b7075281959f3893fc8be897e783de1  wine-runtime-11.21-logos-x86_64.tar.xz
+          614fbe45f5afca787810348f3fc848c6b8736bc8db7d74a321356260da7ba565  wine-source-11.21-logos.tar.xz
+          SUMS
+          sha256sum --check SHA256SUMS
+          gh release create "$tag" --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease \
+            --title 'Pinned Wine 11.21 compatibility inputs' \
+            --notes 'Exact, unchanged Wine runtime and corresponding source for compatibility DLL packaging and tests. Wine source commit: 3b19eb0e45ac5f57301073fc9e721cac7829dc93. This is a build dependency, not the Akousousin installer.' ./*
