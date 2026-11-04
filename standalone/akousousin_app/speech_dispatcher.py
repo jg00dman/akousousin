@@ -204,7 +204,11 @@ class Module:
                             self.speak(' ' if text == 'space' else text)
                     elif command.startswith('LIST VOICES'):
                         config = settings.load(self.path)
+                        language = command.split()[2:3]
                         for key, voice in config['voices'].items():
+                            code = voice['language'].replace('_', '-')
+                            if language and code.casefold() != language[0].casefold() and code.split('-')[0].casefold() != language[0].casefold():
+                                continue
                             if any(c in key + voice['language'] for c in '\t\r\n'):
                                 continue
                             self.send(f'200-{key}\t{voice["language"].replace("_", "-")}\tnone\n')

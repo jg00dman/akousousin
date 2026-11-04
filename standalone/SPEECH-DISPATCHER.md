@@ -26,8 +26,9 @@ explicit Stop/Quit still stop the backend. Closing the panel still leaves it run
 Long SAPI fragments are requested and played in bounded chunks. This reduces
 first-audio waiting for long text, but is not sample-by-sample streaming, and chunk
 joins/prosody need listening tests. It does not generate estimated word timings.
-Accurate word events require an alignment source; current Piper model output
-does not provide it. Full pause/resume and word highlighting remain incomplete.
+Accurate word events require enabling Piper’s optional phoneme alignments and
+mapping normalized speech back to original text offsets, including numbers and
+Unicode. This branch does not yet provide that mapping. Full pause/resume and word highlighting remain incomplete.
 
 ## Install the Linux module
 

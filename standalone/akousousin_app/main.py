@@ -63,7 +63,8 @@ def main():
         config['wine_prefix'] = str(args.wine_prefix.expanduser().resolve())
     if args.wine:
         config['wine'] = args.wine
-    settings.save(args.settings, config)
+    if args.wine_prefix or args.wine:
+        settings.save(args.settings, config)
     if args.uninstall:
         Installer(resources.root(), args.wine_prefix or config['wine_prefix'] or None,
                   args.wine or config['wine'] or None).uninstall()

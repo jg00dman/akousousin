@@ -69,12 +69,18 @@ class Router:
         self.control_lock = threading.Lock()
 
     def expire(self, now=None):
-        # Never wait for or interrupt active synthesis. Health polling is not use.
+        # Do not take the synthesis lock on every event-loop tick: dispatching
+        # a new HTTP request and idle maintenance happen together, and that can
+        # otherwise report a ready backend as busy. Recheck after taking it.
+        timeout = settings.load(self.path)['idle_timeout']
+        current = time.monotonic() if now is None else now
+        if not self.synth or not timeout or current - self.last_activity < timeout:
+            return False
         if not self.lock.acquire(False):
             return False
         try:
             timeout = settings.load(self.path)['idle_timeout']
-            if self.synth and timeout and (time.monotonic() if now is None else now) - self.last_activity >= timeout:
+            if self.synth and timeout and current - self.last_activity >= timeout:
                 self.close()
                 return True
             return False
@@ -89,6 +95,7 @@ class Router:
     def start(self):
         config = settings.load(self.path)
         self.select(config['voice'], config)
+        self.last_activity = time.monotonic()
 
     def select(self, selected, config, cancelled=None):
         if selected not in config['voices']:
@@ -195,7 +202,8 @@ def application(router, instance, control="", stopping=None):
                 body, kind = router.synthesize(request, env.get('HTTP_X_AKOUSOUSIN_REQUEST')), 'audio/wav'
             else:
                 status, body = '404 Not Found', b'{"error":"Not found"}'
-        except (ValueError, TypeError, AttributeError):
+        except (ValueError, TypeError, AttributeError) as error:
+            logging.getLogger(__name__).warning('Rejected synthesis request: %s', error)
             status, body = '400 Bad Request', b'{"error":"Invalid request"}'
         except BlockingIOError:
             status, body = '503 Service Unavailable', b'{"error":"Piper is busy"}'
@@ -206,6 +214,8 @@ def application(router, instance, control="", stopping=None):
         except Exception:
             logging.exception('Speech request failed')
             status, body = '503 Service Unavailable', b'{"error":"Voice unavailable"}'
+        if not status.startswith('200') and env['PATH_INFO'] == '/synthesize':
+            logging.getLogger(__name__).warning('Synthesis HTTP status: %s', status)
         respond(status, [('Content-Type', kind), ('Content-Length', str(len(body)))])
         return [body]
     return app
