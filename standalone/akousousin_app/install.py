@@ -86,8 +86,15 @@ class Installer:
         # Wine services can inherit stdout beyond the command's lifetime. Capture to
         # files so command completion does not wait for an unrelated service's EOF.
         with tempfile.TemporaryFile() as output, tempfile.TemporaryFile() as errors:
-            result = subprocess.run(command, env=self.environment(), stdout=output, stderr=errors,
-                                    timeout=timeout, check=False)
+            try:
+                result = subprocess.run(command, env=self.environment(), stdout=output, stderr=errors,
+                                        timeout=timeout, check=False)
+            except subprocess.TimeoutExpired as error:
+                output.seek(0)
+                errors.seek(0)
+                raise RuntimeError(f'Wine/Windows command timed out after {timeout}s: '
+                                   f'{output.read().decode(errors="replace")} '
+                                   f'{errors.read().decode(errors="replace")}') from error
             output.seek(0)
             errors.seek(0)
             completed = subprocess.CompletedProcess(command, result.returncode,
@@ -204,7 +211,10 @@ class Installer:
             # or the HTTP caller. An AppImage must remain at this installed path.
             invocation = runtime.command('--api-start', '--settings', str(settings_path or settings.config_path()))
             if self.prefix:
-                invocation = [r'C:\windows\system32\start.exe', '/unix', *invocation]
+                # Wine can CreateProcess a Unix executable directly (returning no
+                # Win32 process handle). Avoid ShellExecute's file associations
+                # and desktop dialogs. env supplies a native argv[0] for AppImage.
+                invocation = [self.windows('/usr/bin/env'), 'PYINSTALLER_RESET_ENVIRONMENT=1', *invocation]
             launcher = subprocess.list2cmdline(invocation)
             if len(launcher) >= 4096:
                 raise ValueError('Launcher command is too long')

@@ -91,7 +91,9 @@ jobs:
             standalone-dist/*.zip
             standalone-dist/*.gz
             standalone-dist/SHA256SUMS
-            build/dispatcher-ci/**
+            build/dispatcher-ci/speech-dispatcher/*.log
+            build/dispatcher-ci/speech-dispatcher/logs/**
+            build/dispatcher-ci/state/**
             build/standalone-ci/*.log
             build/standalone-ci/*.wav
             build/standalone-ci/*.png

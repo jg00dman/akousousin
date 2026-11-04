@@ -187,12 +187,18 @@ static HRESULT wake_backend(struct piper_engine *engine, ISpTTSEngineSite *site)
     wcscpy(command, engine->launcher); /* CreateProcess may modify its command line. */
     if (!CreateProcessW(NULL, command, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &startup, &process))
         return HRESULT_FROM_WIN32(GetLastError());
+    /* Wine successfully launches native Unix programs without Win32 handles.
+     * The caller polls the bounded loopback connection while that app starts. */
+    if (!process.hProcess) return S_OK;
     CloseHandle(process.hThread);
     for (;;)
     {
         if (ISpTTSEngineSite_GetActions(site) & SPVES_ABORT)
         { CloseHandle(process.hProcess); return S_FALSE; }
-        if (WaitForSingleObject(process.hProcess, 50) == WAIT_OBJECT_0) break;
+        status = WaitForSingleObject(process.hProcess, 50);
+        if (status == WAIT_OBJECT_0) break;
+        if (status == WAIT_FAILED)
+        { DWORD error = GetLastError(); CloseHandle(process.hProcess); return HRESULT_FROM_WIN32(error); }
         if (GetTickCount64() >= deadline)
         { CloseHandle(process.hProcess); return HRESULT_FROM_WIN32(ERROR_WINHTTP_TIMEOUT); }
     }
