@@ -54,7 +54,7 @@ class Panel:
         header = ttk.Frame(self.root, padding=(24, 18))
         header.pack(fill='x')
         ttk.Label(header, text='▥  Akousousin', style='Title.TLabel').pack(side='left')
-        ttk.Label(header, text='SAPI · Speech Dispatcher (planned)', padding=(18, 8)).pack(side='left')
+        ttk.Label(header, text='SAPI · Speech Dispatcher (experimental)', padding=(18, 8)).pack(side='left')
         ttk.Label(header, text='Standalone beta').pack(side='right')
         body = ttk.Frame(self.root)
         body.pack(fill='both', expand=True, padx=20)

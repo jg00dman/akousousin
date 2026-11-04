@@ -126,3 +126,46 @@ class RoutingTests(unittest.TestCase):
         self.assertFalse(self.router.cancelled.is_set())
         self.assertTrue(self.router.cancel('private-id'))
         self.assertTrue(self.router.cancelled.is_set())
+
+    def test_idle_poll_does_not_take_speech_lock_before_expiry(self):
+        self.router.start()
+        # Real HTTP dispatch and event-loop maintenance are concurrent. Even an
+        # uncontended maintenance lock can cause a false busy response there.
+        from unittest.mock import Mock
+        self.router.lock = Mock()
+        self.assertFalse(self.router.expire(self.router.last_activity + 1))
+        self.router.lock.acquire.assert_not_called()
+        self.router.lock = threading.RLock()
+
+    def test_http_cancel_interrupts_only_matching_request_and_recovers(self):
+        entered = threading.Event()
+        original = FakeSynth.synthesize
+        def synthesize(synth, request, cancelled=None):
+            if request['text'] == 'wait':
+                entered.set()
+                if not cancelled.wait(2):
+                    raise AssertionError('Cancellation did not arrive')
+                raise InterruptedError('Cancelled')
+            return original(synth, request, cancelled)
+        self.patch_synth = patch.object(FakeSynth, 'synthesize', synthesize)
+        self.patch_synth.start()
+        self.addCleanup(self.patch_synth.stop)
+        app = application(self.router, 'instance')
+        def call(path, identifier, text=''):
+            import json
+            raw = json.dumps({'text': text}).encode()
+            status = []
+            env = {'PATH_INFO': path, 'REQUEST_METHOD': 'POST', 'HTTP_X_AKOUSOUSIN_REQUEST': identifier,
+                   'CONTENT_LENGTH': str(len(raw)), 'wsgi.input': io.BytesIO(raw)}
+            app(env, lambda *args: status.append(args[0]))
+            return status[0]
+        responses = []
+        task = threading.Thread(target=lambda: responses.append(call('/synthesize', 'owner', 'wait')))
+        task.start()
+        self.assertTrue(entered.wait(1))
+        self.assertEqual(call('/cancel', 'someone-else'), '404 Not Found')
+        self.assertEqual(call('/cancel', 'owner'), '200 OK')
+        task.join(2)
+        self.assertFalse(task.is_alive())
+        self.assertEqual(responses, ['409 Conflict'])
+        self.assertEqual(call('/synthesize', 'next-owner', 'again'), '200 OK')

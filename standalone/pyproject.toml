@@ -3,10 +3,10 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 [project]
 name = "akousousin-control-panel"
-version = "0.5.0b1"
+version = "0.6.0b1"
 requires-python = ">=3.12,<3.13"
 license = {text = "GPL-3.0-or-later"}
-dependencies = ["akousousin-backend==0.2.0b1", "PySide6-Essentials==6.8.3", "psutil==7.0.0"]
+dependencies = ["akousousin-backend==0.3.0b1", "PySide6-Essentials==6.8.3", "psutil==7.0.0"]
 [project.scripts]
 akousousin = "akousousin_app.main:main"
 [tool.setuptools.packages.find]

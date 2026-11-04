@@ -78,7 +78,7 @@ icon.save(RESOURCE / 'akousousin.png')
 
 commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
 (RESOURCE / 'build.json').write_text(json.dumps({'build': commit[:12] + '-' + sys.platform,
-                                               'commit': commit, 'version': '0.5.0b1'}, indent=2))
+                                               'commit': commit, 'version': '0.6.0b1'}, indent=2))
 subprocess.run([sys.executable, '-m', 'PyInstaller', '--clean', '--noconfirm', '--onedir', '--name', 'akousousin',
                 '--distpath', str(BUILD / 'frozen'), '--workpath', str(BUILD / 'freeze'), '--specpath', str(BUILD),
                 '--paths', str(ROOT / 'standalone'), '--paths', str(ROOT / 'backend'),

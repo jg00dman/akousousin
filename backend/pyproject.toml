@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "akousousin-backend"
-version = "0.2.0b1"
+version = "0.3.0b1"
 requires-python = ">=3.10"
 description = "Local, bounded Piper speech service for Akousousin"
 license = {text = "GPL-3.0-or-later"}

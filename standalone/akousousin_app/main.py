@@ -10,7 +10,7 @@ from .install import Installer
 
 def main():
     multiprocessing.freeze_support()
-    parser = argparse.ArgumentParser(description='Akousousin — Neural Voice Engine. SAPI TTS via Piper; Speech Dispatcher and Whisper planned.')
+    parser = argparse.ArgumentParser(description='Akousousin — Neural Voice Engine. SAPI TTS via Piper; experimental Speech Dispatcher; Whisper planned.')
     parser.add_argument('--wine-prefix', type=Path, help='Install into this initialized 64-bit Wine prefix')
     parser.add_argument('--wine', help='Wine executable or AppImage used by this prefix')
     parser.add_argument('--install', action='store_true', help='Install into native Windows')
