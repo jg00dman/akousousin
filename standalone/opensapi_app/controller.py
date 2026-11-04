@@ -211,6 +211,7 @@ def run(path):
     try:
         app.exec()
     finally:
-        state.quit()
+        # Stop accepting clients before waiting for backend process cleanup.
         server.close()
+        state.quit()
         lock.unlock()

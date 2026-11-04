@@ -90,6 +90,12 @@ class Service:
                 while time.monotonic() < deadline:
                     current = self.health(port)
                     if not current or current.get('instance') != record['instance']:
+                        if self.process is not None:
+                            try:
+                                self.process.wait(timeout=5)
+                            except subprocess.TimeoutExpired:
+                                break  # Fall through to the owned-process cleanup below.
+                            self.process = None
                         return True
                     time.sleep(.1)
                 if self.process is None:
