@@ -204,7 +204,7 @@ class Installer:
             # or the HTTP caller. An AppImage must remain at this installed path.
             invocation = runtime.command('--api-start', '--settings', str(settings_path or settings.config_path()))
             if self.prefix:
-                invocation = [r'C:\windows\system32\start.exe', '/wait', '/unix', *invocation]
+                invocation = [r'C:\windows\system32\start.exe', '/unix', *invocation]
             launcher = subprocess.list2cmdline(invocation)
             if len(launcher) >= 4096:
                 raise ValueError('Launcher command is too long')

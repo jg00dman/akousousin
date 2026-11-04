@@ -244,6 +244,7 @@ static HRESULT fetch_wav(struct piper_engine *engine, const char *json,
     BYTE *buffer = NULL;
     int count, offset, total;
     BOOL woke = FALSE;
+    ULONGLONG startup_deadline = 0;
     HRESULT hr = HRESULT_FROM_WIN32(ERROR_WINHTTP_CONNECTION_ERROR);
 
     *data = NULL;
@@ -271,11 +272,19 @@ retry:
     if ((hr = socket_ready(socket, TRUE, site, GetTickCount64() + 3000)) != S_OK)
     {
 connect_failed:
-        if (hr == S_FALSE || woke || !engine->launcher[0]) goto done;
+        if (hr == S_FALSE || !engine->launcher[0]) goto done;
         closesocket(socket);
         socket = INVALID_SOCKET;
-        if ((hr = wake_backend(engine, site)) != S_OK) goto done;
-        woke = TRUE;
+        if (!woke)
+        {
+            if ((hr = wake_backend(engine, site)) != S_OK) goto done;
+            woke = TRUE;
+            startup_deadline = GetTickCount64() + 65000;
+        }
+        else if (GetTickCount64() >= startup_deadline)
+        { hr = HRESULT_FROM_WIN32(ERROR_WINHTTP_TIMEOUT); goto done; }
+        if (ISpTTSEngineSite_GetActions(site) & SPVES_ABORT) { hr = S_FALSE; goto done; }
+        Sleep(50);
         goto retry;
     }
     total = sprintf(request, "POST /synthesize HTTP/1.0\r\nHost: 127.0.0.1:%lu\r\n"

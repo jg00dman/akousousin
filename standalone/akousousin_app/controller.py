@@ -83,7 +83,7 @@ def run(path):
         app.setQuitOnLastWindowClosed(False)
         app.setWindowIcon(QIcon(str(resources.root() / 'akousousin.png')))
     lock = QLockFile(str(runtime.directory() / (os.path.basename(runtime.name(path)) + '.lock')))
-    if not lock.tryLock(0):
+    if not lock.tryLock(10000):
         return
     QLocalServer.removeServer(runtime.name(path))
     server = QLocalServer()
@@ -108,6 +108,9 @@ def run(path):
         elif response.get('pending_registration') and graphical:
             QMessageBox.information(None, 'Akousousin', 'Default saved. Apply voice registration in Configure → Settings.')
         if state.closed:
+            # Reject new clients immediately, before potentially slow backend
+            # cleanup. A restarting caller must connect to a fresh controller.
+            server.close()
             QTimer.singleShot(250, app.quit)
 
     events.result.connect(finish)

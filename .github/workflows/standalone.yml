@@ -57,12 +57,13 @@ jobs:
         shell: bash
         run: PYTHONPATH=backend python -m unittest discover -s backend/tests -v
       - name: Build package with reviewed LJSpeech starter voice, licences and sources
+        id: package
         run: python standalone/package.py
       - name: Wine installer, COM engine, real speech and panel tests
         if: runner.os == 'Linux'
         run: xvfb-run -a python standalone/ci_smoke.py
       - name: Real Speech Dispatcher module and interruption tests
-        if: runner.os == 'Linux'
+        if: ${{ !cancelled() && runner.os == 'Linux' && steps.package.outcome == 'success' }}
         shell: bash
         run: |
           export APPIMAGE_EXTRACT_AND_RUN=1

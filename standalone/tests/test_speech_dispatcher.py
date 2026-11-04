@@ -50,9 +50,9 @@ class DispatcherTests(unittest.TestCase):
         self.assertEqual(output.getvalue().count(b'303 ERROR'), 2)
 
     @patch('akousousin_app.speech_dispatcher.runtime.call')
-    @patch('urllib.request.OpenerDirector.open')
+    @patch('akousousin_app.speech_dispatcher.fetch')
     def test_speech_returns_pcm_to_dispatcher_and_finishes(self, open_request, wake):
-        open_request.return_value.__enter__.return_value.read.return_value = audio(22050)
+        open_request.return_value = audio(22050)
         output = io.BytesIO()
         module = Module(self.path, output=output)
         module.audio_server = True
@@ -63,18 +63,18 @@ class DispatcherTests(unittest.TestCase):
         self.assertIn(b'701 BEGIN\n', response)
         self.assertIn(b'705-AUDIO\0', response)
         self.assertTrue(response.endswith(b'702 END\n'))
-        request = open_request.call_args[0][0]
-        self.assertEqual(json.loads(request.data)['voice'], 'english')
+        payload = open_request.call_args[0][1]
+        self.assertEqual(json.loads(payload)['voice'], 'english')
 
     @patch('akousousin_app.speech_dispatcher.runtime.call')
-    @patch('urllib.request.OpenerDirector.open')
+    @patch('akousousin_app.speech_dispatcher.fetch')
     def test_stop_is_immediate_and_late_response_emits_no_audio(self, open_request, wake):
         entered, release = threading.Event(), threading.Event()
         def blocked(*args, **kwargs):
             entered.set()
             release.wait(2)
             return audio(22050)
-        open_request.return_value.__enter__.return_value.read.side_effect = blocked
+        open_request.side_effect = blocked
         module = Module(self.path, output=io.BytesIO())
         module.audio_server = True
         module.speak('Hello')

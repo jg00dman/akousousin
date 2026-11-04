@@ -15,6 +15,7 @@ import uuid
 import wave
 
 from . import runtime, settings
+from .transport import fetch
 
 MAX_MESSAGE = 65536
 
@@ -138,16 +139,12 @@ class Module:
                 data = json.dumps({'text': part, 'voice': voice, 'length_scale': scale,
                                    'volume': (int(options.get('volume', 0)) + 100) / 100,
                                    'sample_rate': config['voices'][voice]['sample_rate']}).encode()
-                request = urllib.request.Request(f'http://127.0.0.1:{config["port"]}/synthesize', data=data,
-                    headers={'Content-Type': 'application/json', 'X-Akousousin-Request': request_id})
-                opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
                 # A just-cancelled inference may take a short time to release its
                 # worker. Keep retries bounded and interruptible, never queue forever.
                 deadline = time.monotonic() + 2
                 while True:
                     try:
-                        with opener.open(request, timeout=65) as response:
-                            audio = response.read(64 * 1024 * 1024 + 1)
+                        audio = fetch(config['port'], data, cancelled, request_id)
                         break
                     except urllib.error.HTTPError as error:
                         if error.code != 503 or time.monotonic() >= deadline or cancelled.wait(.05):
