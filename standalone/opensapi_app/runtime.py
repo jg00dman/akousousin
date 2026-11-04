@@ -75,12 +75,20 @@ def call(path, request, launch=True):
     return result(data)
 
 
+def environment():
+    value = os.environ.copy()
+    # A detached controller/panel is an independent frozen application, not a
+    # multiprocessing child inheriting the caller's PyInstaller bootloader state.
+    value['PYINSTALLER_RESET_ENVIRONMENT'] = '1'
+    return value
+
+
 def launch_controller(path):
     with log_path().open('ab') as output:
         options = {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == 'nt' else {
             'start_new_session': True}
         subprocess.Popen(command('--controller', '--settings', str(path)), stdin=subprocess.DEVNULL,
-                         stdout=output, stderr=output, **options)
+                         stdout=output, stderr=output, env=environment(), **options)
 
 
 def result(data):

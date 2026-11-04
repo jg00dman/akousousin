@@ -43,7 +43,7 @@ class Sessions:
                 self.quit()
             elif operation == 'configure':
                 self.independent |= request.get('independent', False)
-                subprocess.Popen(runtime.command('--panel', '--settings', str(self.path)))
+                subprocess.Popen(runtime.command('--panel', '--settings', str(self.path)), env=runtime.environment())
             elif operation == 'voice':
                 pending = settings.select_voice(self.path, request['voice'])
                 return {'pending_registration': pending}
