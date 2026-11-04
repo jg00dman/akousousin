@@ -86,7 +86,8 @@ def accessible_text(text, options, character=False):
         return ' '.join(('capital ' if c.isupper() and options.get('cap_let_recogn') == 'spell' else '') +
                         (name(c) if not c.isalnum() else c) for c in text)
     return ''.join(' ' + name(c) + ' ' if unicodedata.category(c).startswith(('P', 'S')) and
-                   (level == 'all' or level == 'some' and c in '.,;:!?') else c for c in text)
+                   (level == 'all' or level == 'most' and c not in '.,;:!?' or
+                    level == 'some' and c in '@+_') else c for c in text)
 
 
 class Module:
@@ -132,7 +133,7 @@ class Module:
                 raise ValueError('Only Speech Dispatcher server audio is supported')
             self.audio_server = True
         elif command == 'SET':
-            for key, allowed in {'punctuation_mode': ('none', 'some', 'all'), 'spelling_mode': ('on', 'off'),
+            for key, allowed in {'punctuation_mode': ('none', 'some', 'most', 'all'), 'spelling_mode': ('on', 'off'),
                                  'cap_let_recogn': ('none', 'spell', 'icon')}.items():
                 if key in pending and pending[key] not in allowed:
                     raise ValueError('Invalid speech setting')

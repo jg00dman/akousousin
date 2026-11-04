@@ -157,3 +157,14 @@ class DispatcherTests(unittest.TestCase):
             module.speak('Hallo')
             module.task.join(2)
             self.assertEqual(json.loads(fetch.call_args.args[1])['voice'], 'german')
+
+
+    def test_dispatcher_012_most_punctuation_setting_used_by_orca(self):
+        output = io.BytesIO()
+        module = Module(self.path, io.BytesIO(b'INIT\nSET\npunctuation_mode=most\n.\nQUIT\n'), output)
+        module.run()
+        self.assertNotIn(b'303 ERROR', output.getvalue())
+        self.assertEqual(module.options['punctuation_mode'], 'most')
+        text = accessible_text('a@b.', {'punctuation_mode': 'most'})
+        self.assertIn('at', text)
+        self.assertTrue(text.endswith('.'))
