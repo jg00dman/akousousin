@@ -1,4 +1,6 @@
-Akousousin 0.4 shared speech beta: one per-user configuration, system tray and public launcher interface.
+Akousousin — Neural Voice Engine 0.5 rebranding beta.
+
+Project vision: the unified neural speech engine for Linux, implementing Microsoft SAPI and Speech Dispatcher, based on Piper and Whisper. The current beta implements SAPI TTS with Piper. Speech Dispatcher is the next milestone; Whisper recognition is planned. See COMPATIBILITY.md for implemented features and limitations.
 
 Download Akousousin-x86_64.AppImage for Linux, or Akousousin-Windows-x86_64.zip for Windows. Read TESTING.md for installation, storage paths, commands and rollback. The reviewed en_US-ljspeech-medium starter voice is bundled with its model card,
 licence declarations and checksum provenance. No Wine runtime or other voice
