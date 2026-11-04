@@ -92,8 +92,9 @@ class Installer:
             errors.seek(0)
             completed = subprocess.CompletedProcess(command, result.returncode,
                 output.read().decode('utf-8', errors='replace'), errors.read().decode('utf-8', errors='replace'))
-        if check:
-            completed.check_returncode()
+        if check and completed.returncode:
+            raise RuntimeError(f'Wine/Windows command failed ({completed.returncode}): '
+                               f'{completed.stdout} {completed.stderr}')
         return completed
 
     def windows(self, path):

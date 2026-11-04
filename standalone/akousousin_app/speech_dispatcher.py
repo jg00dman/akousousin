@@ -8,6 +8,8 @@ import json
 import logging
 import sys
 import threading
+import time
+import urllib.error
 import urllib.request
 import uuid
 import wave
@@ -42,6 +44,7 @@ class Module:
         self.cancelled = threading.Event()
         self.request_id = ''
         self.audio_server = False
+        self.busy = False
 
     def send(self, text):
         with self.lock:
@@ -66,7 +69,7 @@ class Module:
         return b''.join(lines).decode('utf-8').rstrip('\r\n')
 
     def parameters(self, command):
-        self.send('207 OK RECEIVING AUDIO SETTINGS\n' if command == 'AUDIO' else '203 OK RECEIVING SETTINGS\n')
+        self.send('207 OK RECEIVING SETTINGS\n' if command in ('AUDIO', 'LOGLEVEL') else '203 OK RECEIVING SETTINGS\n')
         pending = dict(line.split('=', 1) for line in self.block().splitlines())
         if command == 'AUDIO':
             if pending != {'audio_output_method': 'server'}:
@@ -81,9 +84,10 @@ class Module:
 
     def stop(self, paused=False):
         with self.lock:
-            if not self.task or not self.task.is_alive() or self.cancelled.is_set():
+            if not self.busy or self.cancelled.is_set():
                 return
             self.cancelled.set()
+            self.busy = False
             self.send('704 PAUSE\n' if paused else '703 STOP\n')
         # Never wait for an unresponsive backend in the command-reading thread.
         request_id = self.request_id
@@ -100,19 +104,20 @@ class Module:
 
     def speak(self, text):
         with self.lock:
-            if not text.strip() or not self.audio_server or (self.task and self.task.is_alive()):
+            if not text.strip() or not self.audio_server or self.busy:
                 self.send('301 ERROR CANT SPEAK\n')
                 return
             self.cancelled = threading.Event()
             self.request_id = uuid.uuid4().hex
+            self.busy = True
             self.send('200 OK SPEAKING\n')
-            self.task = threading.Thread(target=self.render, args=(text, dict(self.options)), daemon=True)
+            self.task = threading.Thread(target=self.render, args=(text, dict(self.options), self.cancelled, self.request_id), daemon=True)
             self.task.start()
 
-    def render(self, text, options):
+    def render(self, text, options, cancelled, request_id):
         try:
             runtime.call(self.path, {'command': 'wake'})
-            if self.cancelled.is_set():
+            if cancelled.is_set():
                 return
             self.send('701 BEGIN\n')
             config = settings.load(self.path)
@@ -128,16 +133,25 @@ class Module:
             rate = int(options.get('rate', 0)) / 100
             scale = 1 / (1 + rate) if rate >= 0 else 1 - rate
             for part in chunks(text):
-                if self.cancelled.is_set():
+                if cancelled.is_set():
                     return
                 data = json.dumps({'text': part, 'voice': voice, 'length_scale': scale,
                                    'volume': (int(options.get('volume', 0)) + 100) / 100,
                                    'sample_rate': config['voices'][voice]['sample_rate']}).encode()
                 request = urllib.request.Request(f'http://127.0.0.1:{config["port"]}/synthesize', data=data,
-                    headers={'Content-Type': 'application/json', 'X-Akousousin-Request': self.request_id})
+                    headers={'Content-Type': 'application/json', 'X-Akousousin-Request': request_id})
                 opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-                with opener.open(request, timeout=65) as response:
-                    audio = response.read(64 * 1024 * 1024 + 1)
+                # A just-cancelled inference may take a short time to release its
+                # worker. Keep retries bounded and interruptible, never queue forever.
+                deadline = time.monotonic() + 2
+                while True:
+                    try:
+                        with opener.open(request, timeout=65) as response:
+                            audio = response.read(64 * 1024 * 1024 + 1)
+                        break
+                    except urllib.error.HTTPError as error:
+                        if error.code != 503 or time.monotonic() >= deadline or cancelled.wait(.05):
+                            raise
                 if len(audio) > 64 * 1024 * 1024:
                     raise ValueError('Audio too large')
                 with wave.open(io.BytesIO(audio), 'rb') as wav:
@@ -150,19 +164,21 @@ class Module:
                 for start in range(0, len(pcm), 8192):
                     block = pcm[start:start + 8192]
                     with self.lock:
-                        if self.cancelled.is_set():
+                        if cancelled.is_set():
                             return
                         header = (f'705-bits=16\n705-num_channels=1\n705-sample_rate={sample_rate}\n'
                                   f'705-num_samples={len(block)//2}\n705-big_endian=0\n705-AUDIO').encode()
                         self.output.write(header + b'\0' + escaped(block) + b'\n705 AUDIO\n')
                         self.output.flush()
             with self.lock:
-                if not self.cancelled.is_set():
+                if not cancelled.is_set():
+                    self.busy = False
                     self.send('702 END\n')
         except Exception:
-            logging.exception('Speech Dispatcher synthesis failed')
+            logging.getLogger(__name__).exception('Speech Dispatcher synthesis failed')
             with self.lock:
-                if not self.cancelled.is_set():
+                if not cancelled.is_set():
+                    self.busy = False
                     self.send('703 STOP\n')
 
     def run(self):
@@ -214,8 +230,8 @@ class Module:
 def install(path):
     """Opt-in user module registration. Preserve all existing dispatcher settings."""
     import os
-    from pathlib import Path
     import shlex
+    from pathlib import Path
     if os.name == 'nt':
         raise ValueError('Speech Dispatcher integration is for Linux')
     launcher = settings.data_path() / 'speech-dispatcher-module'

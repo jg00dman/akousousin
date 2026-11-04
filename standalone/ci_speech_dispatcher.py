@@ -12,7 +12,7 @@ import time
 
 executable, settings_path = map(lambda p: Path(p).resolve(), sys.argv[1:3])
 work = settings_path.parent / 'speech-dispatcher'
-work.mkdir(exist_ok=True)
+work.mkdir(parents=True, exist_ok=True)
 logs = work / 'logs'
 logs.mkdir(exist_ok=True)
 subprocess.run([str(executable), '--settings', str(settings_path), '--install-speech-dispatcher'], check=True, timeout=45)
