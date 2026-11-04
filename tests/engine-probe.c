@@ -77,7 +77,7 @@ int wmain(int argc, WCHAR **argv)
     output = CreateFileW(argv[1], GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
     if (output == INVALID_HANDLE_VALUE) return 2;
     CoInitializeEx(NULL, COINIT_MULTITHREADED);
-    if (GetEnvironmentVariableW(L"OPENSAPI_CLSID", class_id, 64))
+    if (GetEnvironmentVariableW(L"AKOUSOUSIN_CLSID", class_id, 64))
         if (FAILED(CLSIDFromString(class_id, &engine_clsid))) return 2;
     hr = CoCreateInstance(&engine_clsid, NULL, CLSCTX_INPROC_SERVER, &IID_ISpTTSEngine, (void **)&engine);
     if (FAILED(hr)) { fprintf(stderr, "engine creation failed: %#lx\n", hr); return 2; }
@@ -85,8 +85,8 @@ int wmain(int argc, WCHAR **argv)
     {
         hr = CoCreateInstance(&CLSID_SpObjectToken, NULL, CLSCTX_INPROC_SERVER, &IID_ISpObjectToken, (void **)&token);
         if (FAILED(hr)) return 2;
-        if (!GetEnvironmentVariableW(L"OPENSAPI_TOKEN", token_id, 1024))
-            wcscpy(token_id, L"HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Speech\\Voices\\Tokens\\OpenSAPI-Piper");
+        if (!GetEnvironmentVariableW(L"AKOUSOUSIN_TOKEN", token_id, 1024))
+            wcscpy(token_id, L"HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Speech\\Voices\\Tokens\\Akousousin-Piper");
         hr = ISpObjectToken_SetId(token, NULL, token_id, FALSE);
         if (FAILED(hr)) return 2;
         hr = ISpTTSEngine_QueryInterface(engine, &IID_ISpObjectWithToken, (void **)&with_token);

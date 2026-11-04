@@ -1,4 +1,4 @@
-"""Per-user controller IPC. Session ownership belongs to OpenSAPI, not launchers."""
+"""Per-user controller IPC. Session ownership belongs to Akousousin, not launchers."""
 import hashlib
 import json
 import os
@@ -14,18 +14,18 @@ def directory(path=None):
     if os.name == 'nt':
         base = settings.data_path() / 'run'
     else:
-        base = Path(os.environ.get('XDG_RUNTIME_DIR', f'/tmp/opensapi-{os.getuid()}')) / 'OpenSAPI'
+        base = Path(os.environ.get('XDG_RUNTIME_DIR', f'/tmp/akousousin-{os.getuid()}')) / 'Akousousin'
     base.mkdir(parents=True, exist_ok=True, mode=0o700)
     if os.name != 'nt':
         if base.stat().st_uid != os.getuid() or base.is_symlink():
-            raise RuntimeError('Unsafe OpenSAPI runtime directory')
+            raise RuntimeError('Unsafe Akousousin runtime directory')
         base.chmod(0o700)
     return base
 
 
 def name(path):
     key = hashlib.sha256(str(Path(path).resolve()).encode()).hexdigest()[:16]
-    return str(directory() / key) if os.name != 'nt' else 'OpenSAPI-' + key
+    return str(directory() / key) if os.name != 'nt' else 'Akousousin-' + key
 
 
 def command(*args):
@@ -36,7 +36,7 @@ def command(*args):
         return [image, *args]
     if getattr(sys, 'frozen', False):
         return [sys.executable, *args]
-    return [sys.executable, '-m', 'opensapi_app.main', *args]
+    return [sys.executable, '-m', 'akousousin_app.main', *args]
 
 
 def call(path, request, launch=True):
@@ -62,7 +62,7 @@ def call(path, request, launch=True):
             time.sleep(.1)
             connection = connect()
         if connection is None:
-            raise RuntimeError(f'OpenSAPI could not start; see {log_path()}')
+            raise RuntimeError(f'Akousousin could not start; see {log_path()}')
     with connection:
         connection.settimeout(85)
         connection.sendall(json.dumps(request).encode() + b'\n')
@@ -70,7 +70,7 @@ def call(path, request, launch=True):
         while b'\n' not in data and len(data) < 1024 * 1024:
             chunk = connection.recv(8192)
             if not chunk:
-                raise RuntimeError('OpenSAPI controller disconnected')
+                raise RuntimeError('Akousousin controller disconnected')
             data.extend(chunk)
     return result(data)
 
@@ -126,7 +126,7 @@ def windows_call(path, request, launch):
                 break
             time.sleep(.1)
         else:
-            raise RuntimeError(f'OpenSAPI could not start; see {log_path()}')
+            raise RuntimeError(f'Akousousin could not start; see {log_path()}')
     socket.write(json.dumps(request).encode() + b'\n')
     socket.waitForBytesWritten(3000)
     data = bytearray()
@@ -138,11 +138,11 @@ def windows_call(path, request, launch):
                 return result(data)
         if socket.state() == QLocalSocket.UnconnectedState:
             break
-    raise TimeoutError('OpenSAPI controller did not respond')
+    raise TimeoutError('Akousousin controller did not respond')
 
 
 def log_path():
     base = settings.data_path() if os.name == 'nt' else Path(
-        os.environ.get('XDG_STATE_HOME', Path.home() / '.local/state')) / 'OpenSAPI'
+        os.environ.get('XDG_STATE_HOME', Path.home() / '.local/state')) / 'Akousousin'
     base.mkdir(parents=True, exist_ok=True)
-    return base / 'opensapi.log'
+    return base / 'akousousin.log'

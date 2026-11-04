@@ -23,7 +23,7 @@ work.mkdir(parents=True, exist_ok=True)
 archive = work / 'backend.tar.xz'
 digest = hashlib.sha256()
 print('Download checksum-pinned external Piper backend and voice', flush=True)
-url = f'https://github.com/jg00dman/opensapi/releases/download/{TAG}/opensapi-piper-linux-x86_64.tar.xz'
+url = f'https://github.com/jg00dman/akousousin/releases/download/{TAG}/akousousin-piper-linux-x86_64.tar.xz'
 with urllib.request.urlopen(url, timeout=30) as response, archive.open('wb') as output:
     while True:
         chunk = response.read(1024 * 1024)
@@ -35,14 +35,14 @@ if digest.hexdigest() != SHA256:
     raise RuntimeError('Backend checksum mismatch')
 # The archive is authenticated against a pinned cryptographic digest before extraction.
 subprocess.run(['tar', '-xJf', str(archive), '-C', str(work)], check=True, timeout=60)
-backend = work / 'opensapi-piper'
+backend = work / 'akousousin-piper'
 model = backend / 'voices/en_US-ljspeech-medium.onnx'
 opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 env = os.environ.copy()
 env.update(APPIMAGE_EXTRACT_AND_RUN='1', WINEPREFIX=str(work / 'wine-prefix'))
 image = str(Path(sys.argv[1]).resolve())
 with (work / 'backend.log').open('w') as log:
-    process = subprocess.Popen([str(backend / 'opensapi-piper'), '--model', str(model)],
+    process = subprocess.Popen([str(backend / 'akousousin-piper'), '--model', str(model)],
                                stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True)
     try:
         deadline = time.monotonic() + 65
@@ -58,11 +58,11 @@ with (work / 'backend.log').open('w') as log:
         else:
             raise TimeoutError('Backend startup')
         print('Register real bundled voice in a new disposable Wine prefix', flush=True)
-        subprocess.run([image, '--opensapi-register', str(model) + '.json'], env=env, check=True, timeout=190)
+        subprocess.run([image, '--akousousin-register', str(model) + '.json'], env=env, check=True, timeout=190)
         output = work / 'real-piper-sapi.wav'
         print('Request real neural speech through packaged Wine SAPI', flush=True)
         text = 'Open SAPI is speaking through the packaged Piper service.'
-        subprocess.run([image, '--opensapi-wav', str(output), text],
+        subprocess.run([image, '--akousousin-wav', str(output), text],
                        env=env, check=True, timeout=75)
         with wave.open(str(output), 'rb') as wav:
             assert (wav.getnchannels(), wav.getsampwidth(), wav.getframerate()) == (1, 2, 22050)

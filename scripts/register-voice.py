@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 CLSID = "{7C8B3F91-6F72-4C5B-A60F-2E895AB143D2}"
-TOKEN = r"SOFTWARE\Microsoft\Speech\Voices\Tokens\OpenSAPI-Piper"
+TOKEN = r"SOFTWARE\Microsoft\Speech\Voices\Tokens\Akousousin-Piper"
 
 
 def main():
@@ -27,14 +27,14 @@ def main():
     content = f'''Windows Registry Editor Version 5.00
 
 [HKEY_LOCAL_MACHINE\\{TOKEN}]
-@="Piper (OpenSAPI)"
+@="Piper (Akousousin)"
 "CLSID"="{CLSID}"
 "SampleRate"=dword:{rate:08x}
 "Port"=dword:{args.port:08x}
 
 [HKEY_LOCAL_MACHINE\\{TOKEN}\\Attributes]
-"Name"="Piper (OpenSAPI)"
-"Vendor"="OpenSAPI"
+"Name"="Piper (Akousousin)"
+"Vendor"="Akousousin"
 "Language"="{args.language}"
 '''
     if args.make_default:

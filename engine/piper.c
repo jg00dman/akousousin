@@ -1,7 +1,7 @@
 /*
  * Wine Piper TTS engine, using a separately installed loopback HTTP service.
  *
- * Copyright 2026 OpenSAPI contributors
+ * Copyright 2026 Akousousin contributors
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -86,7 +86,7 @@ static ULONG WINAPI engine_Release(ISpTTSEngine *iface)
     {
         if (engine->token) ISpObjectToken_Release(engine->token);
         free(engine);
-        InterlockedDecrement(&opensapi_objects);
+        InterlockedDecrement(&akousousin_objects);
     }
     return ref;
 }
@@ -503,7 +503,7 @@ HRESULT piper_engine_create(IUnknown *outer, REFIID iid, void **out)
     HRESULT hr;
     if (outer) return CLASS_E_NOAGGREGATION;
     if (!(engine = calloc(1, sizeof(*engine)))) return E_OUTOFMEMORY;
-    InterlockedIncrement(&opensapi_objects);
+    InterlockedIncrement(&akousousin_objects);
     engine->ISpTTSEngine_iface.lpVtbl = &engine_vtbl;
     engine->ISpObjectWithToken_iface.lpVtbl = &token_vtbl;
     engine->ref = 1;

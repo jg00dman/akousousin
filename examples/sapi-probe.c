@@ -83,14 +83,14 @@ int wmain(int argc, wchar_t **argv)
     check(CoCreateInstance(&CLSID_SpObjectTokenCategory, NULL, CLSCTX_INPROC_SERVER,
                           &IID_ISpObjectTokenCategory, (void **)&category), "create category");
     check(ISpObjectTokenCategory_SetId(category, SPCAT_VOICES, FALSE), "open voices");
-    check(ISpObjectTokenCategory_EnumTokens(category, missing ? L"Vendor=OpenSAPI" : NULL, NULL, &tokens), "enumerate voices");
+    check(ISpObjectTokenCategory_EnumTokens(category, missing ? L"Vendor=Akousousin" : NULL, NULL, &tokens), "enumerate voices");
     check(IEnumSpObjectTokens_GetCount(tokens, &count), "voice count");
     printf("voices: %lu\n", count);
     while (IEnumSpObjectTokens_Next(tokens, 1, &token, &fetched) == S_OK)
     {
         check(ISpObjectToken_GetId(token, &id), "token id");
         wprintf(L"voice: %ls\n", id);
-        if (wcsstr(id, L"OpenSAPI-Piper"))
+        if (wcsstr(id, L"Akousousin-Piper"))
         {
             if (selected) ISpObjectToken_Release(selected);
             selected = token;
@@ -108,7 +108,7 @@ int wmain(int argc, wchar_t **argv)
         if (missing_token)
         {
             WCHAR token_id[1024];
-            if (!GetEnvironmentVariableW(L"OPENSAPI_TOKEN", token_id, 1024)) return 2;
+            if (!GetEnvironmentVariableW(L"AKOUSOUSIN_TOKEN", token_id, 1024)) return 2;
             check(CoCreateInstance(&CLSID_SpObjectToken, NULL, CLSCTX_INPROC_SERVER,
                                   &IID_ISpObjectToken, (void **)&token), "create absent token test");
             hr = ISpObjectToken_SetId(token, NULL, token_id, FALSE);
@@ -124,7 +124,7 @@ int wmain(int argc, wchar_t **argv)
         printf("missing voice result: %#lx\n", hr);
         return hr == SPERR_NOT_FOUND ? 0 : 2;
     }
-    if (!selected) { fprintf(stderr, "No OpenSAPI-Piper voice registered\n"); return 1; }
+    if (!selected) { fprintf(stderr, "No Akousousin-Piper voice registered\n"); return 1; }
     check(ISpObjectToken_GetDWORD(selected, L"SampleRate", &sample_rate), "sample rate");
     format.nSamplesPerSec = sample_rate;
     format.nAvgBytesPerSec = sample_rate * 2;

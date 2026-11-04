@@ -21,7 +21,7 @@ if [[ -d $SCRIPT_DIR/data/wine64_bottle ]]; then : "${INSTALL_DIR:=$SCRIPT_DIR}"
 : "${WORK_DIR:=${XDG_CACHE_HOME:-$HOME/.cache}/wine-bisect}"
 : "${BUILD_DIR:=$WORK_DIR/build}"
 : "${PRISTINE_PREFIX:=$INSTALL_DIR/data/wine64_bottle}"
-: "${SAPI_WINE:=$HOME/opensapi/wine-opensapi-piper-11.21-logos-x86_64.AppImage}"
+: "${SAPI_WINE:=$HOME/akousousin/wine-akousousin-piper-11.21-logos-x86_64.AppImage}"
 : "${SAPI_WINEDEBUG:=-all,+sapi,+winhttp,+loaddll,+timestamp,+pid}"
 extra=${SAPI_DLLOVERRIDES-${WINEDLLOVERRIDES-${PRINT_DLLOVERRIDES-}}}
 overrides="winemenubuilder.exe=d${extra:+;$extra};sapi=b"
@@ -47,7 +47,7 @@ else
   done
 fi
 [[ -n $WINE ]] || die "No usable Wine at $target"
-# OpenSAPI AppRun supplies its own server; do not invoke it as wineserver -w.
+# Akousousin AppRun supplies its own server; do not invoke it as wineserver -w.
 if [[ -n $server && $(readlink -f "$server") == "$(readlink -f "$WINE")" ]]; then server=''; fi
 export WINEPREFIX=$PRISTINE_PREFIX
 [[ -d $WINEPREFIX/drive_c && -f $WINEPREFIX/system.reg ]] || die "No existing prefix at $WINEPREFIX"

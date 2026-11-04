@@ -5,6 +5,6 @@ set -euo pipefail
 docker run --rm --init \
     --user "$(id -u):$(id -g)" \
     --volume "$PWD:$PWD" --workdir "$PWD" \
-    --env HOME=/tmp/opensapi-home \
+    --env HOME=/tmp/akousousin-home \
     --env WINE_REPOSITORY --env WINE_BASE --env WINE_VERSION \
     "$CI_IMAGE_ID" bash -c 'mkdir -p "$HOME"; exec bash scripts/ci/build-appimage.sh "$@"' -- "$@"

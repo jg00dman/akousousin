@@ -15,7 +15,7 @@ import urllib.request
 ROOT = Path(__file__).resolve().parent
 OUT = Path('backend-dist')
 OUT.mkdir(exist_ok=True)
-BUNDLE = OUT / 'opensapi-piper'
+BUNDLE = OUT / 'akousousin-piper'
 BUNDLE.mkdir(exist_ok=True)
 voice = json.loads((ROOT / 'voice.json').read_text())
 
@@ -50,17 +50,17 @@ for dist in importlib.metadata.distributions():
                 target = notices / dist.metadata['Name'] / str(file)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy(source, target)
-shutil.copy(ROOT / 'LICENSE', notices / 'OpenSAPI-backend-GPL-3.0.txt')
+shutil.copy(ROOT / 'LICENSE', notices / 'Akousousin-backend-GPL-3.0.txt')
 source = OUT / 'sources'
 source.mkdir(exist_ok=True)
 fetch('https://github.com/OHF-Voice/piper1-gpl/archive/refs/tags/v1.8.0.tar.gz', source / 'piper-1.8.0.tar.gz')
 # Exact eSpeak revision selected by Piper 1.8.0's CMakeLists.txt.
 fetch('https://github.com/espeak-ng/espeak-ng/archive/724808c.tar.gz', source / 'espeak-ng-724808c.tar.gz')
-shutil.copytree(ROOT, source / 'opensapi-backend', dirs_exist_ok=True,
+shutil.copytree(ROOT, source / 'akousousin-backend', dirs_exist_ok=True,
                 ignore=shutil.ignore_patterns('__pycache__', '*.egg-info', 'build'))
 subprocess.run([sys.executable, '-m', 'pip', 'freeze'],
                stdout=(source / 'python-requirements.txt').open('w'), check=True)
-subprocess.run(['pyinstaller', '--noconfirm', '--clean', '--onedir', '--name', 'opensapi-piper',
+subprocess.run(['pyinstaller', '--noconfirm', '--clean', '--onedir', '--name', 'akousousin-piper',
                 '--distpath', str(OUT / 'frozen'), '--workpath', 'build/backend-freeze',
                 '--specpath', 'build', '--paths', str(ROOT), '--exclude-module', 'readline',
                 '--collect-all', 'piper',
@@ -70,7 +70,7 @@ subprocess.run(['pyinstaller', '--noconfirm', '--clean', '--onedir', '--name', '
 # for system libraries collected by PyInstaller (OpenSSL, libffi, liblzma, etc.).
 fetch(f'https://raw.githubusercontent.com/python/cpython/v{platform.python_version()}/LICENSE',
       notices / 'Python-LICENSE.txt')
-analysis = ast.literal_eval(Path('build/backend-freeze/opensapi-piper/Analysis-00.toc').read_text())
+analysis = ast.literal_eval(Path('build/backend-freeze/akousousin-piper/Analysis-00.toc').read_text())
 def system_notices(value):
     if isinstance(value, (tuple, list)):
         if len(value) == 3 and isinstance(value[1], str) and value[1].startswith(('/usr/lib/', '/lib/')):
@@ -88,15 +88,15 @@ def system_notices(value):
         for item in value:
             system_notices(item)
 system_notices(analysis)
-for path in (OUT / 'frozen/opensapi-piper').iterdir():
+for path in (OUT / 'frozen/akousousin-piper').iterdir():
     target = BUNDLE / path.name
     if path.is_dir():
         shutil.copytree(path, target, dirs_exist_ok=True)
     else:
         shutil.copy2(path, target)
-with tarfile.open(OUT / 'opensapi-piper-linux-x86_64.tar.xz', 'w:xz') as archive:
+with tarfile.open(OUT / 'akousousin-piper-linux-x86_64.tar.xz', 'w:xz') as archive:
     archive.add(BUNDLE, arcname=BUNDLE.name)
-with tarfile.open(OUT / 'opensapi-piper-sources.tar.xz', 'w:xz') as archive:
+with tarfile.open(OUT / 'akousousin-piper-sources.tar.xz', 'w:xz') as archive:
     archive.add(source, arcname='sources')
 for archive in sorted(OUT.glob('*.tar.xz')):
     with (OUT / 'SHA256SUMS').open('a') as checksums:

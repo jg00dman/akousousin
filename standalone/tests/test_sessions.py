@@ -3,8 +3,8 @@ from pathlib import Path
 import unittest
 from unittest.mock import Mock, patch
 
-from opensapi_app import settings
-from opensapi_app.controller import Sessions
+from akousousin_app import settings
+from akousousin_app.controller import Sessions
 
 
 class SessionsTests(unittest.TestCase):
@@ -13,7 +13,7 @@ class SessionsTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.path = Path(temporary.name) / 'settings.json'
         settings.save(self.path, settings.DEFAULTS)
-        with patch('opensapi_app.controller.Service', return_value=Mock()):
+        with patch('akousousin_app.controller.Service', return_value=Mock()):
             self.state = Sessions(self.path)
 
     def acquire(self, name):
@@ -40,7 +40,7 @@ class SessionsTests(unittest.TestCase):
         self.assertFalse(self.state.closed)
 
     def test_configuration_panel_does_not_acquire_a_session(self):
-        with patch('opensapi_app.controller.subprocess.Popen'):
+        with patch('akousousin_app.controller.subprocess.Popen'):
             self.state.request({'command': 'configure'})
         self.assertFalse(self.state.independent)
         self.assertEqual(self.state.owners, {})
@@ -58,7 +58,7 @@ class SessionsTests(unittest.TestCase):
 
     def test_dead_owner_or_reused_pid_is_reaped(self):
         self.acquire('logos')
-        with patch('opensapi_app.controller.psutil.Process') as process:
+        with patch('akousousin_app.controller.psutil.Process') as process:
             process.return_value.create_time.return_value = -1
             self.state.reap()
         self.assertTrue(self.state.closed)

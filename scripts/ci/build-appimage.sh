@@ -12,8 +12,8 @@ export WINEDEBUG=${WINEDEBUG:--all}
 export PYTHONUNBUFFERED=1
 export WINE_SRC="$project_dir/wine-src" WINE_BUILD="$project_dir/wine-build"
 export WINE="$WINE_BUILD/wine" WINEPREFIX="$project_dir/build/ci-prefix"
-image="wine-opensapi-piper-${wine_version}-x86_64.AppImage"
-share="$project_dir/AppDir/usr/share/opensapi"
+image="wine-akousousin-piper-${wine_version}-x86_64.AppImage"
+share="$project_dir/AppDir/usr/share/akousousin"
 mkdir -p build dist
 stage=${1:-setup}
 fail_stage() {
@@ -137,7 +137,7 @@ fi
         ;;
     configure)
 mkdir -p wine-build
-if [ -f wine-build/.opensapi-configured ]; then
+if [ -f wine-build/.akousousin-configured ]; then
     echo 'Reusing configured build from matching toolchain/source cache'
 else
     cd wine-build
@@ -146,7 +146,7 @@ else
         echo 'Audio support is required for this desktop test build.' >&2
         exit 1
     fi
-    touch .opensapi-configured
+    touch .akousousin-configured
 fi
         ;;
     compile)
@@ -164,7 +164,7 @@ run_stage probes 5m bash scripts/build-probes.sh
         ;;
     build-tests)
 mkdir -p "$WINEPREFIX"
-touch "$WINEPREFIX/.opensapi-test-prefix"
+touch "$WINEPREFIX/.akousousin-test-prefix"
 run_stage integration 10m xvfb-run -a bash scripts/test-wine.sh
 grep -q '^Ran 13 tests in ' build/integration.log
 grep -qx 'OK' build/integration.log
@@ -172,18 +172,18 @@ run_stage failure-recovery 5m xvfb-run -a python3 tests/test_failures.py
 run_stage enum-values 2m xvfb-run -a "$WINE" "$project_dir/build/token-enum-probe.exe"
         ;;
     assemble)
-share="$project_dir/AppDir/usr/share/opensapi"
-mkdir -p "$share/scripts" "$project_dir/AppDir/usr/share/licenses/opensapi"
+share="$project_dir/AppDir/usr/share/akousousin"
+mkdir -p "$share/scripts" "$project_dir/AppDir/usr/share/licenses/akousousin"
 cp build/sapi-probe.exe "$share/"
 cp scripts/register-voice.py "$share/scripts/"
 cp scripts/ci/AppRun AppDir/AppRun
 chmod +x AppDir/AppRun
-cp LICENSE AppDir/usr/share/licenses/opensapi/LGPL-2.1.txt
-cp wine-src/COPYING.LIB AppDir/usr/share/licenses/opensapi/Wine-COPYING.LIB
-cp scripts/ci/type2-runtime.LICENSE AppDir/usr/share/licenses/opensapi/AppImage-runtime-MIT.txt
+cp LICENSE AppDir/usr/share/licenses/akousousin/LGPL-2.1.txt
+cp wine-src/COPYING.LIB AppDir/usr/share/licenses/akousousin/Wine-COPYING.LIB
+cp scripts/ci/type2-runtime.LICENSE AppDir/usr/share/licenses/akousousin/AppImage-runtime-MIT.txt
 cp scripts/ci/WINE-SOURCE.md "$share/"
 cat > "$share/BUILD-INFO.txt" <<EOF
-Experimental OpenSAPI Piper SAPI engine
+Experimental Akousousin Piper SAPI engine
 Package version: $wine_version
 Wine source version: $(cat wine-src/VERSION)
 Wine source repository: $wine_repository
@@ -193,21 +193,21 @@ Piper patch SHA256: $(sha256sum patches/wine-piper.patch | cut -d' ' -f1)
 SAPI enumeration patch SHA256: $(sha256sum patches/wine-sapi-enum-values.patch | cut -d' ' -f1)
 HTTP lifecycle patch SHA256: $(sha256sum patches/wine-piper-lifecycle.patch | cut -d' ' -f1)
 PCM write patch SHA256: $(sha256sum patches/wine-piper-site-write.patch | cut -d' ' -f1)
-OpenSAPI revision: $(git rev-parse HEAD)
+Akousousin revision: $(git rev-parse HEAD)
 Architecture: x86-64 Windows applications only; no WoW64/32-bit support
 Built on Ubuntu 22.04; requires glibc 2.35 or newer and normal Wine host libraries.
 Piper and voice models are NOT bundled in Wine.
 Real neural synthesis is checked separately before publication; see real-packaged-piper.log.
 EOF
-cat > AppDir/opensapi.desktop <<'EOF'
+cat > AppDir/akousousin.desktop <<'EOF'
 [Desktop Entry]
 Type=Application
-Name=Wine OpenSAPI Piper Test
+Name=Wine Akousousin Piper Test
 Exec=AppRun
-Icon=opensapi
+Icon=akousousin
 Categories=Utility;
 EOF
-cat > AppDir/opensapi.svg <<'EOF'
+cat > AppDir/akousousin.svg <<'EOF'
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><rect width="128" height="128" rx="24" fill="#263b58"/><path d="M22 50h19l24-20v68L41 78H22z" fill="#fff"/><path d="M81 43q29 21 0 42M90 28q47 36 0 72" fill="none" stroke="#70d6cf" stroke-width="7"/></svg>
 EOF
 
@@ -222,22 +222,22 @@ curl --fail --location --retry 3 --connect-timeout 30 --max-time 180 \
     -o build/appimage-runtime
 echo '617aa77314d57c8b8e4fae9c3f0b35af7b30d5529cb69e98f64f92510ed98a46  build/appimage-runtime' | sha256sum --check
 mksquashfs AppDir build/appdir.squashfs -noappend -root-owned -comp gzip -processors "$jobs"
-image="wine-opensapi-piper-${wine_version}-x86_64.AppImage"
+image="wine-akousousin-piper-${wine_version}-x86_64.AppImage"
 cat build/appimage-runtime build/appdir.squashfs > "dist/$image"
 chmod +x "dist/$image"
 echo '::endgroup::'
         ;;
     package-tests)
-run_stage appimage-smoke 2m env APPIMAGE_EXTRACT_AND_RUN=1 "dist/$image" --opensapi-info
+run_stage appimage-smoke 2m env APPIMAGE_EXTRACT_AND_RUN=1 "dist/$image" --akousousin-info
 printf '%s\n' '{"audio":{"sample_rate":22050}}' > build/test-voice.onnx.json
 export WINEPREFIX="$project_dir/build/package-prefix"
 run_stage appimage-register 3m env APPIMAGE_EXTRACT_AND_RUN=1 xvfb-run -a "dist/$image" \
-    --opensapi-register "$project_dir/build/test-voice.onnx.json"
+    --akousousin-register "$project_dir/build/test-voice.onnx.json"
 run_stage packaged-integration 10m env WINE="$project_dir/AppDir/AppRun" \
     xvfb-run -a python3 tests/test_integration.py
 grep -q '^Ran 13 tests in ' build/packaged-integration.log
 grep -qx 'OK' build/packaged-integration.log
-touch "$WINEPREFIX/.opensapi-test-prefix"
+touch "$WINEPREFIX/.akousousin-test-prefix"
 run_stage packaged-failure-recovery 5m env WINE="$project_dir/AppDir/AppRun" xvfb-run -a python3 tests/test_failures.py
 run_stage packaged-enum-values 2m xvfb-run -a "$project_dir/AppDir/AppRun" "$project_dir/build/token-enum-probe.exe"
 mkdir -p build/appimage-bin
@@ -248,8 +248,8 @@ run_stage appimage-wineserver-dispatch 1m env APPIMAGE_EXTRACT_AND_RUN=1 "$proje
 run_stage real-packaged-piper 7m xvfb-run -a python3 tests/packaged_piper_smoke.py "$project_dir/dist/$image"
         ;;
     archives)
-tar -C AppDir -cJf "dist/wine-opensapi-piper-${wine_version}-x86_64.tar.xz" .
-tar --exclude=.git -cJf "dist/wine-opensapi-piper-${wine_version}-source.tar.xz" wine-src
+tar -C AppDir -cJf "dist/wine-akousousin-piper-${wine_version}-x86_64.tar.xz" .
+tar --exclude=.git -cJf "dist/wine-akousousin-piper-${wine_version}-source.tar.xz" wine-src
 cp patches/wine-piper.patch patches/wine-logos-11.21.patch patches/wine-sapi-enum-values.patch patches/wine-piper-site-write.patch patches/wine-piper-lifecycle.patch dist/
 cp scripts/ci/WINE-SOURCE.md dist/WINE-SOURCE.md
 cp scripts/ci/APPIMAGE-TESTING.md dist/APPIMAGE-TESTING.md

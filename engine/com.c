@@ -6,7 +6,7 @@
 #include "engine.h"
 static const CLSID piper_clsid = {0xea7a00ab,0x0fb7,0x4deb,{0x81,0xc5,0x55,0x0d,0x85,0x4f,0x39,0x0f}};
 const GUID SPDFID_WaveFormatEx = {0xc31adbae, 0x527f, 0x4ff5, {0xa2, 0x30, 0xf6, 0x2b, 0xb6, 0x1f, 0xf7, 0x0c}};
-LONG opensapi_objects;
+LONG akousousin_objects;
 static LONG locks;
 static HMODULE module;
 static HRESULT WINAPI factory_qi(IClassFactory *self, REFIID iid, void **out)
@@ -16,8 +16,8 @@ static HRESULT WINAPI factory_qi(IClassFactory *self, REFIID iid, void **out)
     if (!IsEqualIID(iid,&IID_IUnknown) && !IsEqualIID(iid,&IID_IClassFactory)) return E_NOINTERFACE;
     *out=self; IClassFactory_AddRef(self); return S_OK;
 }
-static ULONG WINAPI factory_add(IClassFactory *self) { return InterlockedIncrement(&opensapi_objects); }
-static ULONG WINAPI factory_release(IClassFactory *self) { return InterlockedDecrement(&opensapi_objects); }
+static ULONG WINAPI factory_add(IClassFactory *self) { return InterlockedIncrement(&akousousin_objects); }
+static ULONG WINAPI factory_release(IClassFactory *self) { return InterlockedDecrement(&akousousin_objects); }
 static HRESULT WINAPI factory_create(IClassFactory *self,IUnknown *outer,REFIID iid,void **out)
 { return piper_engine_create(outer,iid,out); }
 static HRESULT WINAPI factory_lock(IClassFactory *self,BOOL lock)
@@ -30,7 +30,7 @@ __declspec(dllexport) HRESULT WINAPI DllGetClassObject(REFCLSID clsid,REFIID iid
 { if (!IsEqualCLSID(clsid,&piper_clsid)) { if(out)*out=NULL; return CLASS_E_CLASSNOTAVAILABLE; }
   return IClassFactory_QueryInterface(&factory,iid,out); }
 __declspec(dllexport) HRESULT WINAPI DllCanUnloadNow(void)
-{ return opensapi_objects || locks ? S_FALSE : S_OK; }
+{ return akousousin_objects || locks ? S_FALSE : S_OK; }
 __declspec(dllexport) HRESULT WINAPI DllRegisterServer(void)
 {
     WCHAR path[32768]; HKEY key; LONG ret;

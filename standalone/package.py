@@ -43,16 +43,16 @@ shutil.copytree(ROOT / 'standalone/resources', RESOURCE, dirs_exist_ok=True)
 
 # The user explicitly approved this one reviewed starter voice for redistribution.
 # Catalogue downloads preserve its upstream model card and MIT/public-domain provenance.
-from opensapi_app import catalogue
+from akousousin_app import catalogue
 with tempfile.TemporaryDirectory(dir=BUILD) as temporary:
     entry = catalogue.catalogue(ROOT / 'standalone/resources')['en_US-ljspeech-medium']
     voice = catalogue.install(entry, Path(temporary), reviewed=True)
     shutil.copytree(Path(voice['path']).parent, RESOURCE / 'voices', dirs_exist_ok=True)
 
 if sys.platform != 'win32':
-    published = 'https://github.com/jg00dman/opensapi/releases/download/piper-test-41467603154-1/'
+    published = 'https://github.com/jg00dman/akousousin/releases/download/wine-compat-11.21-3b19eb0e45ac/'
     runtime = CACHE / 'wine-runtime.tar.xz'
-    fetch(published + 'wine-opensapi-piper-11.21-logos-x86_64.tar.xz', runtime,
+    fetch(published + 'wine-runtime-11.21-logos-x86_64.tar.xz', runtime,
           'e9e2559bbf34348d1cc9a5cf15530fd62b7075281959f3893fc8be897e783de1')
     compat = RESOURCE / 'compat'
     compat.mkdir(exist_ok=True)
@@ -60,31 +60,31 @@ if sys.platform != 'win32':
         member = next(m for m in archive if m.name.endswith('/sapi.dll') and '/x86_64-windows/' in m.name)
         with archive.extractfile(member) as source, (compat / 'sapi.dll').open('wb') as target:
             shutil.copyfileobj(source, target)
-    fetch(published + 'wine-opensapi-piper-11.21-logos-source.tar.xz', SOURCE / 'wine-compat-matching-source.tar.xz',
+    fetch(published + 'wine-source-11.21-logos.tar.xz', SOURCE / 'wine-compat-matching-source.tar.xz',
           '614fbe45f5afca787810348f3fc848c6b8736bc8db7d74a321356260da7ba565')
     (compat / 'provenance.json').write_text(json.dumps({'version': '11.21', 'source_commit':
-         '3b19eb0e45ac5f57301073fc9e721cac7829dc93', 'release': 'piper-test-41467603154-1'}, indent=2))
+         '3b19eb0e45ac5f57301073fc9e721cac7829dc93', 'release': 'wine-compat-11.21-3b19eb0e45ac'}, indent=2))
 
-# Original OpenSAPI artwork, shared by the AppImage, Tk window and tray.
+# Original Akousousin artwork, shared by the AppImage, Tk window and tray.
 from PIL import Image, ImageDraw
 icon = Image.new('RGBA', (128, 128))
 draw = ImageDraw.Draw(icon)
 draw.rounded_rectangle((0, 0, 127, 127), radius=24, fill='#087e82')
 for x, low, high in ((30, 52, 76), (47, 36, 92), (64, 26, 102), (81, 40, 88), (98, 56, 72)):
     draw.line((x, low, x, high), fill='white', width=7)
-icon.save(RESOURCE / 'opensapi.png')
+icon.save(RESOURCE / 'akousousin.png')
 
 commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
 (RESOURCE / 'build.json').write_text(json.dumps({'build': commit[:12] + '-' + sys.platform,
-                                               'commit': commit, 'version': '0.4.0b1'}, indent=2))
-subprocess.run([sys.executable, '-m', 'PyInstaller', '--clean', '--noconfirm', '--onedir', '--name', 'opensapi',
+                                               'commit': commit, 'version': '0.5.0b1'}, indent=2))
+subprocess.run([sys.executable, '-m', 'PyInstaller', '--clean', '--noconfirm', '--onedir', '--name', 'akousousin',
                 '--distpath', str(BUILD / 'frozen'), '--workpath', str(BUILD / 'freeze'), '--specpath', str(BUILD),
                 '--paths', str(ROOT / 'standalone'), '--paths', str(ROOT / 'backend'),
                 '--exclude-module', 'readline', '--collect-all', 'piper', '--collect-all', 'numpy',
                 '--collect-all', 'onnxruntime', str(ROOT / 'standalone/entrypoint.py')], check=True)
 
-PACKAGE = BUILD / 'OpenSAPI'
-shutil.copytree(BUILD / 'frozen/opensapi', PACKAGE, dirs_exist_ok=True)
+PACKAGE = BUILD / 'Akousousin'
+shutil.copytree(BUILD / 'frozen/akousousin', PACKAGE, dirs_exist_ok=True)
 shutil.copytree(RESOURCE, PACKAGE / 'resources', dirs_exist_ok=True)
 notices = PACKAGE / 'licenses'
 notices.mkdir(exist_ok=True)
@@ -104,7 +104,7 @@ for dist in importlib.metadata.distributions():
                 shutil.copy2(source, target)
 if sys.platform != 'win32':
     shutil.copytree('/usr/share/common-licenses', notices / 'common', dirs_exist_ok=True)
-    analysis = ast.literal_eval((BUILD / 'freeze/opensapi/Analysis-00.toc').read_text())
+    analysis = ast.literal_eval((BUILD / 'freeze/akousousin/Analysis-00.toc').read_text())
     def system_notices(value):
         if isinstance(value, (tuple, list)):
             if len(value) == 3 and isinstance(value[1], str) and value[1].startswith(('/usr/lib/', '/lib/')):
@@ -131,6 +131,7 @@ for file in PACKAGE.rglob('*'):
         file.unlink()
 
 shutil.copy(ROOT / 'standalone/README.md', PACKAGE / 'README.md')
+shutil.copy(ROOT / 'COMPATIBILITY.md', PACKAGE / 'COMPATIBILITY.md')
 # ONNX Runtime ships unused demonstration graphs; they are not required for inference.
 for sample in (PACKAGE / '_internal/onnxruntime/datasets').glob('*.onnx'):
     sample.unlink()
@@ -142,36 +143,36 @@ models = [file.relative_to(PACKAGE).as_posix() for file in PACKAGE.rglob('*.onnx
 if models != ['resources/voices/en_US-ljspeech-medium.onnx']:
     raise RuntimeError('Only the explicitly approved LJSpeech starter voice may be bundled')
 if sys.platform == 'win32':
-    with zipfile.ZipFile(OUT / 'OpenSAPI-Windows-x86_64.zip', 'w', zipfile.ZIP_DEFLATED) as archive:
+    with zipfile.ZipFile(OUT / 'Akousousin-Windows-x86_64.zip', 'w', zipfile.ZIP_DEFLATED) as archive:
         for file in PACKAGE.rglob('*'):
-            archive.write(file, Path('OpenSAPI') / file.relative_to(PACKAGE))
+            archive.write(file, Path('Akousousin') / file.relative_to(PACKAGE))
 else:
     app = BUILD / 'AppDir'
     (app / 'usr/lib').mkdir(parents=True, exist_ok=True)
-    shutil.copytree(PACKAGE, app / 'usr/lib/opensapi', dirs_exist_ok=True)
+    shutil.copytree(PACKAGE, app / 'usr/lib/akousousin', dirs_exist_ok=True)
     shutil.copy(ROOT / 'standalone/AppRun', app / 'AppRun')
     (app / 'AppRun').chmod(0o755)
-    (app / 'opensapi.desktop').write_text('[Desktop Entry]\nType=Application\nName=OpenSAPI\nExec=AppRun\nIcon=opensapi\nCategories=AudioVideo;Accessibility;\nTerminal=false\n')
-    (app / 'opensapi.svg').write_text('<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"><rect width="128" height="128" rx="24" fill="#087e82"/><path d="M30 52v24m17-40v56m17-66v76m17-62v48m17-32v16" stroke="white" stroke-width="7" stroke-linecap="round"/></svg>')
+    (app / 'akousousin.desktop').write_text('[Desktop Entry]\nType=Application\nName=Akousousin — Neural Voice Engine\nComment=Microsoft SAPI voice engine; Speech Dispatcher and Whisper planned\nExec=AppRun\nIcon=akousousin\nCategories=AudioVideo;Accessibility;\nTerminal=false\n')
+    (app / 'akousousin.svg').write_text('<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"><rect width="128" height="128" rx="24" fill="#087e82"/><path d="M30 52v24m17-40v56m17-66v76m17-62v48m17-32v16" stroke="white" stroke-width="7" stroke-linecap="round"/></svg>')
     runtime = CACHE / 'appimage-runtime'
     fetch('https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64', runtime,
           '617aa77314d57c8b8e4fae9c3f0b35af7b30d5529cb69e98f64f92510ed98a46')
     subprocess.run(['mksquashfs', str(app), str(BUILD / 'app.squashfs'), '-noappend', '-root-owned',
                     '-comp', 'gzip', '-processors', '4'], check=True)
-    with (OUT / 'OpenSAPI-x86_64.AppImage').open('wb') as output:
+    with (OUT / 'Akousousin-x86_64.AppImage').open('wb') as output:
         output.write(runtime.read_bytes())
         with (BUILD / 'app.squashfs').open('rb') as squash:
             shutil.copyfileobj(squash, output)
-    (OUT / 'OpenSAPI-x86_64.AppImage').chmod(0o755)
+    (OUT / 'Akousousin-x86_64.AppImage').chmod(0o755)
     # Corresponding sources for our DLL/panel and the separately bundled GPL backend.
-    subprocess.run(['git', 'archive', '--format=tar.gz', '--output', str(SOURCE / 'opensapi-source.tar.gz'), 'HEAD'], check=True)
+    subprocess.run(['git', 'archive', '--format=tar.gz', '--output', str(SOURCE / 'akousousin-source.tar.gz'), 'HEAD'], check=True)
     fetch('https://github.com/OHF-Voice/piper1-gpl/archive/refs/tags/v1.8.0.tar.gz', SOURCE / 'piper-1.8.0.tar.gz')
     fetch('https://github.com/espeak-ng/espeak-ng/archive/724808c.tar.gz', SOURCE / 'espeak-ng.tar.gz')
     # Matching LGPL Qt/PySide sources for the tray and local IPC libraries.
     for module in ('qtbase', 'qtsvg', 'qtwayland', 'qtdeclarative', 'qtshadertools', 'qttools', 'qtimageformats'):
         fetch(f'https://github.com/qt/{module}/archive/refs/tags/v6.8.3.tar.gz', SOURCE / f'{module}-6.8.3.tar.gz')
     fetch('https://github.com/pyside/pyside-setup/archive/refs/tags/v6.8.3.tar.gz', SOURCE / 'pyside-setup-6.8.3.tar.gz')
-    with tarfile.open(OUT / 'OpenSAPI-corresponding-sources.tar.gz', 'w:gz') as archive:
+    with tarfile.open(OUT / 'Akousousin-corresponding-sources.tar.gz', 'w:gz') as archive:
         archive.add(SOURCE, arcname='sources')
 
 with (OUT / 'SHA256SUMS').open('w', encoding='ascii', newline='\n') as sums:

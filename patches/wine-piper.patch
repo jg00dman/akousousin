@@ -184,7 +184,7 @@ index 00000000000..6f01d322d76
 +/*
 + * Wine Piper TTS engine, using a separately installed loopback HTTP service.
 + *
-+ * Copyright 2026 OpenSAPI contributors
++ * Copyright 2026 Akousousin contributors
 + *
 + * This library is free software; you can redistribute it and/or
 + * modify it under the terms of the GNU Lesser General Public

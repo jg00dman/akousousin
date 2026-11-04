@@ -12,13 +12,13 @@ DEFAULTS = {'version': 1, 'voice': 'en_US-ljspeech-medium', 'speed': 1.0, 'volum
 def config_path():
     base = Path(os.environ.get('LOCALAPPDATA', Path.home() / 'AppData/Local')) if os.name == 'nt' else Path(
         os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config'))
-    return base / 'OpenSAPI/settings.json'
+    return base / 'Akousousin/settings.json'
 
 
 def data_path():
     base = Path(os.environ.get('LOCALAPPDATA', Path.home() / 'AppData/Local')) if os.name == 'nt' else Path(
         os.environ.get('XDG_DATA_HOME', Path.home() / '.local/share'))
-    return base / 'OpenSAPI'
+    return base / 'Akousousin'
 
 
 def load(path):

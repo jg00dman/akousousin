@@ -6,8 +6,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from opensapi_app.install import CLASS, FULL_TOKEN, Installer, VOICES
-from opensapi_app.settings import DEFAULTS
+from akousousin_app.install import CLASS, FULL_TOKEN, Installer, VOICES
+from akousousin_app.settings import DEFAULTS
 
 
 class FakeInstaller(Installer):
@@ -67,7 +67,7 @@ class InstallTests(unittest.TestCase):
         (self.prefix / 'system.reg').write_text('WINE REGISTRY Version 2\n#arch=win64\n')
         self.resource = root / 'resource'
         (self.resource / 'compat').mkdir(parents=True)
-        (self.resource / 'opensapi-piper.dll').write_bytes(b'engine')
+        (self.resource / 'akousousin-piper.dll').write_bytes(b'engine')
         (self.resource / 'compat/sapi.dll').write_bytes(b'compat')
         self.app = FakeInstaller(self.resource, self.prefix, '/custom/Wine.AppImage')
         self.app.reg = {CLASS + r'\InprocServer32': {'@': ['REG_SZ', 'original-engine']},
@@ -87,23 +87,23 @@ class InstallTests(unittest.TestCase):
         for key, value in self.original.items():
             self.assertEqual(self.app.reg[key], value)
         self.assertFalse(self.app.manifest.exists())
-        self.assertFalse((self.app.directory / 'opensapi-piper.dll').exists())
+        self.assertFalse((self.app.directory / 'akousousin-piper.dll').exists())
 
     def test_failed_update_rolls_back_to_installed_version(self):
         self.app.install(self.config)
         before = copy.deepcopy(self.app.reg)
         state = self.app.manifest.read_bytes()
-        (self.resource / 'opensapi-piper.dll').write_bytes(b'new-engine')
+        (self.resource / 'akousousin-piper.dll').write_bytes(b'new-engine')
         self.app.fail = True
         with self.assertRaisesRegex(RuntimeError, 'Injected'):
             self.app.install(self.config)
         self.assertEqual(self.app.reg, before)
-        self.assertEqual((self.app.directory / 'opensapi-piper.dll').read_bytes(), b'engine')
+        self.assertEqual((self.app.directory / 'akousousin-piper.dll').read_bytes(), b'engine')
         self.assertEqual(self.app.manifest.read_bytes(), state)
 
     def test_manual_dll_change_is_not_overwritten_by_uninstall(self):
         self.app.install(self.config)
-        path = self.app.directory / 'opensapi-piper.dll'
+        path = self.app.directory / 'akousousin-piper.dll'
         path.write_bytes(b'user-change')
         before = copy.deepcopy(self.app.reg)
         with self.assertRaisesRegex(RuntimeError, 'modified'):
@@ -136,7 +136,7 @@ class InstallTests(unittest.TestCase):
         self.config['voices'] = {}
         self.app.install(self.config)
         self.assertEqual(self.app.reg[VOICES], self.original[VOICES])
-        self.assertFalse(any(key.startswith(VOICES + r'\Tokens\OpenSAPI-Piper-') for key in self.app.reg))
+        self.assertFalse(any(key.startswith(VOICES + r'\Tokens\Akousousin-Piper-') for key in self.app.reg))
         self.app.uninstall()
         self.assertEqual(self.app.reg[CLASS + r'\InprocServer32'], self.original[CLASS + r'\InprocServer32'])
 
@@ -163,7 +163,7 @@ class InstallTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'could not be activated'):
             self.app.install(self.config)
         self.assertFalse(self.app.manifest.exists())
-        self.assertFalse((self.app.directory / 'opensapi-piper.dll').exists())
+        self.assertFalse((self.app.directory / 'akousousin-piper.dll').exists())
         for key, value in self.original.items():
             self.assertEqual(self.app.reg[key], value)
 

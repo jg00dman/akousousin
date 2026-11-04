@@ -44,9 +44,9 @@ jobs:
       - name: Install dependencies into reusable image
         if: steps.environment-cache.outputs.cache-hit != 'true'
         run: |
-          docker build --progress=plain -t opensapi-ci:build -f scripts/ci/Dockerfile scripts/ci
+          docker build --progress=plain -t akousousin-ci:build -f scripts/ci/Dockerfile scripts/ci
           mkdir -p .ci-environment
-          docker save opensapi-ci:build -o .ci-environment/image.tar
+          docker save akousousin-ci:build -o .ci-environment/image.tar
       - name: Save dependency environment
         if: steps.environment-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684
@@ -57,8 +57,8 @@ jobs:
         id: image
         run: |
           docker load -i .ci-environment/image.tar
-          echo "id=$(docker image inspect --format '{{.Id}}' opensapi-ci:build)" >> "$GITHUB_OUTPUT"
-          docker run --rm opensapi-ci:build sh -c 'gcc --version; x86_64-w64-mingw32-gcc --version; bison --version; python3 --version'
+          echo "id=$(docker image inspect --format '{{.Id}}' akousousin-ci:build)" >> "$GITHUB_OUTPUT"
+          docker run --rm akousousin-ci:build sh -c 'gcc --version; x86_64-w64-mingw32-gcc --version; bison --version; python3 --version'
 
   build:
     name: Build and validate AppImage
@@ -85,7 +85,7 @@ jobs:
       - name: Load and verify dependency environment
         run: |
           docker load -i .ci-environment/image.tar
-          test "$(docker image inspect --format '{{.Id}}' opensapi-ci:build)" = "$CI_IMAGE_ID"
+          test "$(docker image inspect --format '{{.Id}}' akousousin-ci:build)" = "$CI_IMAGE_ID"
           rm .ci-environment/image.tar
       - name: Identify compatible Wine build checkpoint
         id: build-key
@@ -161,7 +161,7 @@ jobs:
       - name: Install Wine into AppDir
         timeout-minutes: 12
         run: bash scripts/ci/run-stage.sh install
-      - name: Build OpenSAPI diagnostic probes
+      - name: Build Akousousin diagnostic probes
         timeout-minutes: 6
         run: bash scripts/ci/run-stage.sh probes
       - name: Run all 13 build-tree integration tests
@@ -183,7 +183,7 @@ jobs:
         timeout-minutes: 15
         run: |
           bash scripts/ci/run-stage.sh archives
-          cat AppDir/usr/share/opensapi/BUILD-INFO.txt build/integration.log build/packaged-integration.log >> "$GITHUB_STEP_SUMMARY"
+          cat AppDir/usr/share/akousousin/BUILD-INFO.txt build/integration.log build/packaged-integration.log >> "$GITHUB_STEP_SUMMARY"
       - name: Upload build and test logs
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

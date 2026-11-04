@@ -7,7 +7,7 @@ unchanged. This deployment candidate adds failure handling and a separate servic
 ## Separate Piper service and voice
 
 The first standalone package is available at
-https://github.com/jg00dman/opensapi/releases/tag/piper-backend-41388556427-1
+https://github.com/jg00dman/akousousin/releases/tag/piper-backend-41388556427-1
 
 GitHub Actions built a Linux x86-64 application with embedded Python, Piper 1.8.0,
 Waitress 3.0.2, and en_US-ljspeech-medium. Its frozen executable produced valid,
@@ -35,7 +35,7 @@ request has a 65-second deadline, including trickling peers. It connects only to
 transfer encoding, malformed WAV, unsupported format and incomplete bodies.
 
 Uninitialized engines return SPERR_UNINITIALIZED. Removing the Piper voice
-makes OpenSAPI-filtered enumeration return zero; a stale default is tested to
+makes Akousousin-filtered enumeration return zero; a stale default is tested to
 return SPERR_NOT_FOUND from speech. Wine's unrelated empty 'Wine Default Voice'
 placeholder is not removed, and other vendors' installed voices are preserved.
 
@@ -88,9 +88,9 @@ an actual extraction-mode wineserver dispatch check in the Wine packaging stage.
 ## Verified downloadable beta set
 
 - Wine and its matching source/checksums/logs/real-neural WAV:
-  https://github.com/jg00dman/opensapi/releases/tag/piper-test-41391312177-1
+  https://github.com/jg00dman/akousousin/releases/tag/piper-test-41391312177-1
 - Backend, voice and corresponding sources:
-  https://github.com/jg00dman/opensapi/releases/tag/piper-backend-41388556427-1
+  https://github.com/jg00dman/akousousin/releases/tag/piper-backend-41388556427-1
 - OuDedetai x86-64 launcher and checksum:
   https://github.com/jg00dman/OuDedetai/releases/tag/piper-beta-41389712590-1
 

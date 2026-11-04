@@ -1,4 +1,4 @@
-# OpenSAPI Piper backend beta
+# Akousousin Piper backend beta
 
 This is a separate GPL-3.0-or-later package, not part of the Wine AppImage or
 OuDedetai's MIT-licensed application. It contains Piper 1.8.0, a Waitress 3.0.2
@@ -9,7 +9,7 @@ for the prebuilt Linux x86-64 package (Ubuntu 22.04/glibc 2.35 or newer).
 Extract the archive and run:
 
 ```
-./opensapi-piper --model "$PWD/voices/en_US-ljspeech-medium.onnx"
+./akousousin-piper --model "$PWD/voices/en_US-ljspeech-medium.onnx"
 ```
 
 It binds only 127.0.0.1:5000. Stop with Ctrl+C, or let OuDedetai own its lifecycle.

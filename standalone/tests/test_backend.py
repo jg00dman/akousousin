@@ -7,8 +7,8 @@ import unittest
 import wave
 from unittest.mock import patch
 
-from opensapi_app import settings
-from opensapi_app.backend import Router, application
+from akousousin_app import settings
+from akousousin_app.backend import Router, application
 
 
 def audio(rate):
@@ -49,7 +49,7 @@ class RoutingTests(unittest.TestCase):
             self.config['language_voices'][language] = identifier
         self.config['voice'] = 'english'
         settings.save(self.path, self.config)
-        self.patch = patch('opensapi_app.backend.Synthesizer', FakeSynth)
+        self.patch = patch('akousousin_app.backend.Synthesizer', FakeSynth)
         self.patch.start(); self.addCleanup(self.patch.stop)
         FakeSynth.instances.clear()
         self.router = Router(self.path)
@@ -95,6 +95,6 @@ class RoutingTests(unittest.TestCase):
         app(env, lambda *args: status.append(args[0]))
         self.assertTrue(status[0].startswith('403'))
         self.assertFalse(stopping.is_set())
-        env['HTTP_X_OPENSAPI_CONTROL'] = 'private-token'
+        env['HTTP_X_AKOUSOUSIN_CONTROL'] = 'private-token'
         app(env, lambda *args: status.append(args[0]))
         self.assertTrue(stopping.wait(1))

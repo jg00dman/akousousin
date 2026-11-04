@@ -26,7 +26,7 @@ static void check_voice_attributes(void)
                           &IID_ISpObjectToken, (void **)&token);
     REQUIRE(hr == S_OK, "create voice token failed");
     hr = ISpObjectToken_SetId(token, NULL,
-        L"HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Speech\\Voices\\Tokens\\OpenSAPI-Piper", FALSE);
+        L"HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Speech\\Voices\\Tokens\\Akousousin-Piper", FALSE);
     REQUIRE(hr == S_OK, "open Piper token failed");
     hr = ISpObjectToken_OpenKey(token, L"Attributes", &attributes);
     REQUIRE(hr == S_OK, "open Piper attributes failed");
@@ -40,12 +40,12 @@ static void check_voice_attributes(void)
         REQUIRE(hr == S_OK, "Piper attribute string retrieval failed");
         if (!wcscmp(name, L"Name"))
         {
-            REQUIRE(!wcscmp(value, L"Piper (OpenSAPI)"), "incorrect voice Name");
+            REQUIRE(!wcscmp(value, L"Piper (Akousousin)"), "incorrect voice Name");
             found |= 1;
         }
         else if (!wcscmp(name, L"Vendor"))
         {
-            REQUIRE(!wcscmp(value, L"OpenSAPI"), "incorrect voice Vendor");
+            REQUIRE(!wcscmp(value, L"Akousousin"), "incorrect voice Vendor");
             found |= 2;
         }
         else if (!wcscmp(name, L"Language"))
@@ -83,7 +83,7 @@ int wmain(void)
     hr = ISpRegDataKey_EnumValues(data, 0, &name);
     REQUIRE(hr == E_HANDLE && !name, "uninitialized key handling failed");
     REQUIRE(ISpRegDataKey_EnumValues(data, 0, NULL) == E_POINTER, "null output handling failed");
-    _snwprintf(path, sizeof(path) / sizeof(path[0]), L"Software\\OpenSAPI\\EnumValues-%lu", GetCurrentProcessId());
+    _snwprintf(path, sizeof(path) / sizeof(path[0]), L"Software\\Akousousin\\EnumValues-%lu", GetCurrentProcessId());
     REQUIRE(RegCreateKeyExW(HKEY_CURRENT_USER, path, 0, NULL, 0, KEY_ALL_ACCESS,
                             NULL, &key, &disposition) == ERROR_SUCCESS, "create test key failed");
     REQUIRE(disposition == REG_CREATED_NEW_KEY, "refusing to reuse an existing registry key");

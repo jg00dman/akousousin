@@ -8,7 +8,7 @@ from pathlib import Path
 import threading
 import wave
 
-from opensapi_backend.server import Synthesizer, MAX_AUDIO, MAX_BODY
+from akousousin_backend.server import Synthesizer, MAX_AUDIO, MAX_BODY
 from . import settings
 
 
@@ -126,12 +126,12 @@ def application(router, instance, control="", stopping=None):
         try:
             if env['PATH_INFO'] == '/health' and env['REQUEST_METHOD'] == 'GET':
                 ready = router.synth is not None and router.synth.process is not None and router.synth.process.is_alive()
-                body = json.dumps({'service': 'opensapi-piper', 'instance': instance, 'ready': ready,
+                body = json.dumps({'service': 'akousousin-piper', 'instance': instance, 'ready': ready,
                                    'settings': str(router.path), 'voice': router.voice}).encode()
                 if not ready:
                     status = '503 Service Unavailable'
             elif env['PATH_INFO'] == '/shutdown' and env['REQUEST_METHOD'] == 'POST':
-                if not control or not hmac.compare_digest(env.get('HTTP_X_OPENSAPI_CONTROL', ''), control):
+                if not control or not hmac.compare_digest(env.get('HTTP_X_AKOUSOUSIN_CONTROL', ''), control):
                     status, body = '403 Forbidden', b'{"error":"Not owned by this panel"}'
                 else:
                     timer = threading.Timer(.5, stopping.set)

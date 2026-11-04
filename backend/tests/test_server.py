@@ -3,7 +3,7 @@ import json
 import time
 import unittest
 import wave
-from opensapi_backend.server import Synthesizer, application
+from akousousin_backend.server import Synthesizer, application
 
 
 def fake_worker(pipe, model):

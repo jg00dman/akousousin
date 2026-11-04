@@ -1,4 +1,4 @@
-name: Publish tested standalone OpenSAPI
+name: Publish tested standalone Akousousin
 on:
   push:
     branches: [codex/standalone-control-panel]
@@ -50,7 +50,7 @@ jobs:
           ref: ${{ steps.tested.outputs.sha }}
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          pattern: opensapi-standalone-*
+          pattern: akousousin-standalone-*
           path: release-input
           run-id: ${{ inputs.tested_run }}
           github-token: ${{ github.token }}
@@ -71,5 +71,5 @@ jobs:
           SOURCE_RUN: ${{ inputs.tested_run }}
         run: |
           gh release create "standalone-beta-${SOURCE_RUN}-1" --verify-tag --repo "$GITHUB_REPOSITORY" \
-            --prerelease --title "OpenSAPI standalone beta ${SOURCE_RUN}" \
+            --prerelease --title "Akousousin standalone beta ${SOURCE_RUN}" \
             --notes-file standalone/RELEASE-NOTES.md release-assets/*

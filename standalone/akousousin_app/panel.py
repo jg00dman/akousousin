@@ -31,8 +31,8 @@ class Panel:
         self.events = queue.Queue()
         self.busy = 0
         self.root = tk.Tk()
-        self.root.title('OpenSAPI — Speech for your applications')
-        icon = resources.root() / 'opensapi.png'
+        self.root.title('Akousousin — Neural Voice Engine')
+        icon = resources.root() / 'akousousin.png'
         if icon.exists():
             self.window_icon = tk.PhotoImage(file=str(icon))
             self.root.iconphoto(True, self.window_icon)
@@ -53,8 +53,8 @@ class Panel:
         style.configure('Treeview.Heading', font=('DejaVu Sans', 10, 'bold'), padding=8)
         header = ttk.Frame(self.root, padding=(24, 18))
         header.pack(fill='x')
-        ttk.Label(header, text='▥  OpenSAPI', style='Title.TLabel').pack(side='left')
-        ttk.Label(header, text='Speech for your applications', padding=(18, 8)).pack(side='left')
+        ttk.Label(header, text='▥  Akousousin', style='Title.TLabel').pack(side='left')
+        ttk.Label(header, text='SAPI · Speech Dispatcher (planned)', padding=(18, 8)).pack(side='left')
         ttk.Label(header, text='Standalone beta').pack(side='right')
         body = ttk.Frame(self.root)
         body.pack(fill='both', expand=True, padx=20)
@@ -123,7 +123,7 @@ class Panel:
                 self.busy = max(0, self.busy - 1)
                 if kind == 'error':
                     self.status.set(result)
-                    messagebox.showerror('OpenSAPI', result, parent=self.root)
+                    messagebox.showerror('Akousousin', result, parent=self.root)
                 elif callback:
                     callback(result)
         except queue.Empty:
@@ -389,7 +389,7 @@ class Panel:
         self.worker(lambda: Installer(resources.root(), prefix, wine).install(self.config), installed)
 
     def uninstall(self):
-        if not messagebox.askyesno('Uninstall OpenSAPI', 'Restore original DLLs and speech registration in this installation?'):
+        if not messagebox.askyesno('Uninstall Akousousin', 'Restore original DLLs and speech registration in this installation?'):
             return
         prefix, wine = self.config['wine_prefix'] or None, self.config['wine'] or None
         self.worker(lambda: Installer(resources.root(), prefix, wine).uninstall(),
@@ -440,6 +440,6 @@ class Panel:
         self.worker(preview, self.status.set)
 
     def close(self):
-        if self.busy and not messagebox.askyesno('OpenSAPI', 'An operation is still running. Close the panel?'):
+        if self.busy and not messagebox.askyesno('Akousousin', 'An operation is still running. Close the panel?'):
             return
         self.root.destroy()

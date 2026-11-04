@@ -48,7 +48,7 @@ class Sessions:
                 pending = settings.select_voice(self.path, request['voice'])
                 return {'pending_registration': pending}
             elif operation != 'status':
-                raise ValueError('Unknown OpenSAPI command')
+                raise ValueError('Unknown Akousousin command')
             return {'sessions': len(self.owners), 'running': bool(self.service.health(port)),
                     'independent': self.independent, 'closed': self.closed}
 
@@ -79,7 +79,7 @@ def run(path):
     app = QApplication([]) if graphical else QCoreApplication([])
     if graphical:
         app.setQuitOnLastWindowClosed(False)
-        app.setWindowIcon(QIcon(str(resources.root() / 'opensapi.png')))
+        app.setWindowIcon(QIcon(str(resources.root() / 'akousousin.png')))
     lock = QLockFile(str(runtime.directory() / (os.path.basename(runtime.name(path)) + '.lock')))
     if not lock.tryLock(0):
         return
@@ -102,9 +102,9 @@ def run(path):
             socket.disconnectFromServer()
             connections.discard(socket)
         elif 'error' in response and graphical:
-            QMessageBox.warning(None, 'OpenSAPI', response['error'])
+            QMessageBox.warning(None, 'Akousousin', response['error'])
         elif response.get('pending_registration') and graphical:
-            QMessageBox.information(None, 'OpenSAPI', 'Default saved. Apply voice registration in Configure → Settings.')
+            QMessageBox.information(None, 'Akousousin', 'Default saved. Apply voice registration in Configure → Settings.')
         if state.closed:
             QTimer.singleShot(250, app.quit)
 
@@ -140,8 +140,8 @@ def run(path):
     server.newConnection.connect(accept)
     tray = QSystemTrayIcon() if graphical else None
     if tray:
-        tray.setToolTip('OpenSAPI')
-        tray.setIcon(QIcon(str(resources.root() / 'opensapi.png')))
+        tray.setToolTip('Akousousin — Neural Voice Engine')
+        tray.setIcon(QIcon(str(resources.root() / 'akousousin.png')))
         menu = QMenu()
         toggle = menu.addAction('Start')
         toggle.triggered.connect(lambda: submit({'command': 'stop' if toggle.text() == 'Stop' else 'start'}))
@@ -162,7 +162,7 @@ def run(path):
         voices.aboutToShow.connect(populate)
         menu.addAction('Configure…', lambda: submit({'command': 'configure'}))
         def quit_requested():
-            if (state.owners or state.service.health(settings.load(path)['port'])) and QMessageBox.question(None, 'Quit OpenSAPI?',
+            if (state.owners or state.service.health(settings.load(path)['port'])) and QMessageBox.question(None, 'Quit Akousousin?',
                     'Speech is in use. Quit and stop Piper, interrupting speech?') != QMessageBox.Yes:
                 return
             submit({'command': 'quit'})
@@ -195,14 +195,14 @@ def run(path):
                 status = 'Error'
             if state.error and not running:
                 status = 'Error'
-            pixmap = QPixmap(str(resources.root() / 'opensapi.png')).scaled(64, 64)
+            pixmap = QPixmap(str(resources.root() / 'akousousin.png')).scaled(64, 64)
             painter = QPainter(pixmap)
             painter.setBrush(QColor({'Running': '#20a45b', 'Stopped': '#737b80', 'Starting': '#e3aa26', 'Error': '#bd3838'}[status]))
             painter.setPen(QPen(QColor('white'), 3))
             painter.drawEllipse(44, 44, 18, 18)
             painter.end()
             tray.setIcon(QIcon(pixmap))
-            tray.setToolTip('OpenSAPI — ' + status)
+            tray.setToolTip('Akousousin — Neural Voice Engine · ' + status)
             toggle.setText('Stop' if running else 'Start')
     timer = QTimer()
     timer.timeout.connect(tick)

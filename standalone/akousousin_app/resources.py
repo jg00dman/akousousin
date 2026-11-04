@@ -9,8 +9,8 @@ from . import settings
 
 
 def root():
-    if os.environ.get('OPENSAPI_RESOURCES'):
-        return Path(os.environ['OPENSAPI_RESOURCES'])
+    if os.environ.get('AKOUSOUSIN_RESOURCES'):
+        return Path(os.environ['AKOUSOUSIN_RESOURCES'])
     if getattr(sys, 'frozen', False):
         return Path(sys.executable).parent / 'resources'
     return Path(__file__).resolve().parents[1] / 'resources'

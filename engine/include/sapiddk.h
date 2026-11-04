@@ -1,7 +1,7 @@
 /* LGPL-2.1-or-later. C interface declarations derived from Wine's sapiddk.idl,
  * Copyright (C) 2017 Huw Davies. Standard SAPI DDK binary interfaces only. */
-#ifndef OPENSAPI_SAPIDDK_H
-#define OPENSAPI_SAPIDDK_H
+#ifndef AKOUSOUSIN_SAPIDDK_H
+#define AKOUSOUSIN_SAPIDDK_H
 #include <sapi.h>
 typedef enum { SPVST_SENTENCE = 1 } SPVSKIPTYPE;
 typedef enum { SPVES_CONTINUE=0, SPVES_ABORT=1, SPVES_SKIP=2, SPVES_RATE=4, SPVES_VOLUME=8 } SPVESACTIONS;

@@ -1,12 +1,12 @@
 # Testing the prototype
 
 For a prebuilt AppImage, first check the
-[GitHub build](https://github.com/jg00dman/opensapi/actions/workflows/appimage.yml)
-and [Releases](https://github.com/jg00dman/opensapi/releases), then follow
+[GitHub build](https://github.com/jg00dman/akousousin/actions/workflows/appimage.yml)
+and [Releases](https://github.com/jg00dman/akousousin/releases), then follow
 [APPIMAGE-TESTING.md](scripts/ci/APPIMAGE-TESTING.md). A successful workflow publishes
 a test package that includes the sample program; you do not need to build Wine
-locally. [Run 41372784570](https://github.com/jg00dman/opensapi/actions/runs/41372784570) succeeded and
-published [this experimental release](https://github.com/jg00dman/opensapi/releases/tag/piper-test-41372784570-1). Both sets of 13 deterministic
+locally. [Run 41372784570](https://github.com/jg00dman/akousousin/actions/runs/41372784570) succeeded and
+published [this experimental release](https://github.com/jg00dman/akousousin/releases/tag/piper-test-41372784570-1). Both sets of 13 deterministic
 integration tests passed. Piper and voice models remain separate; real speech
 and audible playback have not been verified by CI.
 
@@ -17,7 +17,7 @@ test.
 ## Configure the voice in an existing Logos prefix
 
 Close Logos first and keep the Piper server running. In the same terminal,
-set `OPENSAPI_IMAGE` to the new `wine-opensapi-piper-11.21-logos-x86_64.AppImage`,
+set `AKOUSOUSIN_IMAGE` to the new `wine-akousousin-piper-11.21-logos-x86_64.AppImage`,
 set `APPIMAGE_EXTRACT_AND_RUN=1`, and set `WINEPREFIX` to your actual existing
 Logos prefix (the directory containing `drive_c` and `system.reg`). The standalone
 speech-test prefix is separate and its voice registration does not carry across.
@@ -27,20 +27,20 @@ implementation, register the engine, and register the voice using your model's
 configuration file:
 
 ```sh
-"$OPENSAPI_IMAGE" reg.exe add 'HKCU\Software\Wine\DllOverrides' /v sapi /t REG_SZ /d builtin /f
-"$OPENSAPI_IMAGE" regsvr32.exe /s sapi.dll
-"$OPENSAPI_IMAGE" --opensapi-register "$HOME/opensapi/voices/en_US-ljspeech-medium.onnx.json"
-"$OPENSAPI_IMAGE" --opensapi-speak 'Testing Piper inside the Logos prefix.'
+"$AKOUSOUSIN_IMAGE" reg.exe add 'HKCU\Software\Wine\DllOverrides' /v sapi /t REG_SZ /d builtin /f
+"$AKOUSOUSIN_IMAGE" regsvr32.exe /s sapi.dll
+"$AKOUSOUSIN_IMAGE" --akousousin-register "$HOME/akousousin/voices/en_US-ljspeech-medium.onnx.json"
+"$AKOUSOUSIN_IMAGE" --akousousin-speak 'Testing Piper inside the Logos prefix.'
 ```
 
 The helper creates
-`HKLM\SOFTWARE\Microsoft\Speech\Voices\Tokens\OpenSAPI-Piper` and sets
+`HKLM\SOFTWARE\Microsoft\Speech\Voices\Tokens\Akousousin-Piper` and sets
 `HKLM\SOFTWARE\Microsoft\Speech\Voices\DefaultDefaultTokenId`. Manual CLSID
 editing is not needed. This intentionally changes the default Wine SAPI voice
 in the selected prefix. Then launch Logos itself through this same AppImage and
 prefix, preserving the launcher's other settings. Registering with the new
 AppImage while launching Logos through an older unpatched Wine will not load
-the new engine. If Logos offers a voice selector, choose `Piper (OpenSAPI)`.
+the new engine. If Logos offers a voice selector, choose `Piper (Akousousin)`.
 
 For the supplied wine-bisect print launcher, pass the new AppImage as the target
 argument: its default still selects the older 11.20 runtime. That launcher also
@@ -55,23 +55,23 @@ not evidence that the standalone speech check validates Logos Read Aloud.
 
 ## 1. Recover the source
 
-The handoff archive contains an `opensapi/` directory with the source, Wine patch,
-and instructions, plus an `opensapi.bundle` Git backup. Extract it into a directory
+The handoff archive contains an `akousousin/` directory with the source, Wine patch,
+and instructions, plus an `akousousin.bundle` Git backup. Extract it into a directory
 of your choice. The bundle can alternatively restore the project with:
 
 ```sh
-git clone /path/to/opensapi.bundle opensapi
+git clone /path/to/akousousin.bundle akousousin
 ```
 
 For a fresh desktop source checkout, use the exact base revision and apply the
 patch once:
 
 ```sh
-mkdir -p "$HOME/opensapi-test"
-cd "$HOME/opensapi-test"
+mkdir -p "$HOME/akousousin-test"
+cd "$HOME/akousousin-test"
 git clone --single-branch --branch logos-11.21 https://github.com/FaithLife-Community/wine.git wine
 git -C wine checkout 9a962f8799c79149af0be85d8d8f7b92951c1cc5
-git -C wine apply /absolute/path/to/opensapi/patches/wine-piper.patch
+git -C wine apply /absolute/path/to/akousousin/patches/wine-piper.patch
 ```
 
 ## 2. Build a desktop Wine runtime
@@ -99,11 +99,11 @@ recorded in `VALIDATION.md`.
 
 ## 3. Build the sample and run the deterministic tests
 
-In the extracted/cloned `opensapi` directory:
+In the extracted/cloned `akousousin` directory:
 
 ```sh
-export WINE_SRC="$HOME/opensapi-test/wine"
-export WINE_BUILD="$HOME/opensapi-test/wine-build"
+export WINE_SRC="$HOME/akousousin-test/wine"
+export WINE_BUILD="$HOME/akousousin-test/wine-build"
 export WINE="$WINE_BUILD/wine"
 export WINEPREFIX="$PWD/build/test-prefix"
 sh scripts/build-probes.sh
@@ -141,12 +141,12 @@ In one terminal, keep Piper running:
 
 ## 5. Register the voice and test real speech
 
-In another terminal, in `opensapi`, set `WINE` as in step 3. Use a new prefix,
+In another terminal, in `akousousin`, set `WINE` as in step 3. Use a new prefix,
 not your Logos prefix:
 
 ```sh
-export WINE="$HOME/opensapi-test/wine-build/wine"
-export WINEPREFIX="$HOME/opensapi-test/piper-prefix"
+export WINE="$HOME/akousousin-test/wine-build/wine"
+export WINEPREFIX="$HOME/akousousin-test/piper-prefix"
 "$WINE" wineboot.exe -u
 python3 scripts/register-voice.py --make-default \
     --config "$PWD/voices/en_US-ljspeech-medium.onnx.json" \
@@ -183,10 +183,10 @@ These paths refer to the previous development environment, not the current
 CI-only cloud setup. The previous workspace used these commands:
 
 ```sh
-cd /workspace/opensapi
+cd /workspace/akousousin
 export PATH=/workspace/.build-tools/root/usr/bin:$PATH
 export WINE=/workspace/build-wine/wine
-export WINEPREFIX=/workspace/opensapi/build/test-prefix-v2
+export WINEPREFIX=/workspace/akousousin/build/test-prefix-v2
 sh scripts/build-probes.sh
 sh scripts/test-wine.sh
 ```

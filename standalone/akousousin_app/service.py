@@ -14,7 +14,7 @@ from . import runtime
 
 
 def command(*args):
-    return [sys.executable, *args] if getattr(sys, 'frozen', False) else [sys.executable, '-m', 'opensapi_app.main', *args]
+    return [sys.executable, *args] if getattr(sys, 'frozen', False) else [sys.executable, '-m', 'akousousin_app.main', *args]
 
 
 class Service:
@@ -33,7 +33,7 @@ class Service:
         try:
             with opener.open(f'http://127.0.0.1:{port}/health', timeout=1) as response:
                 data = json.load(response)
-            return data if data.get('service') == 'opensapi-piper' else None
+            return data if data.get('service') == 'akousousin-piper' else None
         except (OSError, ValueError):
             return None
 
@@ -82,7 +82,7 @@ class Service:
                     return False
                 token = self.control.read_text()
                 request = urllib.request.Request(f'http://127.0.0.1:{port}/shutdown', data=b'',
-                                                  headers={'X-OpenSAPI-Control': token})
+                                                  headers={'X-Akousousin-Control': token})
                 opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
                 with opener.open(request, timeout=5):
                     pass

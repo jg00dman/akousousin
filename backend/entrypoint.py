@@ -1,3 +1,3 @@
-from opensapi_backend.server import main
+from akousousin_backend.server import main
 if __name__ == '__main__':
     main()

@@ -13,8 +13,8 @@ from .settings import lcid
 CLSID = '{EA7A00AB-0FB7-4DEB-81C5-550D854F390F}'
 CLASS = 'HKCU\\Software\\Classes\\CLSID\\' + CLSID
 VOICES = r'HKLM\SOFTWARE\Microsoft\Speech\Voices'
-TOKEN_BASE = VOICES + r'\Tokens\OpenSAPI-Piper-'
-FULL_TOKEN = r'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Speech\Voices\Tokens\OpenSAPI-Piper-'
+TOKEN_BASE = VOICES + r'\Tokens\Akousousin-Piper-'
+FULL_TOKEN = r'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Speech\Voices\Tokens\Akousousin-Piper-'
 
 
 def digest(path):
@@ -57,20 +57,20 @@ class Installer:
             self.wine = wine or shutil.which('wine')
             if not self.wine:
                 raise ValueError('Select the Wine executable or AppImage used by this prefix')
-            self.directory = self.prefix / 'drive_c/Program Files/OpenSAPI'
+            self.directory = self.prefix / 'drive_c/Program Files/Akousousin'
         else:
             if prefix:
                 raise ValueError('--wine-prefix is for Linux; use --install on Windows')
-            self.directory = Path(os.environ['PROGRAMFILES']) / 'OpenSAPI'
+            self.directory = Path(os.environ['PROGRAMFILES']) / 'Akousousin'
         # Wine commonly runs with an administrative token and ignores per-user COM classes.
         # HKLM here belongs exclusively to the selected prefix; Windows keeps per-user registration.
         self.class_key = CLASS.replace('HKCU', 'HKLM', 1) if self.prefix else CLASS
         self.manifest = self.directory / 'install-state.json'
         self.backups = self.directory / 'backups'
         self.state = json.loads(self.manifest.read_text()) if self.manifest.exists() else {
-            'product': 'OpenSAPI', 'version': 1, 'files': {}, 'keys': {}, 'values': [], 'compatibility': False}
-        if self.state.get('product') != 'OpenSAPI':
-            raise ValueError('Installation record does not belong to OpenSAPI')
+            'product': 'Akousousin', 'version': 1, 'files': {}, 'keys': {}, 'values': [], 'compatibility': False}
+        if self.state.get('product') != 'Akousousin':
+            raise ValueError('Installation record does not belong to Akousousin')
 
     def environment(self):
         env = os.environ.copy()
@@ -193,10 +193,10 @@ class Installer:
                     self.remember_value(r'HKCU\Software\Wine\DllOverrides', 'sapi')
                     self.execute('reg.exe', 'add', r'HKCU\Software\Wine\DllOverrides', '/v', 'sapi',
                                  '/t', 'REG_SZ', '/d', 'native,builtin', '/f', '/reg:64')
-            engine = self.directory / 'opensapi-piper.dll'
-            self.put(self.resource / 'opensapi-piper.dll', engine)
+            engine = self.directory / 'akousousin-piper.dll'
+            self.put(self.resource / 'akousousin-piper.dll', engine)
             self.remember_key(self.class_key)
-            engine_path = r'C:\Program Files\OpenSAPI\opensapi-piper.dll' if self.prefix else str(engine)
+            engine_path = r'C:\Program Files\Akousousin\akousousin-piper.dll' if self.prefix else str(engine)
             text = f'[{self.class_key.replace("HKCU", "HKEY_CURRENT_USER").replace("HKLM", "HKEY_LOCAL_MACHINE")}\\InprocServer32]\n@="{quote(engine_path)}"\n"ThreadingModel"="Both"\n\n'
             for identifier, voice in config['voices'].items():
                 if not re.fullmatch('[A-Za-z0-9_-]+', identifier):
@@ -205,7 +205,7 @@ class Installer:
                 self.remember_key(token)
                 language = lcid(voice['language'])
                 text += f'''[{token.replace('HKLM', 'HKEY_LOCAL_MACHINE')}]
-@="{quote(voice['name'] + ' (OpenSAPI)')}"
+@="{quote(voice['name'] + ' (Akousousin)')}"
 "CLSID"="{CLSID}"
 "VoiceID"="{identifier}"
 "SampleRate"=dword:{int(voice['sample_rate']):08x}
@@ -214,15 +214,15 @@ class Installer:
 "RouteLanguages"=dword:00000001
 
 [{token.replace('HKLM', 'HKEY_LOCAL_MACHINE')}\\Attributes]
-"Name"="{quote(voice['name'] + ' (OpenSAPI)')}"
-"Vendor"="OpenSAPI"
+"Name"="{quote(voice['name'] + ' (Akousousin)')}"
+"Vendor"="Akousousin"
 "Language"="{language:x}"
 
 '''
             self.registry(text)
             activation = self.execute(self.windows(self.resource / 'compat-probe.exe'), '--engine', check=False)
             if activation.returncode:
-                raise RuntimeError('Installed OpenSAPI engine could not be activated: ' + activation.stdout + activation.stderr)
+                raise RuntimeError('Installed Akousousin engine could not be activated: ' + activation.stdout + activation.stderr)
             defaults = [(VOICES, 'DefaultDefaultTokenId'), (r'HKCU\SOFTWARE\Microsoft\Speech\Voices', 'DefaultTokenId')] if config['voices'] else []
             for key, name in defaults:
                 self.remember_value(key, name)
@@ -284,5 +284,5 @@ class Installer:
 
     def uninstall(self):
         if not self.manifest.exists():
-            raise ValueError('No OpenSAPI installation record was found in this prefix')
+            raise ValueError('No Akousousin installation record was found in this prefix')
         self.restore()

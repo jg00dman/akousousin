@@ -17,10 +17,10 @@ int main(int argc,char **argv)
         hr=CoCreateInstance(&engine,NULL,CLSCTX_INPROC_SERVER,&IID_IUnknown,(void**)&object);
         if(object)IUnknown_Release(object);
         CoUninitialize();
-        printf("OpenSAPI engine activation: %#lx\n",hr);
+        printf("Akousousin engine activation: %#lx\n",hr);
         return SUCCEEDED(hr)?0:2;
     }
-    swprintf(path,128,L"Software\\OpenSAPI\\Probe-%lu-%lu",GetCurrentProcessId(),GetTickCount());
+    swprintf(path,128,L"Software\\Akousousin\\Probe-%lu-%lu",GetCurrentProcessId(),GetTickCount());
     CoInitializeEx(NULL,COINIT_MULTITHREADED);
     error=RegCreateKeyExW(HKEY_CURRENT_USER,path,0,NULL,0,KEY_ALL_ACCESS,NULL,&key,NULL);
     if(error)return 2;

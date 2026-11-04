@@ -1,4 +1,4 @@
-"""OpenSAPI control panel / installer entry point."""
+"""Akousousin control panel / installer entry point."""
 import argparse
 import multiprocessing
 import sys
@@ -10,7 +10,7 @@ from .install import Installer
 
 def main():
     multiprocessing.freeze_support()
-    parser = argparse.ArgumentParser(description='OpenSAPI — voices for Windows applications and Wine prefixes')
+    parser = argparse.ArgumentParser(description='Akousousin — Neural Voice Engine. SAPI TTS via Piper; Speech Dispatcher and Whisper planned.')
     parser.add_argument('--wine-prefix', type=Path, help='Install into this initialized 64-bit Wine prefix')
     parser.add_argument('--wine', help='Wine executable or AppImage used by this prefix')
     parser.add_argument('--install', action='store_true', help='Install into native Windows')
@@ -25,7 +25,7 @@ def main():
     parser.add_argument('--release-session', metavar='ID', help='Release an application session')
     parser.add_argument('--owner-pid', type=int, help='Process owning the acquired session')
     parser.add_argument('--status', action='store_true')
-    parser.add_argument('--quit', action='store_true', help='Stop Piper and quit OpenSAPI')
+    parser.add_argument('--quit', action='store_true', help='Stop Piper and quit Akousousin')
     parser.add_argument('--controller', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--panel', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--start-server', action='store_true')
@@ -55,13 +55,13 @@ def main():
     if args.uninstall:
         Installer(resources.root(), args.wine_prefix or config['wine_prefix'] or None,
                   args.wine or config['wine'] or None).uninstall()
-        print('OpenSAPI uninstalled; original speech registration and DLLs restored.')
+        print('Akousousin uninstalled; original speech registration and DLLs restored.')
         return
     if args.wine_prefix or args.install or args.install_only:
         manifest = Installer(resources.root(), args.wine_prefix or None, args.wine,
                              args.wine_compat).install(config)
         settings.register(args.settings, args.wine_prefix, args.wine)
-        print(f'OpenSAPI installed. Recovery record: {manifest}')
+        print(f'Akousousin installed. Recovery record: {manifest}')
         if args.install_only and not args.sapi_wav:
             return
     if args.sapi_wav:
@@ -100,5 +100,5 @@ if __name__ == '__main__':
     try:
         main()
     except Exception as error:
-        print(f'OpenSAPI: {error}', file=sys.stderr)
+        print(f'Akousousin: {error}', file=sys.stderr)
         raise SystemExit(1)

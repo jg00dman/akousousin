@@ -2,7 +2,7 @@
 
 This is a prebuilt Wine 11.21 runtime containing the complete
 `FaithLife-Community/wine` `logos-11.21` branch at
-`9a962f8799c79149af0be85d8d8f7b92951c1cc5`, plus the experimental OpenSAPI TTS
+`9a962f8799c79149af0be85d8d8f7b92951c1cc5`, plus the experimental Akousousin TTS
 engine and C sample. See `WINE-SOURCE.md` for all 15 included branch commits. You do not need to compile Wine. Piper and voice models are separate
 downloads and are not included in this release.
 
@@ -17,11 +17,11 @@ Download the `.AppImage`, this file, and `SHA256SUMS`. Verify the downloaded fil
 against its entry in `SHA256SUMS`, then:
 
 ```sh
-chmod +x wine-opensapi-piper-11.21-logos-x86_64.AppImage
-export OPENSAPI_IMAGE="$PWD/wine-opensapi-piper-11.21-logos-x86_64.AppImage"
+chmod +x wine-akousousin-piper-11.21-logos-x86_64.AppImage
+export AKOUSOUSIN_IMAGE="$PWD/wine-akousousin-piper-11.21-logos-x86_64.AppImage"
 export APPIMAGE_EXTRACT_AND_RUN=1
-export WINEPREFIX="$HOME/.wine-opensapi-piper-test"
-"$OPENSAPI_IMAGE" --opensapi-info
+export WINEPREFIX="$HOME/.wine-akousousin-piper-test"
+"$AKOUSOUSIN_IMAGE" --akousousin-info
 ```
 
 Extraction mode avoids requiring FUSE. The alternative `.tar.xz` holds the same
@@ -49,32 +49,32 @@ Shell variables are per terminal. In this second terminal, set them again
 (use the directory containing your downloaded AppImage):
 
 ```sh
-cd ~/opensapi
-export OPENSAPI_IMAGE="$PWD/wine-opensapi-piper-11.21-logos-x86_64.AppImage"
+cd ~/akousousin
+export AKOUSOUSIN_IMAGE="$PWD/wine-akousousin-piper-11.21-logos-x86_64.AppImage"
 export APPIMAGE_EXTRACT_AND_RUN=1
-export WINEPREFIX="$HOME/.wine-opensapi-piper-test"
-test -x "$OPENSAPI_IMAGE" && "$OPENSAPI_IMAGE" --opensapi-info
+export WINEPREFIX="$HOME/.wine-akousousin-piper-test"
+test -x "$AKOUSOUSIN_IMAGE" && "$AKOUSOUSIN_IMAGE" --akousousin-info
 ```
 
 Keep the Piper server running in the first terminal, then:
 
 ```sh
-"$OPENSAPI_IMAGE" --opensapi-register "$PWD/voices/en_US-ljspeech-medium.onnx.json"
-"$OPENSAPI_IMAGE" --opensapi-wav "$PWD/piper-sapi.wav" 'Hello from Wine and Piper.'
-"$OPENSAPI_IMAGE" --opensapi-speak 'Hello from Wine and Piper.'
+"$AKOUSOUSIN_IMAGE" --akousousin-register "$PWD/voices/en_US-ljspeech-medium.onnx.json"
+"$AKOUSOUSIN_IMAGE" --akousousin-wav "$PWD/piper-sapi.wav" 'Hello from Wine and Piper.'
+"$AKOUSOUSIN_IMAGE" --akousousin-speak 'Hello from Wine and Piper.'
 ```
 
 Listen to `piper-sapi.wav` with your normal player as well. If WAV output works
 but live playback is silent, inspect Wine's audio configuration:
 
 ```sh
-"$OPENSAPI_IMAGE" winecfg.exe
+"$AKOUSOUSIN_IMAGE" winecfg.exe
 ```
 
 For diagnostics:
 
 ```sh
-WINEDEBUG=+sapi,+winhttp "$OPENSAPI_IMAGE" --opensapi-wav "$PWD/debug.wav" \
+WINEDEBUG=+sapi,+winhttp "$AKOUSOUSIN_IMAGE" --akousousin-wav "$PWD/debug.wav" \
     'Testing speech output.' >sapi-debug.log 2>&1
 ```
 
@@ -104,7 +104,7 @@ behavior remains a separate test.
 CI runs the 13 deterministic integration tests against both the build-tree Wine
 and the packaged Wine runtime, plus an AppImage extraction/version/registration
 check. CI disables compilation of Wine's unrelated regression test executables;
-this does not disable either OpenSAPI integration run. Dependency setup runs in its own job and is retained as a Docker image in the
+this does not disable either Akousousin integration run. Dependency setup runs in its own job and is retained as a Docker image in the
 repository's Actions cache, keyed by the dependency Dockerfile. The image contains
 only Ubuntu build dependencies; no credentials, Piper or voice models are included.
 It is not uploaded to a public container registry. Change the Dockerfile revision
@@ -135,5 +135,5 @@ remain unsupported. Stop/cancel may be delayed by a synchronous HTTP request.
 
 The matching patched Wine source archive, Piper patch, complete Logos-branch
 diff and `WINE-SOURCE.md` provenance are release assets. The
-OpenSAPI source and test instructions are on the `codex/piper-sapi-prototype`
-branch of https://github.com/jg00dman/opensapi.
+Akousousin source and test instructions are on the `codex/piper-sapi-prototype`
+branch of https://github.com/jg00dman/akousousin.

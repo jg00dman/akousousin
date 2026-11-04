@@ -1,4 +1,4 @@
-name: Standalone OpenSAPI
+name: Standalone Akousousin
 on:
   workflow_dispatch:
     inputs:
@@ -64,14 +64,14 @@ jobs:
         if: always()
         shell: bash
         run: |
-          for log in build/standalone-ci/state/OpenSAPI/opensapi.log build/standalone-ci/appdata/OpenSAPI/opensapi.log; do
+          for log in build/standalone-ci/state/Akousousin/akousousin.log build/standalone-ci/appdata/Akousousin/akousousin.log; do
             if [ -f "$log" ]; then tail -80 "$log"; fi
           done
       - name: Upload packages and diagnostic evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: opensapi-standalone-${{ runner.os }}-${{ github.run_id }}
+          name: akousousin-standalone-${{ runner.os }}-${{ github.run_id }}
           path: |
             standalone-dist/*.AppImage
             standalone-dist/*.zip
@@ -80,8 +80,8 @@ jobs:
             build/standalone-ci/*.log
             build/standalone-ci/*.wav
             build/standalone-ci/*.png
-            build/standalone-ci/state/OpenSAPI/opensapi.log
-            build/standalone-ci/appdata/OpenSAPI/opensapi.log
+            build/standalone-ci/state/Akousousin/akousousin.log
+            build/standalone-ci/appdata/Akousousin/akousousin.log
 
   release:
     if: github.event_name == 'workflow_dispatch' && inputs.publish
@@ -94,7 +94,7 @@ jobs:
         with: {persist-credentials: false}
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          pattern: opensapi-standalone-*
+          pattern: akousousin-standalone-*
           path: release-input
       - name: Prepare checked release assets
         shell: bash
@@ -113,5 +113,5 @@ jobs:
         run: |
           tag="standalone-beta-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           gh release create "$tag" --verify-tag --repo "$GITHUB_REPOSITORY" \
-            --prerelease --title "OpenSAPI standalone beta ${GITHUB_RUN_ID}" \
+            --prerelease --title "Akousousin standalone beta ${GITHUB_RUN_ID}" \
             --notes-file standalone/RELEASE-NOTES.md release-assets/*

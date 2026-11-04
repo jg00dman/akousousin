@@ -124,7 +124,7 @@ def application(synth, model, instance=''):
             if environ['REQUEST_METHOD'] == 'GET' and environ['PATH_INFO'] == '/health':
                 ready = synth.process is not None and synth.process.is_alive()
                 status = '200 OK' if ready else '503 Service Unavailable'
-                body = json.dumps({'service': 'opensapi-piper', 'ready': ready,
+                body = json.dumps({'service': 'akousousin-piper', 'ready': ready,
                                    'model': Path(model).name, 'sample_rate': synth.rate,
                                    'instance': instance}).encode()
             elif environ['REQUEST_METHOD'] == 'POST' and environ['PATH_INFO'] == '/synthesize':

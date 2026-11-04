@@ -2,9 +2,9 @@
 
 ## Current Logos + Piper AppImage CI validation
 
-[Run 41372784570](https://github.com/jg00dman/opensapi/actions/runs/41372784570)
-succeeded for OpenSAPI commit `a43e304c12dc3b612f1a6d3b38fb72846def3bff` and
-published [the Logos + Piper test release](https://github.com/jg00dman/opensapi/releases/tag/piper-test-41372784570-1).
+[Run 41372784570](https://github.com/jg00dman/akousousin/actions/runs/41372784570)
+succeeded for Akousousin commit `a43e304c12dc3b612f1a6d3b38fb72846def3bff` and
+published [the Logos + Piper test release](https://github.com/jg00dman/akousousin/releases/tag/piper-test-41372784570-1).
 
 * The full FaithLife-Community `logos-11.21` tip is pinned at
   `9a962f8799c79149af0be85d8d8f7b92951c1cc5`, including all 15 branch commits.
@@ -37,9 +37,9 @@ stage; the exact command cannot be established from those untraced logs.
 
 ## Earlier Piper-only AppImage CI validation
 
-[Run 41365675371](https://github.com/jg00dman/opensapi/actions/runs/41365675371) succeeded for OpenSAPI commit
+[Run 41365675371](https://github.com/jg00dman/akousousin/actions/runs/41365675371) succeeded for Akousousin commit
 `bc62ec5633e8f73e5f1c5c73b542d69e81d0b121` and published
-[the experimental test release](https://github.com/jg00dman/opensapi/releases/tag/piper-test-41365675371-1). It includes the AppImage, an AppDir
+[the experimental test release](https://github.com/jg00dman/akousousin/releases/tag/piper-test-41365675371-1). It includes the AppImage, an AppDir
 tarball, checksums, matching patched Wine source, the patch, and test instructions.
 
 * All 13 integration tests passed against the build-tree Wine runtime.
@@ -67,11 +67,11 @@ The following records describe the previous headless development environment.
 Its local build paths and installed tools do not describe the current workspace.
 
 The Wine changes are saved locally on `codex/piper-sapi-prototype`, commit
-`b688f135551`. The OpenSAPI repository also carries the complete patch, so its
+`b688f135551`. The Akousousin repository also carries the complete patch, so its
 source backup is sufficient to reproduce the Wine edits at the base below.
-The OpenSAPI branch, including the complete Wine patch and instructions, has now
+The Akousousin branch, including the complete Wine patch and instructions, has now
 been pushed to GitHub. Pushing the Wine branch itself was denied by GitHub; the
-patch in OpenSAPI preserves those changes independently of this cloud workspace.
+patch in Akousousin preserves those changes independently of this cloud workspace.
 
 Validated in this cloud workspace against Wine commit
 `2528aff26208257fdbf980666a4f0e66d47563ce` (11.21), x86-64 Linux, with a
@@ -116,11 +116,11 @@ directory record the targets used. A normal full build supplies those targets.
 This is not a desktop or complete AppImage build.
 
 The successful suite used the marked disposable prefix
-`/workspace/opensapi/build/test-prefix-v2`:
+`/workspace/akousousin/build/test-prefix-v2`:
 
 ```sh
 WINE=/workspace/build-wine/wine \
-WINEPREFIX=/workspace/opensapi/build/test-prefix-v2 \
+WINEPREFIX=/workspace/akousousin/build/test-prefix-v2 \
     sh scripts/test-wine.sh
 ```
 
@@ -145,8 +145,8 @@ test output, without identifying the exact setup command. No upstream PR has bee
 
 ## Deployment beta — 2026-11-02
 
-Run [41391312177](https://github.com/jg00dman/opensapi/actions/runs/41391312177)
-succeeded and published [the deployment beta](https://github.com/jg00dman/opensapi/releases/tag/piper-test-41391312177-1).
+Run [41391312177](https://github.com/jg00dman/akousousin/actions/runs/41391312177)
+succeeded and published [the deployment beta](https://github.com/jg00dman/akousousin/releases/tag/piper-test-41391312177-1).
 Both 13-case original suites and both seven-case failure/recovery suites passed,
 as did both registry enumeration probes and actual AppImage wineserver dispatch.
 The real AppImage plus frozen Piper and bundled voice generated a non-silent
@@ -177,12 +177,12 @@ publish successfully. No repository permission settings were relaxed.
 
 ## WineD3D regression-revert build
 
-Run [41467603154](https://github.com/jg00dman/opensapi/actions/runs/41467603154)
-succeeded and published [the new beta](https://github.com/jg00dman/opensapi/releases/tag/piper-test-41467603154-1).
+Run [41467603154](https://github.com/jg00dman/akousousin/actions/runs/41467603154)
+succeeded and published [the new beta](https://github.com/jg00dman/akousousin/releases/tag/piper-test-41467603154-1).
 Wine is pinned to `3b19eb0e45ac5f57301073fc9e721cac7829dc93`, including both
 new WineD3D reverts (`f9641663888598dbb69265e1ede182deeb9b27bd` and the tip).
 CI reused the compatible previous checkpoint and compilation took 22 seconds.
-The Ubuntu 22.04/x86-64 target and OpenSAPI patch stack are unchanged.
+The Ubuntu 22.04/x86-64 target and Akousousin patch stack are unchanged.
 
 Both 13-case integration suites, both seven-case failure/recovery suites, both
 registry enumeration probes, AppImage wineserver dispatch and real packaged
@@ -190,7 +190,7 @@ Piper synthesis passed. Downloaded asset hashes and the full checksum manifest
 were independently checked against GitHub digests. All 18 files changed by the
 17 Logos branch commits in the source archive match the pinned branch byte for
 byte, including all three WineD3D files changed by the two reverts. The recovery
-patch and all OpenSAPI patches also match the repository copies.
+patch and all Akousousin patches also match the repository copies.
 
 The reported graphics regression still requires the user's Logos desktop test;
 these automated speech checks do not establish its graphics behavior.

@@ -26,12 +26,12 @@ jobs:
       - name: Package binary, voice, licences and corresponding sources
         run: python backend/bundle.py
       - name: Test real synthesis using frozen binary
-        run: python backend/smoke.py backend-dist/opensapi-piper
+        run: python backend/smoke.py backend-dist/akousousin-piper
       - name: Upload package and sources
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: opensapi-backend-${{ github.run_id }}
+          name: akousousin-backend-${{ github.run_id }}
           path: |
             backend-dist/*.tar.xz
             backend-dist/SHA256SUMS
@@ -42,5 +42,5 @@ jobs:
         run: |
           gh release create "piper-backend-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
-            --title 'OpenSAPI Piper backend beta' --notes-file backend/README.md \
+            --title 'Akousousin Piper backend beta' --notes-file backend/README.md \
             backend-dist/*.tar.xz backend-dist/SHA256SUMS

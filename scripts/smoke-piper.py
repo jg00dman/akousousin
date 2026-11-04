@@ -29,10 +29,10 @@ def main():
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--port", type=int, default=5000)
     parser.add_argument("--output-dir", type=Path, default=Path("build/real-piper"))
-    parser.add_argument("--text", default="Hello from OpenSAPI. This is a real Piper speech test.")
+    parser.add_argument("--text", default="Hello from Akousousin. This is a real Piper speech test.")
     args = parser.parse_args()
     rate = json.loads(args.config.read_text())["audio"]["sample_rate"]
-    native = os.environ.get("OPENSAPI_NATIVE_WINDOWS") == "1"
+    native = os.environ.get("AKOUSOUSIN_NATIVE_WINDOWS") == "1"
     wine = os.environ.get("WINE", "")
     if not native and "WINEPREFIX" not in os.environ:
         parser.error("Set WINEPREFIX to the prefix with your registered Piper voice")

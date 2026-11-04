@@ -11,29 +11,29 @@ ROOT = Path(__file__).resolve().parents[1]
 WORK = ROOT / 'build/standalone-ci'
 WORK.mkdir(parents=True, exist_ok=True)
 native = os.name == 'nt'
-package = ROOT / 'build/standalone-package/OpenSAPI'
-executable = package / ('opensapi.exe' if native else 'opensapi')
+package = ROOT / 'build/standalone-package/Akousousin'
+executable = package / ('akousousin.exe' if native else 'akousousin')
 resource = package / 'resources'
 settings_path = WORK / 'settings.json'
 prefix = WORK / 'prefix'
 prefix.mkdir(exist_ok=True)
-(prefix / '.opensapi-test-prefix').touch()
+(prefix / '.akousousin-test-prefix').touch()
 env = os.environ.copy()
 env.update(PYTHONPATH=str(ROOT / 'standalone') + os.pathsep + str(ROOT / 'backend'),
-           OPENSAPI_RESOURCES=str(resource), OPENSAPI_STANDALONE='1',
-           OPENSAPI_CLSID='{EA7A00AB-0FB7-4DEB-81C5-550D854F390F}',
-           OPENSAPI_TOKEN=r'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Speech\Voices\Tokens\OpenSAPI-Piper-en_US-ljspeech-medium',
+           AKOUSOUSIN_RESOURCES=str(resource), AKOUSOUSIN_STANDALONE='1',
+           AKOUSOUSIN_CLSID='{EA7A00AB-0FB7-4DEB-81C5-550D854F390F}',
+           AKOUSOUSIN_TOKEN=r'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Speech\Voices\Tokens\Akousousin-Piper-en_US-ljspeech-medium',
            XDG_STATE_HOME=str(WORK / 'state'), QT_QPA_PLATFORM='offscreen',
            WINEPREFIX=str(prefix), XDG_CONFIG_HOME=str(WORK / 'config'), XDG_DATA_HOME=str(WORK / 'data'))
 if native:
     env['LOCALAPPDATA'] = str(WORK / 'appdata')
-    env['OPENSAPI_NATIVE_WINDOWS'] = '1'
+    env['AKOUSOUSIN_NATIVE_WINDOWS'] = '1'
     originals = {p: hashlib.sha256(p.read_bytes()).hexdigest() for p in [
         Path(os.environ['WINDIR']) / 'System32/sapi.dll',
         Path(os.environ['WINDIR']) / 'System32/Speech/Common/sapi.dll'] if p.exists()}
     install = [str(executable), '--install', '--install-only', '--settings', str(settings_path)]
 else:
-    executable = ROOT / 'standalone-dist/OpenSAPI-x86_64.AppImage'
+    executable = ROOT / 'standalone-dist/Akousousin-x86_64.AppImage'
     os.environ['APPIMAGE_EXTRACT_AND_RUN'] = '1'
     env['APPIMAGE_EXTRACT_AND_RUN'] = '1'
     subprocess.run([str(executable), '--help'], env=env, check=True, timeout=60)
@@ -58,8 +58,8 @@ else:
 # Fresh settings must bootstrap the approved voice from the actual package.
 subprocess.run([str(executable), '--settings', str(settings_path), '--status'], env=env, check=True, timeout=60)
 sys.path[:0] = [str(ROOT / 'standalone'), str(ROOT / 'backend')]
-from opensapi_app import settings
-from opensapi_app.service import Service
+from akousousin_app import settings
+from akousousin_app.service import Service
 config = settings.load(settings_path)
 assert config['voice'] == 'en_US-ljspeech-medium'
 assert Path(config['voices'][config['voice']]['path']).is_file(), 'Bundled default voice was not installed'
@@ -100,11 +100,11 @@ try:
     assert public('--release-session', 'logos-ci')['running'], 'Independent service was stopped by Logos release'
 finally:
     public('--quit')
-assert not (WORK / 'data/OpenSAPI/runtimes').exists(), 'An extracted runtime was retained'
+assert not (WORK / 'data/Akousousin/runtimes').exists(), 'An extracted runtime was retained'
 subprocess.run([str(executable), '--settings', str(settings_path), '--smoke-test'], env=env, check=True, timeout=30)
 if not native:
-    os.environ.update({k: v for k, v in env.items() if k in ('XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'OPENSAPI_RESOURCES')})
-    from opensapi_app.panel import Panel
+    os.environ.update({k: v for k, v in env.items() if k in ('XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'AKOUSOUSIN_RESOURCES')})
+    from akousousin_app.panel import Panel
     from PIL import ImageGrab
     panel = Panel(settings_path)
     panel.root.update()

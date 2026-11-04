@@ -14,7 +14,7 @@ import wave
 root = Path(sys.argv[1]).resolve()
 opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 with (root.parent / 'real-synthesis.log').open('w') as log:
-    process = subprocess.Popen([str(root / 'opensapi-piper'), '--model',
+    process = subprocess.Popen([str(root / 'akousousin-piper'), '--model',
                                 str(root / 'voices/en_US-ljspeech-medium.onnx')],
                                stdout=log, stderr=log, start_new_session=True)
     try:

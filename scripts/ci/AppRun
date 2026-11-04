@@ -3,9 +3,9 @@ set -eu
 app_dir=${APPDIR:-$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)}
 wine_bin="$app_dir/usr/bin/wine"
 export WINESERVER="$app_dir/usr/bin/wineserver"
-export WINEPREFIX="${WINEPREFIX:-$HOME/.wine-opensapi-piper-test}"
+export WINEPREFIX="${WINEPREFIX:-$HOME/.wine-akousousin-piper-test}"
 export WINEDEBUG="${WINEDEBUG:--all}"
-share="$app_dir/usr/share/opensapi"
+share="$app_dir/usr/share/akousousin"
 # OuDedetai invokes the same AppImage through wine/wine64/wineserver symlinks.
 # The type-2 runtime preserves the original invocation name in ARGV0.
 invocation=${ARGV0:-$0}
@@ -13,8 +13,8 @@ case "${invocation##*/}" in
     wineserver) exec "$app_dir/usr/bin/wineserver" "$@" ;;
 esac
 case "${1:-}" in
-    --opensapi-register)
-        [ "$#" -eq 2 ] || { echo 'Usage: AppImage --opensapi-register /absolute/path/voice.onnx.json' >&2; exit 2; }
+    --akousousin-register)
+        [ "$#" -eq 2 ] || { echo 'Usage: AppImage --akousousin-register /absolute/path/voice.onnx.json' >&2; exit 2; }
         config=$(realpath -- "$2")
         registry=$(mktemp --suffix=.reg)
         trap 'rm -f "$registry"' EXIT HUP INT TERM
@@ -26,16 +26,16 @@ case "${1:-}" in
         timeout --signal=TERM --kill-after=10s 60s "$wine_bin" regedit.exe /S "Z:$registry"
         echo "Piper voice registered in $WINEPREFIX (server must run on 127.0.0.1:5000)."
         ;;
-    --opensapi-speak)
-        [ "$#" -eq 2 ] || { echo 'Usage: AppImage --opensapi-speak "Text to speak"' >&2; exit 2; }
+    --akousousin-speak)
+        [ "$#" -eq 2 ] || { echo 'Usage: AppImage --akousousin-speak "Text to speak"' >&2; exit 2; }
         exec "$wine_bin" "$share/sapi-probe.exe" unused.wav 0 100 "$2" play
         ;;
-    --opensapi-wav)
-        [ "$#" -eq 3 ] || { echo 'Usage: AppImage --opensapi-wav /path/output.wav "Text to speak"' >&2; exit 2; }
+    --akousousin-wav)
+        [ "$#" -eq 3 ] || { echo 'Usage: AppImage --akousousin-wav /path/output.wav "Text to speak"' >&2; exit 2; }
         output=$(realpath -m -- "$2")
         exec "$wine_bin" "$share/sapi-probe.exe" "Z:$output" 0 100 "$3"
         ;;
-    --opensapi-info)
+    --akousousin-info)
         cat "$share/BUILD-INFO.txt"
         "$wine_bin" --version
         ;;
