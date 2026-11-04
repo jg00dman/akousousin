@@ -9,6 +9,7 @@ import subprocess
 import tempfile
 
 from .settings import lcid
+from . import runtime, settings
 
 CLSID = '{EA7A00AB-0FB7-4DEB-81C5-550D854F390F}'
 CLASS = 'HKCU\\Software\\Classes\\CLSID\\' + CLSID
@@ -168,7 +169,7 @@ class Installer:
             path.write_text('Windows Registry Editor Version 5.00\n\n' + text, encoding='utf-16')
             self.execute('regedit.exe', '/S', self.windows(path))
 
-    def install(self, config):
+    def install(self, config, settings_path=None):
         if config['voices'] and config['voice'] not in config['voices']:
             raise ValueError('Select an installed voice first')
         self.backups.mkdir(parents=True, exist_ok=True)
@@ -198,6 +199,14 @@ class Installer:
             self.remember_key(self.class_key)
             engine_path = r'C:\Program Files\Akousousin\akousousin-piper.dll' if self.prefix else str(engine)
             text = f'[{self.class_key.replace("HKCU", "HKEY_CURRENT_USER").replace("HKLM", "HKEY_LOCAL_MACHINE")}\\InprocServer32]\n@="{quote(engine_path)}"\n"ThreadingModel"="Both"\n\n'
+            # Store an explicit launcher; never resolve an executable supplied by text
+            # or the HTTP caller. An AppImage must remain at this installed path.
+            invocation = runtime.command('--api-start', '--settings', str(settings_path or settings.config_path()))
+            if self.prefix:
+                invocation = [r'C:\windows\system32\start.exe', '/wait', '/unix', *invocation]
+            launcher = subprocess.list2cmdline(invocation)
+            if len(launcher) >= 4096:
+                raise ValueError('Launcher command is too long')
             for identifier, voice in config['voices'].items():
                 if not re.fullmatch('[A-Za-z0-9_-]+', identifier):
                     raise ValueError('Invalid voice identifier')
@@ -212,6 +221,7 @@ class Installer:
 "Port"=dword:{config['port']:08x}
 "LanguageID"=dword:{language:08x}
 "RouteLanguages"=dword:00000001
+"Launcher"="{quote(launcher)}"
 
 [{token.replace('HKLM', 'HKEY_LOCAL_MACHINE')}\\Attributes]
 "Name"="{quote(voice['name'] + ' (Akousousin)')}"

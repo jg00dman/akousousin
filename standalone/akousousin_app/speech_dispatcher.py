@@ -1,0 +1,241 @@
+"""Speech Dispatcher output-module protocol, with audio returned to its mixer.
+
+No shell commands, independent audio device or global preference changes. Speech
+Dispatcher owns playback, priorities and STOP/PAUSE of its queued audio.
+"""
+import io
+import json
+import logging
+import sys
+import threading
+import urllib.request
+import uuid
+import wave
+
+from . import runtime, settings
+
+MAX_MESSAGE = 65536
+
+
+def chunks(text, limit=240):
+    while len(text) > limit:
+        boundary = max(text.rfind(' ', 40, limit + 1), text.rfind('\n', 40, limit + 1))
+        end = boundary + 1 if boundary >= 40 else limit
+        yield text[:end]
+        text = text[end:]
+    if text:
+        yield text
+
+
+def escaped(pcm):
+    return pcm.replace(b'}', b'}]').replace(b'\n', b'}*')
+
+
+class Module:
+    def __init__(self, path, source=None, output=None):
+        self.path = path
+        self.source = source or sys.stdin.buffer
+        self.output = output or sys.stdout.buffer
+        self.lock = threading.RLock()
+        self.options = {}
+        self.task = None
+        self.cancelled = threading.Event()
+        self.request_id = ''
+        self.audio_server = False
+
+    def send(self, text):
+        with self.lock:
+            self.output.write(text.encode('utf-8'))
+            self.output.flush()
+
+    def block(self):
+        lines, size = [], 0
+        overflow = False
+        while True:
+            line = self.source.readline(MAX_MESSAGE + 1)
+            if not line:
+                raise EOFError
+            if line in (b'.\n', b'.\r\n'):
+                break
+            size += len(line)
+            overflow |= size > MAX_MESSAGE
+            if not overflow:
+                lines.append(line[1:] if line.startswith(b'..') else line)
+        if overflow:
+            raise ValueError('Message too large')
+        return b''.join(lines).decode('utf-8').rstrip('\r\n')
+
+    def parameters(self, command):
+        self.send('207 OK RECEIVING AUDIO SETTINGS\n' if command == 'AUDIO' else '203 OK RECEIVING SETTINGS\n')
+        pending = dict(line.split('=', 1) for line in self.block().splitlines())
+        if command == 'AUDIO':
+            if pending != {'audio_output_method': 'server'}:
+                raise ValueError('Only Speech Dispatcher server audio is supported')
+            self.audio_server = True
+        elif command == 'SET':
+            for key in ('rate', 'volume', 'pitch', 'pitch_range'):
+                if key in pending and not -100 <= int(pending[key]) <= 100:
+                    raise ValueError('Invalid speech parameter')
+            self.options.update(pending)
+        self.send('203 OK SETTINGS RECEIVED\n')
+
+    def stop(self, paused=False):
+        with self.lock:
+            if not self.task or not self.task.is_alive() or self.cancelled.is_set():
+                return
+            self.cancelled.set()
+            self.send('704 PAUSE\n' if paused else '703 STOP\n')
+        # Never wait for an unresponsive backend in the command-reading thread.
+        request_id = self.request_id
+        def cancel():
+            try:
+                config = settings.load(self.path)
+                request = urllib.request.Request(f'http://127.0.0.1:{config["port"]}/cancel',
+                    data=b'', headers={'X-Akousousin-Request': request_id})
+                with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(request, timeout=1):
+                    pass
+            except OSError:
+                pass
+        threading.Thread(target=cancel, daemon=True).start()
+
+    def speak(self, text):
+        with self.lock:
+            if not text.strip() or not self.audio_server or (self.task and self.task.is_alive()):
+                self.send('301 ERROR CANT SPEAK\n')
+                return
+            self.cancelled = threading.Event()
+            self.request_id = uuid.uuid4().hex
+            self.send('200 OK SPEAKING\n')
+            self.task = threading.Thread(target=self.render, args=(text, dict(self.options)), daemon=True)
+            self.task.start()
+
+    def render(self, text, options):
+        try:
+            runtime.call(self.path, {'command': 'wake'})
+            if self.cancelled.is_set():
+                return
+            self.send('701 BEGIN\n')
+            config = settings.load(self.path)
+            voice = options.get('synthesis_voice')
+            if voice in (None, 'NULL'):
+                language = options.get('language', '').replace('-', '_')
+                voice = config['language_voices'].get(language)
+                if not voice:
+                    voice = next((key for key, entry in config['voices'].items()
+                                  if entry['language'].split('_')[0] == language), config['voice'])
+            if voice not in config['voices']:
+                raise ValueError('Voice not installed')
+            rate = int(options.get('rate', 0)) / 100
+            scale = 1 / (1 + rate) if rate >= 0 else 1 - rate
+            for part in chunks(text):
+                if self.cancelled.is_set():
+                    return
+                data = json.dumps({'text': part, 'voice': voice, 'length_scale': scale,
+                                   'volume': (int(options.get('volume', 0)) + 100) / 100,
+                                   'sample_rate': config['voices'][voice]['sample_rate']}).encode()
+                request = urllib.request.Request(f'http://127.0.0.1:{config["port"]}/synthesize', data=data,
+                    headers={'Content-Type': 'application/json', 'X-Akousousin-Request': self.request_id})
+                opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+                with opener.open(request, timeout=65) as response:
+                    audio = response.read(64 * 1024 * 1024 + 1)
+                if len(audio) > 64 * 1024 * 1024:
+                    raise ValueError('Audio too large')
+                with wave.open(io.BytesIO(audio), 'rb') as wav:
+                    if wav.getnchannels() != 1 or wav.getsampwidth() != 2 or wav.getcomptype() != 'NONE':
+                        raise ValueError('Invalid audio format')
+                    pcm = wav.readframes(wav.getnframes())
+                    if not pcm or len(pcm) != wav.getnframes() * 2:
+                        raise ValueError('Truncated audio')
+                    sample_rate = wav.getframerate()
+                for start in range(0, len(pcm), 8192):
+                    block = pcm[start:start + 8192]
+                    with self.lock:
+                        if self.cancelled.is_set():
+                            return
+                        header = (f'705-bits=16\n705-num_channels=1\n705-sample_rate={sample_rate}\n'
+                                  f'705-num_samples={len(block)//2}\n705-big_endian=0\n705-AUDIO').encode()
+                        self.output.write(header + b'\0' + escaped(block) + b'\n705 AUDIO\n')
+                        self.output.flush()
+            with self.lock:
+                if not self.cancelled.is_set():
+                    self.send('702 END\n')
+        except Exception:
+            logging.exception('Speech Dispatcher synthesis failed')
+            with self.lock:
+                if not self.cancelled.is_set():
+                    self.send('703 STOP\n')
+
+    def run(self):
+        if self.source.readline(MAX_MESSAGE) != b'INIT\n':
+            self.send('399 ERR EXPECTED INIT\n')
+            return
+        self.send('299-Akousousin neural voice engine\n299 OK LOADED SUCCESSFULLY\n')
+        try:
+            while True:
+                line = self.source.readline(MAX_MESSAGE + 1)
+                if not line:
+                    return
+                command = line.decode('utf-8').strip()
+                try:
+                    if command in ('SET', 'AUDIO', 'LOGLEVEL'):
+                        self.parameters(command)
+                    elif command in ('SPEAK', 'CHAR', 'KEY', 'SOUND_ICON'):
+                        self.send('202 OK RECEIVING MESSAGE\n')
+                        text = self.block()
+                        if command == 'SOUND_ICON':
+                            self.send('301 ERROR SOUND ICONS UNSUPPORTED\n')
+                        else:
+                            self.speak(' ' if text == 'space' else text)
+                    elif command.startswith('LIST VOICES'):
+                        config = settings.load(self.path)
+                        for key, voice in config['voices'].items():
+                            if any(c in key + voice['language'] for c in '\t\r\n'):
+                                continue
+                            self.send(f'200-{key}\t{voice["language"].replace("_", "-")}\tnone\n')
+                        self.send('200 OK VOICE LIST SENT\n')
+                    elif command in ('STOP', 'PAUSE'):
+                        self.stop(command == 'PAUSE')
+                    elif command == 'QUIT':
+                        self.stop()
+                        self.send('210 OK QUIT\n')
+                        return
+                    elif command.startswith('DEBUG '):
+                        self.send('200 OK DEBUGGING OFF\n')
+                    else:
+                        self.send('300 ERR UNKNOWN COMMAND\n')
+                except (ValueError, UnicodeError):
+                    self.send('303 ERROR INVALID PARAMETER OR VALUE\n')
+        except EOFError:
+            return
+        finally:
+            self.stop()
+
+
+def install(path):
+    """Opt-in user module registration. Preserve all existing dispatcher settings."""
+    import os
+    from pathlib import Path
+    import shlex
+    if os.name == 'nt':
+        raise ValueError('Speech Dispatcher integration is for Linux')
+    launcher = settings.data_path() / 'speech-dispatcher-module'
+    launcher.parent.mkdir(parents=True, exist_ok=True)
+    command = runtime.command('--speech-dispatcher', '--settings', str(Path(path).resolve()))
+    launcher.write_text('#!/bin/sh\nexec ' + shlex.join(command) + '\n', encoding='utf-8')
+    launcher.chmod(0o700)
+    directory = Path(os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config')) / 'speech-dispatcher'
+    directory.mkdir(parents=True, exist_ok=True)
+    config = directory / 'speechd.conf'
+    existing = config.read_text() if config.exists() else ''
+    registration = f'AddModule "akousousin" "{launcher}" ""'
+    if any(c in str(launcher) for c in '\r\n"'):
+        raise ValueError('Unsupported Speech Dispatcher launcher path')
+    lines = existing.splitlines()
+    matches = [line for line in lines if line.lstrip().startswith('AddModule "akousousin"')]
+    if matches and matches != [registration]:
+        raise ValueError('An akousousin module is already configured at a different path')
+    if not matches:
+        temporary = config.with_suffix('.tmp')
+        temporary.write_text(existing + '\n# Akousousin user speech module\n' + registration + '\n', encoding='utf-8')
+        temporary.replace(config)
+    return config

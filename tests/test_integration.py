@@ -109,6 +109,15 @@ class IntegrationTests(unittest.TestCase):
             expected.update(voice='en_US-ljspeech-medium', sample_rate=22050)
         self.assertEqual(Handler.requests[-1], expected)
 
+    def test_long_fragment_is_split_without_losing_text(self):
+        if not os.environ.get('AKOUSOUSIN_STANDALONE'):
+            self.skipTest('Standalone bounded-fragment transport')
+        text = 'A complete sentence with café and 世界. ' * 40
+        output = self.run_probe(direct=True, text=text)
+        self.assertGreater(len(Handler.requests), 1)
+        self.assertEqual(''.join(item['text'] for item in Handler.requests), text)
+        self.assertEqual(output.read_bytes(), PCM * len(Handler.requests))
+
     def test_async_and_rate(self):
         self.run_probe(mode="async", rate=10)
         self.assertEqual(Handler.requests[-1]["length_scale"], 0.5)

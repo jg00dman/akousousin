@@ -7,8 +7,8 @@ on:
         type: boolean
         default: false
   push:
-    branches: [codex/standalone-control-panel]
-    paths: [engine/**, standalone/**, .github/workflows/standalone.yml]
+    branches: [codex/standalone-control-panel, codex/speech-dispatcher-on-demand]
+    paths: [engine/**, standalone/**, backend/**, tests/**, .github/workflows/standalone.yml]
 permissions:
   contents: read
 jobs:
@@ -52,6 +52,10 @@ jobs:
         shell: bash
         run: PYTHONPATH=standalone:backend python -m unittest discover -s standalone/tests -v
         if: runner.os == 'Linux'
+      - name: Backend failure and cancellation tests
+        if: runner.os == 'Linux'
+        shell: bash
+        run: PYTHONPATH=backend python -m unittest discover -s backend/tests -v
       - name: Build package with reviewed LJSpeech starter voice, licences and sources
         run: python standalone/package.py
       - name: Wine installer, COM engine, real speech and panel tests

@@ -13,9 +13,9 @@ not capabilities advertised as available in the current release.
 | Manual book-language selection | Working beta | Tested with German reading in Logos. |
 | Automatic language changes from application hints | Partial / under investigation | SAPI language hints are supported; Logos did not automatically select German in the reported Bible test. No isolated-word language detection. |
 | Failure handling and cancellation | Implemented / tested | Missing voice, backend unavailable/interrupted, malformed audio, server failures, bounded transport and cancellation have automated checks. |
-| Streaming synthesis to reduce initial latency | Planned | The current backend returns complete WAV responses. |
+| Lower first-audio latency | Experimental branch | Long fragments use bounded requests; each response remains a complete WAV. True streaming is not implemented. |
 | Full SAPI pause/resume and stream/word events | Not complete | Current async, rate, volume and cancellation tests do not establish complete SAPI event or pause/resume compatibility. |
-| Speech Dispatcher output module | Next implementation milestone | Native Linux bridge is not implemented yet; requires output-module protocol, cancellation, event and screen-reader tests. |
+| Speech Dispatcher output module | Experimental branch | User module, server-audio protocol, voices, rate/volume and cancellation implemented. Desktop screen-reader validation pending; no SSML/index marks or sound icons. |
 | Whisper local recognition | Planned | No recognition model or microphone capture is currently included. |
 | SAPI speech recognition (`ISpRecognizer`, `ISpRecoContext`) | Planned | Whisper transcription alone will not implement SAPI grammars, recognition contexts or events. |
 | Native Linux dictation integration | Planned | Wayland and X11 text insertion require supported desktop-specific integration. |
@@ -26,3 +26,6 @@ not capabilities advertised as available in the current release.
 Deterministic audio checks exercise protocol and PCM behavior with a substitute
 backend. Real Piper WAV tests establish neural audio generation. Neither is a
 substitute for audible playback and application testing on the user's desktop.
+
+On-demand SAPI startup and configurable idle model unloading are experimental on
+`codex/speech-dispatcher-on-demand`; see [branch testing instructions](standalone/SPEECH-DISPATCHER.md).

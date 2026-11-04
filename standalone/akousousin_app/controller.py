@@ -34,6 +34,8 @@ class Sessions:
                 previous = self.owners.pop(request['session'], None)
                 if previous and not self.owners and not self.independent:
                     self.quit()
+            elif operation == 'wake':
+                self.service.start(port)
             elif operation == 'start':
                 self.service.start(port)
                 self.independent = True
@@ -188,7 +190,7 @@ def run(path):
             config = settings.load(path)
             health = state.service.health(config['port'])
             running = bool(health and health.get('ready'))
-            status = 'Running' if running else 'Stopped'
+            status = 'Idle' if running and health.get('model_loaded') is False else 'Running' if running else 'Stopped'
             if state.service.process is not None and state.service.process.poll() is None and not running:
                 status = 'Starting'
             if state.service.process is not None and state.service.process.poll() not in (None, 0) and not running:
@@ -197,7 +199,7 @@ def run(path):
                 status = 'Error'
             pixmap = QPixmap(str(resources.root() / 'akousousin.png')).scaled(64, 64)
             painter = QPainter(pixmap)
-            painter.setBrush(QColor({'Running': '#20a45b', 'Stopped': '#737b80', 'Starting': '#e3aa26', 'Error': '#bd3838'}[status]))
+            painter.setBrush(QColor({'Idle': '#737b80', 'Running': '#20a45b', 'Stopped': '#737b80', 'Starting': '#e3aa26', 'Error': '#bd3838'}[status]))
             painter.setPen(QPen(QColor('white'), 3))
             painter.drawEllipse(44, 44, 18, 18)
             painter.end()

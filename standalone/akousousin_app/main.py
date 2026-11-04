@@ -24,6 +24,9 @@ def main():
     parser.add_argument('--acquire-session', metavar='ID', help='Start/reuse speech for this application session')
     parser.add_argument('--release-session', metavar='ID', help='Release an application session')
     parser.add_argument('--owner-pid', type=int, help='Process owning the acquired session')
+    parser.add_argument('--api-start', action='store_true', help='Wake speech on demand without pinning a model in memory')
+    parser.add_argument('--install-speech-dispatcher', action='store_true', help='Register the output module in your user Speech Dispatcher configuration')
+    parser.add_argument('--speech-dispatcher', action='store_true', help='Run a Speech Dispatcher output module on stdin/stdout')
     parser.add_argument('--status', action='store_true')
     parser.add_argument('--quit', action='store_true', help='Stop Piper and quit Akousousin')
     parser.add_argument('--controller', action='store_true', help=argparse.SUPPRESS)
@@ -46,7 +49,16 @@ def main():
         from .controller import run
         run(args.settings)
         return
+    if args.speech_dispatcher:
+        from .speech_dispatcher import Module
+        resources.bootstrap(args.settings)
+        Module(args.settings).run()
+        return
     config = resources.bootstrap(args.settings)
+    if args.install_speech_dispatcher:
+        from .speech_dispatcher import install
+        print(f'Module registered in {install(args.settings)}. Restart Speech Dispatcher, then select akousousin.')
+        return
     if args.wine_prefix:
         config['wine_prefix'] = str(args.wine_prefix.expanduser().resolve())
     if args.wine:
@@ -59,7 +71,7 @@ def main():
         return
     if args.wine_prefix or args.install or args.install_only:
         manifest = Installer(resources.root(), args.wine_prefix or None, args.wine,
-                             args.wine_compat).install(config)
+                             args.wine_compat).install(config, args.settings)
         settings.register(args.settings, args.wine_prefix, args.wine)
         print(f'Akousousin installed. Recovery record: {manifest}')
         if args.install_only and not args.sapi_wav:
@@ -75,7 +87,9 @@ def main():
     import json
     import os
     request = None
-    if args.acquire_session:
+    if args.api_start:
+        request = {'command': 'wake'}
+    elif args.acquire_session:
         request = {'command': 'acquire', 'session': args.acquire_session, 'pid': args.owner_pid or os.getppid()}
     elif args.release_session:
         request = {'command': 'release', 'session': args.release_session}

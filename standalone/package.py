@@ -88,6 +88,7 @@ subprocess.run([sys.executable, '-m', 'PyInstaller', '--clean', '--noconfirm', '
 PACKAGE = BUILD / 'Akousousin'
 shutil.copytree(BUILD / 'frozen/akousousin', PACKAGE, dirs_exist_ok=True)
 shutil.copytree(RESOURCE, PACKAGE / 'resources', dirs_exist_ok=True)
+shutil.copy(ROOT / 'standalone/SPEECH-DISPATCHER.md', PACKAGE / 'SPEECH-DISPATCHER.md')
 notices = PACKAGE / 'licenses'
 notices.mkdir(exist_ok=True)
 shutil.copy(ROOT / 'LICENSE', notices / 'Engine-LGPL-2.1.txt')

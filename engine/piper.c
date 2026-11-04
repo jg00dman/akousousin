@@ -44,6 +44,7 @@ struct piper_engine
     ISpObjectToken *token;
     DWORD rate, port;
     WCHAR voice[128];
+    WCHAR launcher[4096];
     DWORD language, route;
 };
 
@@ -174,6 +175,31 @@ static HRESULT socket_ready(SOCKET socket, BOOL write, ISpTTSEngineSite *site, U
     }
 }
 
+static HRESULT wake_backend(struct piper_engine *engine, ISpTTSEngineSite *site)
+{
+    STARTUPINFOW startup = {sizeof(startup)};
+    PROCESS_INFORMATION process;
+    WCHAR command[4096];
+    ULONGLONG deadline = GetTickCount64() + 75000;
+    DWORD status;
+    if (!engine->launcher[0]) return HRESULT_FROM_WIN32(ERROR_WINHTTP_CANNOT_CONNECT);
+    wcscpy(command, engine->launcher); /* CreateProcess may modify its command line. */
+    if (!CreateProcessW(NULL, command, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &startup, &process))
+        return HRESULT_FROM_WIN32(GetLastError());
+    CloseHandle(process.hThread);
+    for (;;)
+    {
+        if (ISpTTSEngineSite_GetActions(site) & SPVES_ABORT)
+        { CloseHandle(process.hProcess); return S_FALSE; }
+        if (WaitForSingleObject(process.hProcess, 50) == WAIT_OBJECT_0) break;
+        if (GetTickCount64() >= deadline)
+        { CloseHandle(process.hProcess); return HRESULT_FROM_WIN32(ERROR_WINHTTP_TIMEOUT); }
+    }
+    GetExitCodeProcess(process.hProcess, &status);
+    CloseHandle(process.hProcess);
+    return status ? HRESULT_FROM_WIN32(ERROR_WINHTTP_CANNOT_CONNECT) : S_OK;
+}
+
 static HRESULT fetch_wav(struct piper_engine *engine, const char *json,
                          ISpTTSEngineSite *site, BYTE **data, DWORD *size)
 {
@@ -186,11 +212,14 @@ static HRESULT fetch_wav(struct piper_engine *engine, const char *json,
     BOOL have_length = FALSE;
     BYTE *buffer = NULL;
     int count, offset, total;
+    BOOL woke = FALSE;
     HRESULT hr = HRESULT_FROM_WIN32(ERROR_WINHTTP_CONNECTION_ERROR);
 
     *data = NULL;
     *size = 0;
     if (WSAStartup(MAKEWORD(2, 2), &winsock)) return hr;
+retry:
+    deadline = GetTickCount64() + 65000;
     if ((socket = WSASocketW(AF_INET, SOCK_STREAM, IPPROTO_TCP, NULL, 0, 0)) == INVALID_SOCKET) goto done;
     {
         u_long nonblocking = 1;
@@ -203,9 +232,18 @@ static HRESULT fetch_wav(struct piper_engine *engine, const char *json,
         WSAGetLastError() != WSAEWOULDBLOCK)
     {
         hr = HRESULT_FROM_WIN32(ERROR_WINHTTP_CANNOT_CONNECT);
-        goto done;
+        goto connect_failed;
     }
-    if ((hr = socket_ready(socket, TRUE, site, GetTickCount64() + 3000)) != S_OK) goto done;
+    if ((hr = socket_ready(socket, TRUE, site, GetTickCount64() + 3000)) != S_OK)
+    {
+connect_failed:
+        if (hr == S_FALSE || woke || !engine->launcher[0]) goto done;
+        closesocket(socket);
+        socket = INVALID_SOCKET;
+        if ((hr = wake_backend(engine, site)) != S_OK) goto done;
+        woke = TRUE;
+        goto retry;
+    }
     total = sprintf(request, "POST /synthesize HTTP/1.0\r\nHost: 127.0.0.1:%lu\r\n"
                     "Content-Type: application/json\r\nContent-Length: %u\r\nConnection: close\r\n\r\n",
                     engine->port, (unsigned int)strlen(json));
@@ -390,15 +428,40 @@ static HRESULT WINAPI engine_Speak(ISpTTSEngine *iface, DWORD flags, REFGUID fmt
         if (!frag->ulTextLen) continue;
         if (!frag->pTextStart) return E_POINTER;
         if (frag->ulTextLen > MAX_TEXT_LENGTH) return E_INVALIDARG;
-        if (FAILED(hr = ISpTTSEngineSite_GetRate(site, &rate))) return hr;
-        if (!(json = make_request(frag, rate, engine))) return E_INVALIDARG;
-        hr = fetch_wav(engine, json, site, &wav, &size);
-        free(json);
-        if (hr != S_OK) return hr == S_FALSE ? S_OK : hr;
-        hr = parse_wav(wav, size, engine->rate, &pcm, &pcm_size);
-        if (SUCCEEDED(hr)) hr = write_pcm(site, pcm, pcm_size, frag->State.Volume);
-        free(wav);
-        if (hr != S_OK) return hr == S_FALSE ? S_OK : hr;
+        {
+            ULONG offset = 0;
+            while (offset < frag->ulTextLen)
+            {
+                SPVTEXTFRAG part = *frag;
+                ULONG length = min(240, frag->ulTextLen - offset), split;
+                /* Prefer sentence/word boundaries. Never split a surrogate pair.
+                 * This bounds first-audio latency without inventing word timings. */
+                if (length < frag->ulTextLen - offset)
+                {
+                    for (split = length; split > 40; split--)
+                        if (frag->pTextStart[offset + split - 1] == ' ' ||
+                            frag->pTextStart[offset + split - 1] == '\n') break;
+                    if (split > 40) length = split;
+                    if (frag->pTextStart[offset + length - 1] >= 0xd800 &&
+                        frag->pTextStart[offset + length - 1] <= 0xdbff) length--;
+                }
+                part.pTextStart += offset;
+                part.ulTextLen = length;
+                part.ulTextSrcOffset += offset;
+                part.pNext = NULL;
+                if (ISpTTSEngineSite_GetActions(site) & SPVES_ABORT) return S_OK;
+                if (FAILED(hr = ISpTTSEngineSite_GetRate(site, &rate))) return hr;
+                if (!(json = make_request(&part, rate, engine))) return E_INVALIDARG;
+                hr = fetch_wav(engine, json, site, &wav, &size);
+                free(json);
+                if (hr != S_OK) return hr == S_FALSE ? S_OK : hr;
+                hr = parse_wav(wav, size, engine->rate, &pcm, &pcm_size);
+                if (SUCCEEDED(hr)) hr = write_pcm(site, pcm, pcm_size, frag->State.Volume);
+                free(wav);
+                if (hr != S_OK) return hr == S_FALSE ? S_OK : hr;
+                offset += length;
+            }
+        }
     }
     return S_OK;
 }
@@ -469,6 +532,9 @@ static HRESULT WINAPI token_SetObjectToken(ISpObjectWithToken *iface, ISpObjectT
                 !(engine->voice[i] >= '0' && engine->voice[i] <= '9') &&
                 engine->voice[i] != '_' && engine->voice[i] != '-')
             { RegCloseKey(key); return E_INVALIDARG; }
+        size = sizeof(engine->launcher);
+        if (RegGetValueW(key,NULL,L"Launcher",RRF_RT_REG_SZ,NULL,engine->launcher,&size))
+            engine->launcher[0] = 0;
         size = sizeof(engine->language);
         RegGetValueW(key,NULL,L"LanguageID",RRF_RT_REG_DWORD,NULL,&engine->language,&size);
         size = sizeof(engine->route);

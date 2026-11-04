@@ -26,11 +26,11 @@ class FakeSynth:
         self.requests = []
         self.closed = False
         self.instances.append(self)
-    def start(self):
+    def start(self, cancelled=None):
         pass
     def close(self):
         self.closed = True
-    def synthesize(self, request):
+    def synthesize(self, request, cancelled=None):
         self.requests.append(request)
         return audio(self.rate)
 
@@ -98,3 +98,31 @@ class RoutingTests(unittest.TestCase):
         env['HTTP_X_AKOUSOUSIN_CONTROL'] = 'private-token'
         app(env, lambda *args: status.append(args[0]))
         self.assertTrue(stopping.wait(1))
+
+    def test_idle_unloads_and_next_request_reloads(self):
+        self.router.synthesize({'text': 'Hello'})
+        previous = self.router.synth
+        self.assertFalse(self.router.expire(self.router.last_activity + 299))
+        self.assertTrue(self.router.expire(self.router.last_activity + 300))
+        self.assertTrue(previous.closed)
+        self.assertIsNone(self.router.synth)
+        self.router.synthesize({'text': 'Again'})
+        self.assertIsNot(self.router.synth, previous)
+
+    def test_idle_can_be_disabled_and_health_does_not_keep_model_alive(self):
+        self.router.start()
+        self.config['idle_timeout'] = 0
+        settings.save(self.path, self.config)
+        self.assertFalse(self.router.expire(self.router.last_activity + 100000))
+        for invalid in (-1, True, 1.5, 86401):
+            with self.assertRaises(ValueError):
+                settings.validate(dict(self.config, idle_timeout=invalid))
+
+    def test_cancel_only_matches_current_request(self):
+        self.router.active_request = 'private-id'
+        self.assertFalse(self.router.cancel('other-client'))
+        self.assertFalse(self.router.cancel(''))
+        self.assertFalse(self.router.cancel(None))
+        self.assertFalse(self.router.cancelled.is_set())
+        self.assertTrue(self.router.cancel('private-id'))
+        self.assertTrue(self.router.cancelled.is_set())

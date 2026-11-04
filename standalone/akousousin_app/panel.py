@@ -77,6 +77,7 @@ class Panel:
         self.noise_w = tk.DoubleVar(value=self.config['noise_w_scale'])
         self.language = tk.StringVar(value=label(self.config['book_language']) if self.config['book_language'] else 'Follow application')
         self.port = tk.IntVar(value=self.config['port'])
+        self.idle_timeout = tk.IntVar(value=self.config['idle_timeout'])
         self.build_overview()
         self.build_library()
         self.build_languages()
@@ -360,6 +361,9 @@ class Panel:
         row = ttk.Frame(frame, style='Card.TFrame'); row.pack(fill='x', pady=8)
         ttk.Label(row, text='Loopback port', style='Card.TLabel').pack(side='left')
         ttk.Spinbox(row, textvariable=self.port, from_=1024, to=65535, width=8).pack(side='right')
+        row = ttk.Frame(frame, style='Card.TFrame'); row.pack(fill='x', pady=8)
+        ttk.Label(row, text='Unload Piper after idle seconds (0 = never)', style='Card.TLabel').pack(side='left')
+        ttk.Spinbox(row, textvariable=self.idle_timeout, from_=0, to=86400, increment=60, width=8).pack(side='right')
         ttk.Label(frame, text='Piper has no general pitch slider. Speed and synthesis variation are supported. A port change requires server restart and reapplying voice registration.',
                   wraplength=780, style='Card.TLabel').pack(anchor='w', pady=12)
         ttk.Button(frame, text='Save settings', command=self.save).pack(anchor='e')
@@ -369,7 +373,7 @@ class Panel:
         try:
             self.config.update(speed=float(self.speed.get()), volume=float(self.volume.get()) / 100,
                                noise_scale=float(self.noise.get()), noise_w_scale=float(self.noise_w.get()),
-                               port=int(self.port.get()), wine_prefix=self.prefix.get(), wine=self.wine.get(),
+                               idle_timeout=int(self.idle_timeout.get()), port=int(self.port.get()), wine_prefix=self.prefix.get(), wine=self.wine.get(),
                                book_language=next((code for code in {v['language'] for v in self.config['voices'].values()}
                                                    if label(code) == self.language.get()), ''))
             settings.save(self.path, self.config)
@@ -386,7 +390,7 @@ class Panel:
         def installed(_):
             settings.register(self.path, prefix, wine)
             self.status.set('Installed. Restart the Windows application to use the new default.')
-        self.worker(lambda: Installer(resources.root(), prefix, wine).install(self.config), installed)
+        self.worker(lambda: Installer(resources.root(), prefix, wine).install(self.config, self.path), installed)
 
     def uninstall(self):
         if not messagebox.askyesno('Uninstall Akousousin', 'Restore original DLLs and speech registration in this installation?'):
