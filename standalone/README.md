@@ -1,5 +1,7 @@
 # OpenSAPI shared speech beta
 
+[Verified beta downloads](https://github.com/jg00dman/opensapi/releases/tag/standalone-beta-41862390574-1) · [Packaged Wine/Windows tests](https://github.com/jg00dman/opensapi/actions/runs/41862390574).
+
 One speech service and configuration per operating-system user. This beta contains
 the standalone 64-bit SAPI engine, control panel, tray and Piper/Waitress backend.
 It includes the reviewed en_US-ljspeech-medium starter voice, its model card,

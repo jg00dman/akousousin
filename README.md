@@ -1,6 +1,6 @@
 # OpenSAPI: Piper speech for Wine (beta)
 
-On `codex/standalone-control-panel`, test the [standalone beta](https://github.com/jg00dman/opensapi/releases/tag/standalone-beta-41712034012-1): a prefix installer, control panel and Piper server, with models kept separate. Read [standalone/README.md](standalone/README.md) for installation, configuration and rollback. This branch contains the prototype and deployable-Piper history; the Wine packages below remain available separately.
+On `codex/standalone-control-panel`, test the [standalone beta](https://github.com/jg00dman/opensapi/releases/tag/standalone-beta-41862390574-1): a shared per-user speech service, tray, control panel and prefix installer, including the reviewed LJSpeech starter voice. Read [standalone/README.md](standalone/README.md) for installation, configuration and rollback. This branch contains the prototype and deployable-Piper history; the Wine packages below remain available separately.
 
 For a step-by-step test session, start with [TESTING.md](TESTING.md).
 
