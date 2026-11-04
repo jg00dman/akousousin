@@ -10,7 +10,11 @@ description = "Local, bounded Piper speech service for Akousousin"
 license = {text = "GPL-3.0-or-later"}
 dependencies = ["piper-tts==1.8.0", "waitress==3.0.2"]
 
+[project.optional-dependencies]
+recognition = ["faster-whisper==1.2.1"]
+
 [project.scripts]
+akousousin-whisper = "akousousin_backend.recognition:main"
 akousousin-piper = "akousousin_backend.server:main"
 
 [tool.setuptools.packages.find]
