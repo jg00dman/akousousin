@@ -8,6 +8,7 @@ import math
 import multiprocessing as mp
 from pathlib import Path
 import threading
+import time
 import wave
 
 MAX_BODY = 65536
@@ -66,7 +67,18 @@ class Synthesizer:
             self.pipe = None
         self.rate = None
 
-    def start(self):
+    def receive(self, timeout, cancelled=None):
+        deadline = time.monotonic() + timeout
+        while True:
+            if cancelled is not None and cancelled.is_set():
+                raise InterruptedError('Synthesis cancelled')
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError('Piper response timed out')
+            if self.pipe.poll(min(.05, remaining)):
+                return self.pipe.recv()
+
+    def start(self, cancelled=None):
         self.close()
         ctx = mp.get_context('spawn')
         self.pipe, child = ctx.Pipe()
@@ -74,26 +86,22 @@ class Synthesizer:
         self.process.start()
         child.close()
         try:
-            if not self.pipe.poll(self.startup_timeout):
-                raise TimeoutError('Piper model loading timed out')
-            ok, self.rate = self.pipe.recv()
+            ok, self.rate = self.receive(self.startup_timeout, cancelled)
             if not ok:
                 raise RuntimeError('Piper model loading failed')
         except BaseException:
             self.close()
             raise
 
-    def synthesize(self, request):
+    def synthesize(self, request, cancelled=None):
         # No unbounded synthesis queue. Health checks can use other WSGI threads.
         if not self.lock.acquire(blocking=False):
             raise BlockingIOError('Piper is busy')
         try:
             if self.process is None or not self.process.is_alive():
-                self.start()
+                self.start(cancelled)
             self.pipe.send(request)
-            if not self.pipe.poll(self.timeout):
-                raise TimeoutError('Piper synthesis timed out')
-            ok, audio = self.pipe.recv()
+            ok, audio = self.receive(self.timeout, cancelled)
             if not ok:
                 raise RuntimeError('Piper synthesis failed')
             # Defend the HTTP boundary as well as validating again inside Wine.

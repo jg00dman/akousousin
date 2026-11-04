@@ -70,3 +70,28 @@ class BackendTests(unittest.TestCase):
     def test_unavailable_health(self):
         self.synth.close()
         self.assertTrue(self.call(path='/health', method='GET')[0].startswith('503'))
+
+    def test_cancel_during_inference_releases_worker_and_allows_retry(self):
+        import threading
+        cancelled = threading.Event()
+        self.synth.timeout = 20
+        timer = threading.Timer(.1, cancelled.set)
+        timer.start()
+        started = time.monotonic()
+        with self.assertRaises(InterruptedError):
+            self.synth.synthesize({'text': 'hang', 'length_scale': 1}, cancelled)
+        timer.join()
+        self.assertLess(time.monotonic() - started, 2)
+        self.assertIsNone(self.synth.process)
+        self.assertTrue(self.synth.synthesize({'text': 'again', 'length_scale': 1}).startswith(b'RIFF'))
+
+    def test_cancel_during_cold_start_is_bounded(self):
+        import threading
+        cancelled = threading.Event()
+        cancelled.set()
+        self.synth.close()
+        started = time.monotonic()
+        with self.assertRaises(InterruptedError):
+            self.synth.start(cancelled)
+        self.assertLess(time.monotonic() - started, 2)
+        self.assertIsNone(self.synth.process)

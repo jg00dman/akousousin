@@ -26,11 +26,11 @@ class FakeSynth:
         self.requests = []
         self.closed = False
         self.instances.append(self)
-    def start(self):
+    def start(self, cancelled=None):
         pass
     def close(self):
         self.closed = True
-    def synthesize(self, request):
+    def synthesize(self, request, cancelled=None):
         self.requests.append(request)
         return audio(self.rate)
 
@@ -98,3 +98,114 @@ class RoutingTests(unittest.TestCase):
         env['HTTP_X_AKOUSOUSIN_CONTROL'] = 'private-token'
         app(env, lambda *args: status.append(args[0]))
         self.assertTrue(stopping.wait(1))
+
+    def test_idle_unloads_and_next_request_reloads(self):
+        self.router.synthesize({'text': 'Hello'})
+        previous = self.router.synth
+        self.assertFalse(self.router.expire(self.router.last_activity + 299))
+        self.assertTrue(self.router.expire(self.router.last_activity + 300))
+        self.assertTrue(previous.closed)
+        self.assertIsNone(self.router.synth)
+        self.router.synthesize({'text': 'Again'})
+        self.assertIsNot(self.router.synth, previous)
+
+    def test_idle_can_be_disabled_and_health_does_not_keep_model_alive(self):
+        self.router.start()
+        self.config['idle_timeout'] = 0
+        settings.save(self.path, self.config)
+        self.assertFalse(self.router.expire(self.router.last_activity + 100000))
+        for invalid in (-1, True, 1.5, 86401):
+            with self.assertRaises(ValueError):
+                settings.validate(dict(self.config, idle_timeout=invalid))
+
+    def test_cancel_only_matches_current_request(self):
+        self.router.active_request = 'private-id'
+        self.assertFalse(self.router.cancel('other-client'))
+        self.assertFalse(self.router.cancel(''))
+        self.assertFalse(self.router.cancel(None))
+        self.assertFalse(self.router.cancelled.is_set())
+        self.assertTrue(self.router.cancel('private-id'))
+        self.assertTrue(self.router.cancelled.is_set())
+
+    def test_idle_poll_does_not_take_speech_lock_before_expiry(self):
+        self.router.start()
+        # Real HTTP dispatch and event-loop maintenance are concurrent. Even an
+        # uncontended maintenance lock can cause a false busy response there.
+        from unittest.mock import Mock
+        self.router.lock = Mock()
+        self.assertFalse(self.router.expire(self.router.last_activity + 1))
+        self.router.lock.acquire.assert_not_called()
+        self.router.lock = threading.RLock()
+
+    def test_http_cancel_interrupts_only_matching_request_and_recovers(self):
+        entered = threading.Event()
+        original = FakeSynth.synthesize
+        def synthesize(synth, request, cancelled=None):
+            if request['text'] == 'wait':
+                entered.set()
+                if not cancelled.wait(2):
+                    raise AssertionError('Cancellation did not arrive')
+                raise InterruptedError('Cancelled')
+            return original(synth, request, cancelled)
+        self.patch_synth = patch.object(FakeSynth, 'synthesize', synthesize)
+        self.patch_synth.start()
+        self.addCleanup(self.patch_synth.stop)
+        app = application(self.router, 'instance')
+        def call(path, identifier, text=''):
+            import json
+            raw = json.dumps({'text': text}).encode()
+            status = []
+            env = {'PATH_INFO': path, 'REQUEST_METHOD': 'POST', 'HTTP_X_AKOUSOUSIN_REQUEST': identifier,
+                   'CONTENT_LENGTH': str(len(raw)), 'wsgi.input': io.BytesIO(raw)}
+            app(env, lambda *args: status.append(args[0]))
+            return status[0]
+        responses = []
+        task = threading.Thread(target=lambda: responses.append(call('/synthesize', 'owner', 'wait')))
+        task.start()
+        self.assertTrue(entered.wait(1))
+        self.assertEqual(call('/cancel', 'someone-else'), '404 Not Found')
+        self.assertEqual(call('/cancel', 'owner'), '200 OK')
+        task.join(2)
+        self.assertFalse(task.is_alive())
+        self.assertEqual(responses, ['409 Conflict'])
+        self.assertEqual(call('/synthesize', 'next-owner', 'again'), '200 OK')
+
+    def test_waiting_caller_cancel_leaves_active_caller_running(self):
+        import time
+        entered, release = threading.Event(), threading.Event()
+        original = FakeSynth.synthesize
+        results = []
+        def blocked(synth, request, cancelled=None):
+            if request['text'] == 'active':
+                entered.set()
+                if not release.wait(3):
+                    raise AssertionError('Active caller was not released')
+                self.assertFalse(cancelled.is_set())
+            return original(synth, request, cancelled)
+        def call(text, identifier):
+            try:
+                self.router.synthesize({'text': text}, identifier)
+                results.append((identifier, 'ok'))
+            except InterruptedError:
+                results.append((identifier, 'cancelled'))
+        with patch.object(FakeSynth, 'synthesize', blocked):
+            active = threading.Thread(target=call, args=('active', 'sapi'))
+            waiting = threading.Thread(target=call, args=('waiting', 'dispatcher'))
+            active.start()
+            self.assertTrue(entered.wait(1))
+            waiting.start()
+            deadline = time.monotonic() + 1
+            queued = False
+            while time.monotonic() < deadline:
+                with self.router.control_lock:
+                    queued = 'dispatcher' in self.router.waiters
+                if queued:
+                    break
+                time.sleep(.01)
+            self.assertTrue(queued)
+            self.assertTrue(self.router.cancel('dispatcher'))
+            waiting.join(1)
+            release.set()
+            active.join(1)
+        self.assertCountEqual(results, [('dispatcher', 'cancelled'), ('sapi', 'ok')])
+        self.router.synthesize({'text': 'recovered'}, 'next')

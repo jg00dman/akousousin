@@ -128,13 +128,22 @@ class FailureTests(unittest.TestCase):
         with socket.socket() as reserve:
             reserve.bind(('127.0.0.1', 0))
             unused = reserve.getsockname()[1]
+            backup = Path(self.temp.name) / 'unavailable-token.reg'
+            win_backup = str(backup) if os.environ.get('AKOUSOUSIN_NATIVE_WINDOWS') else 'Z:' + str(backup)
+            execute_wine('reg.exe', 'export', key, win_backup, '/y', check=True, capture_output=True, timeout=20)
             port(unused)
+            # Automatic startup normally recovers an absent backend. Exercise
+            # failure to recover, without disabling the engine's startup path.
+            if os.environ.get('AKOUSOUSIN_STANDALONE'):
+                execute_wine('reg.exe', 'add', key, '/v', 'Launcher', '/t', 'REG_SZ',
+                             '/d', r'C:\akousousin-missing-launcher.exe', '/f', '/reg:64',
+                             check=True, capture_output=True, timeout=20)
             try:
                 started = time.monotonic()
                 self.assertEqual(self.run_probe(direct=True, fail=True).read_bytes(), b'')
                 self.assertLess(time.monotonic() - started, 5)
             finally:
-                port(5000)
+                execute_wine('regedit.exe', '/S', win_backup, check=True, capture_output=True, timeout=20)
 
     def test_total_timeout_including_trickling_response(self):
         FailureHandler.mode = 'trickle'
