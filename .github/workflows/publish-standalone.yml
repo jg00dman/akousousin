@@ -62,9 +62,10 @@ jobs:
             (cd "$directory" && tr -d '\r' < SHA256SUMS | sha256sum --check -)
             find "$directory" -maxdepth 1 -type f \( -name '*.AppImage' -o -name '*.zip' -o -name '*.tar.gz' \) -exec cp {} release-assets/ \;
           done
-          cp standalone/README.md release-assets/TESTING.md
+          sed 's#../COMPATIBILITY.md#COMPATIBILITY.md#g' standalone/README.md > release-assets/TESTING.md
+          cp COMPATIBILITY.md release-assets/COMPATIBILITY.md
           cp patches/wine-piper.patch release-assets/wine-piper-original.patch
-          (cd release-assets && sha256sum -- *.AppImage *.zip *.tar.gz TESTING.md *.patch > SHA256SUMS)
+          (cd release-assets && sha256sum -- *.AppImage *.zip *.tar.gz TESTING.md COMPATIBILITY.md *.patch > SHA256SUMS)
       - name: Publish unique beta without overwriting existing releases
         env:
           GH_TOKEN: ${{ github.token }}

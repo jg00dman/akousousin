@@ -4,6 +4,7 @@ import ast
 import hashlib
 import importlib.metadata
 import json
+import os
 from pathlib import Path
 import platform
 import shutil
@@ -50,7 +51,8 @@ with tempfile.TemporaryDirectory(dir=BUILD) as temporary:
     shutil.copytree(Path(voice['path']).parent, RESOURCE / 'voices', dirs_exist_ok=True)
 
 if sys.platform != 'win32':
-    published = 'https://github.com/jg00dman/akousousin/releases/download/wine-compat-11.21-3b19eb0e45ac/'
+    repository = os.environ.get('GITHUB_REPOSITORY', 'jg00dman/akousousin')
+    published = f'https://github.com/{repository}/releases/download/wine-compat-11.21-3b19eb0e45ac/'
     runtime = CACHE / 'wine-runtime.tar.xz'
     fetch(published + 'wine-runtime-11.21-logos-x86_64.tar.xz', runtime,
           'e9e2559bbf34348d1cc9a5cf15530fd62b7075281959f3893fc8be897e783de1')
@@ -130,7 +132,7 @@ for file in PACKAGE.rglob('*'):
                            file.name.startswith(('libQt6Pdf', 'Qt6Pdf'))):
         file.unlink()
 
-shutil.copy(ROOT / 'standalone/README.md', PACKAGE / 'README.md')
+(PACKAGE / 'README.md').write_text((ROOT / 'standalone/README.md').read_text(encoding='utf-8').replace('../COMPATIBILITY.md', 'COMPATIBILITY.md'), encoding='utf-8')
 shutil.copy(ROOT / 'COMPATIBILITY.md', PACKAGE / 'COMPATIBILITY.md')
 # ONNX Runtime ships unused demonstration graphs; they are not required for inference.
 for sample in (PACKAGE / '_internal/onnxruntime/datasets').glob('*.onnx'):
