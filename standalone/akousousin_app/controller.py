@@ -16,6 +16,7 @@ class Sessions:
         self.service = Service(path)
         self.owners = {}
         self.independent = False
+        self.on_demand = False
         self.closed = False
         self.error = None
         self.lock = threading.RLock()
@@ -23,7 +24,7 @@ class Sessions:
     def request(self, request):
         with self.lock:
             operation = request['command']
-            if operation in ('start', 'acquire', 'stop'):
+            if operation in ('start', 'acquire', 'stop', 'wake'):
                 self.error = None
             port = settings.load(self.path)['port']
             if operation == 'acquire':
@@ -32,10 +33,11 @@ class Sessions:
                 self.owners[request['session']] = (owner.pid, owner.create_time())
             elif operation == 'release':
                 previous = self.owners.pop(request['session'], None)
-                if previous and not self.owners and not self.independent:
+                if previous and not self.owners and not self.independent and not self.on_demand:
                     self.quit()
             elif operation == 'wake':
                 self.service.start(port)
+                self.on_demand = True
             elif operation == 'start':
                 self.service.start(port)
                 self.independent = True

@@ -66,6 +66,9 @@ with (work / 'daemon.log').open('wb') as log:
                 assert 200 <= code < 300, result
                 return result
         def event(wanted):
+            if wanted in events:
+                events.remove(wanted)
+                return
             deadline = time.monotonic() + 90
             while time.monotonic() < deadline:
                 code, result = response()
@@ -81,13 +84,14 @@ with (work / 'daemon.log').open('wb') as log:
         command('SPEAK')
         command('Akousousin is speaking through the real Speech Dispatcher daemon.\r\n.')
         event(702)
+        events.clear()
         command('SPEAK')
         command(('This speech will be cancelled. ' * 80) + '\r\n.')
         event(701)
         command('STOP SELF')
-        if 703 not in events:
-            event(703)
+        event(703)
         # The next utterance must still work after interruption.
+        events.clear()
         command('SPEAK')
         command('Speech recovered after cancellation.\r\n.')
         event(702)

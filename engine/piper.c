@@ -483,10 +483,21 @@ static HRESULT WINAPI engine_Speak(ISpTTSEngine *iface, DWORD flags, REFGUID fmt
                  * This bounds first-audio latency without inventing word timings. */
                 if (length < frag->ulTextLen - offset)
                 {
-                    for (split = length; split > 40; split--)
-                        if (frag->pTextStart[offset + split - 1] == ' ' ||
-                            frag->pTextStart[offset + split - 1] == '\n') break;
-                    if (split > 40) length = split;
+                    ULONG sentence = 0;
+                    for (split = 40; split < length; split++)
+                        if ((frag->pTextStart[offset + split - 1] == '.' ||
+                             frag->pTextStart[offset + split - 1] == '!' ||
+                             frag->pTextStart[offset + split - 1] == '?') &&
+                            (frag->pTextStart[offset + split] == ' ' || frag->pTextStart[offset + split] == '\n'))
+                        { sentence = split + 1; break; }
+                    if (sentence) length = sentence;
+                    else
+                    {
+                        for (split = length; split > 40; split--)
+                            if (frag->pTextStart[offset + split - 1] == ' ' ||
+                                frag->pTextStart[offset + split - 1] == '\n') break;
+                        if (split > 40) length = split;
+                    }
                     if (frag->pTextStart[offset + length - 1] >= 0xd800 &&
                         frag->pTextStart[offset + length - 1] <= 0xdbff) length--;
                 }

@@ -68,3 +68,13 @@ class SessionsTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'Missing model'):
             self.acquire('logos')
         self.assertEqual(self.state.owners, {})
+
+    def test_dispatcher_wake_survives_another_app_releasing_its_session(self):
+        self.acquire('logos')
+        self.state.request({'command': 'wake'})
+        self.state.request({'command': 'release', 'session': 'logos'})
+        self.state.service.stop.assert_not_called()
+        self.assertFalse(self.state.closed)
+        self.assertFalse(self.state.independent)
+        self.state.request({'command': 'quit'})
+        self.state.service.stop.assert_called_once()

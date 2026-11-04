@@ -6,6 +6,7 @@ Dispatcher owns playback, priorities and STOP/PAUSE of its queued audio.
 import io
 import json
 import logging
+import re
 import sys
 import threading
 import time
@@ -22,8 +23,9 @@ MAX_MESSAGE = 65536
 
 def chunks(text, limit=240):
     while len(text) > limit:
-        boundary = max(text.rfind(' ', 40, limit + 1), text.rfind('\n', 40, limit + 1))
-        end = boundary + 1 if boundary >= 40 else limit
+        sentence = re.search(r'[.!?]\s', text[39:limit])
+        boundary = max(text.rfind(' ', 40, limit), text.rfind('\n', 40, limit))
+        end = 39 + sentence.end() if sentence else boundary + 1 if boundary >= 40 else limit
         yield text[:end]
         text = text[end:]
     if text:
