@@ -32,6 +32,8 @@ class VoiceInput:
         self.local_error = False
         self.shared_polling = False
         self.shared_busy = False
+        self.operation_lock = threading.Lock()
+        self.action_cancelled = threading.Event()
         self.last_sequence = 0
         self.latest_text = ''
         self.beep = tk.BooleanVar(value=config.get('stt_beep', True))
@@ -99,6 +101,7 @@ class VoiceInput:
             return
         self.busy = True
         self.local_error = False
+        self.action_cancelled = threading.Event()
         self.combo.configure(state='disabled')
         for button in self.buttons:
             button.configure(state='disabled')
@@ -124,8 +127,7 @@ class VoiceInput:
 
     def ensure_ready(self, model, source=None):
         self.ensure_model(model, source)
-        if not self.closed:
-            runtime.call(self.panel.path, {'command': 'stt-prepare'})
+        self.start_command({'command': 'stt-prepare'})
 
     def prepare(self):
         model, *_ = self.save()
@@ -137,11 +139,21 @@ class VoiceInput:
         if folder:
             self.run(lambda: self.ensure_ready(model, Path(folder)))
 
+    def start_command(self, request):
+        # Serialize start/cancel RPCs as well as cancelling pending local setup.
+        # Cancel during a slow model import must not start a mic afterwards.
+        with self.operation_lock:
+            if not self.closed and not self.action_cancelled.is_set():
+                return runtime.call(self.panel.path, request)
+
     def command(self, command):
+        if command in ('stt-cancel', 'stt-finish', 'stt-unload', 'stt-desktop-disable'):
+            self.action_cancelled.set()
         self.save()
         def task():
             try:
-                runtime.call(self.panel.path, {'command': command}, launch=False)
+                with self.operation_lock:
+                    runtime.call(self.panel.path, {'command': command}, launch=False)
             except Exception as error:
                 self.events.put(('control-error', str(error)))
         threading.Thread(target=task, daemon=True).start()
@@ -153,15 +165,14 @@ class VoiceInput:
         model, *_ = self.save()
         def task():
             self.ensure_model(model)
-            runtime.call(self.panel.path, {'command': 'stt-desktop-enable'})
+            self.start_command({'command': 'stt-desktop-enable'})
         self.run(task)
 
     def record(self):
         model, *_ = self.save()
         def task():
             self.ensure_model(model)
-            if not self.closed:
-                runtime.call(self.panel.path, {'command': 'stt-start', 'seconds': 10})
+            self.start_command({'command': 'stt-start', 'seconds': 10})
         self.run(task)
 
     def copy(self):

@@ -1,5 +1,6 @@
 """Panel actions use the shared controller; closing the panel leaves it running."""
 import queue
+import threading
 from pathlib import Path
 import unittest
 from unittest.mock import Mock, patch
@@ -11,6 +12,8 @@ class VoiceInputTests(unittest.TestCase):
         page = VoiceInput.__new__(VoiceInput)
         page.closed = False
         page.events = queue.Queue()
+        page.operation_lock = threading.Lock()
+        page.action_cancelled = threading.Event()
         page.panel = Mock(path=Path('/test/settings.json'))
         page.save = lambda: ('small', None, None, False)
         page.run = lambda task: task()
@@ -42,3 +45,10 @@ class VoiceInputTests(unittest.TestCase):
         page.last_sequence = 0
         page.shared({'busy': False, 'state': 'Not loaded', 'desktop': {'state': 'Disabled'}, 'sequence': 0})
         page.state.set.assert_not_called()
+
+    def test_cancel_during_model_import_prevents_late_recording(self):
+        page = self.page()
+        page.ensure_model.side_effect = lambda model: page.action_cancelled.set()
+        with patch('akousousin_app.voice_input.runtime.call') as call:
+            page.record()
+            call.assert_not_called()
