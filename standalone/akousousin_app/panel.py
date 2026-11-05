@@ -407,7 +407,7 @@ class Panel:
             if self.save():
                 self.updating = True
                 self.update_status.set('Downloading and installing update…')
-                self.worker(lambda: updates.install(update, self.path), lambda _: self.root.destroy())
+                self.worker(lambda: updates.install(update, self.path), lambda _: self.root.after_idle(self.root.destroy))
         self.worker(updates.check, checked)
 
     def save(self):

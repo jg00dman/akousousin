@@ -133,6 +133,14 @@ def _install(update, path, target):
         replaced = True
         subprocess.run([str(target), '--settings', str(path), '--refresh-registrations'],
                        env=env, capture_output=True, text=True, check=True, timeout=180)
+        # A native client may have woken the old resident during replacement.
+        # After the path swap, every subsequent cold start loads the new image.
+        runtime.call(path, {'command': 'quit'}, launch=False)
+        deadline = time.monotonic() + 10
+        while runtime.call(path, {'command': 'status'}, launch=False) is not None:
+            if time.monotonic() >= deadline:
+                raise RuntimeError('Speech has not stopped for the updated application restart')
+            time.sleep(.1)
         subprocess.Popen([str(target), '--settings', str(path), '--configure'], env=env,
                          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return backup
