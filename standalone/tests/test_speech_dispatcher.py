@@ -168,3 +168,38 @@ class DispatcherTests(unittest.TestCase):
         text = accessible_text('a@b.', {'punctuation_mode': 'most'})
         self.assertIn('at', text)
         self.assertTrue(text.endswith('.'))
+
+
+    @patch('subprocess.run')
+    def test_configure_restarts_only_after_install_or_removal(self, run):
+        from akousousin_app.speech_dispatcher import configure
+        with patch.dict('os.environ', {'XDG_CONFIG_HOME': str(self.root / 'config'),
+                                      'XDG_DATA_HOME': str(self.root / 'data')}):
+            launcher = self.root / 'data/Akousousin/speech-dispatcher-module'
+            for remove in (False, True):
+                def restarted(command, **kwargs):
+                    self.assertEqual(launcher.exists(), not remove)
+                    self.assertIn('--user', command)
+                run.side_effect = restarted
+                configure(self.path, remove=remove)
+                self.assertEqual(run.call_args_list[-2].args[0][2], 'restart')
+                self.assertEqual(run.call_args_list[-1].args[0][2], 'is-active')
+
+    @patch('subprocess.run')
+    def test_restart_failure_reports_saved_registration(self, run):
+        import subprocess
+        from akousousin_app.speech_dispatcher import configure
+        run.side_effect = subprocess.CalledProcessError(1, 'systemctl', stderr='No user bus')
+        with patch.dict('os.environ', {'XDG_CONFIG_HOME': str(self.root / 'config'),
+                                      'XDG_DATA_HOME': str(self.root / 'data')}):
+            with self.assertRaisesRegex(RuntimeError, 'Registration saved;.*No user bus'):
+                configure(self.path)
+            self.assertTrue((self.root / 'data/Akousousin/speech-dispatcher-module').exists())
+
+    @patch('subprocess.run')
+    def test_registration_failure_does_not_restart(self, run):
+        from akousousin_app.speech_dispatcher import configure
+        with patch('akousousin_app.speech_dispatcher.install', side_effect=ValueError('Conflict')):
+            with self.assertRaises(ValueError):
+                configure(self.path)
+        run.assert_not_called()

@@ -15,7 +15,13 @@ work = settings_path.parent / 'speech-dispatcher'
 work.mkdir(parents=True, exist_ok=True)
 logs = work / 'logs'
 logs.mkdir(exist_ok=True)
-subprocess.run([str(executable), '--settings', str(settings_path), '--install-speech-dispatcher'], check=True, timeout=45)
+installed = subprocess.run([str(executable), '--settings', str(settings_path), '--install-speech-dispatcher'],
+                           capture_output=True, text=True, timeout=45)
+# Hosted CI has no systemd user session. Registration must still be saved, and
+# only that explicit restart failure is acceptable before our isolated daemon test.
+if installed.returncode:
+    assert 'Registration saved; Speech Dispatcher could not be restarted.' in installed.stderr, installed.stderr
+    print('Expected headless user-service restart failure:', installed.stderr, flush=True)
 launcher = Path(os.environ['XDG_DATA_HOME']) / 'Akousousin/speech-dispatcher-module'
 sockpath = work / 'socket'
 (work / 'speechd.conf').write_text(f'''LogLevel 5

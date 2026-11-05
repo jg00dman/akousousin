@@ -355,7 +355,7 @@ class Panel:
         ttk.Button(frame, text='Uninstall & restore', command=self.uninstall).pack(side='left', padx=4)
         if os.name != 'nt':
             frame = self.card(page, 'Native Linux speech — Speech Dispatcher')
-            ttk.Label(frame, text='Install your distribution’s Speech Dispatcher first. Registration preserves your default module. Restart Speech Dispatcher, then choose akousousin in Orca.',
+            ttk.Label(frame, text='Install your distribution’s Speech Dispatcher first. Registration preserves your default module. Installing or removing support restarts your user Speech Dispatcher and interrupts current speech. Then choose your voice in Orca.',
                       wraplength=780, style='Card.TLabel').pack(anchor='w', pady=8)
             ttk.Button(frame, text='Install Speech Dispatcher support', command=lambda: self.dispatcher_install(False)).pack(side='left', padx=4)
             ttk.Button(frame, text='Remove Speech Dispatcher support', command=lambda: self.dispatcher_install(True)).pack(side='left', padx=4)
@@ -390,11 +390,11 @@ class Panel:
             return False
 
     def dispatcher_install(self, remove):
-        from .speech_dispatcher import install, uninstall
+        from .speech_dispatcher import configure
         if not self.save():
             return
-        self.worker(lambda: (uninstall if remove else install)(self.path),
-                    lambda _: self.status.set('Speech Dispatcher support ' + ('removed.' if remove else 'installed.') + ' Restart Speech Dispatcher.'))
+        self.worker(lambda: configure(self.path, remove=remove),
+                    lambda _: self.status.set('Speech Dispatcher support ' + ('removed.' if remove else 'installed.') + ' Speech Dispatcher restarted.'))
 
     def install(self):
         if not self.save():

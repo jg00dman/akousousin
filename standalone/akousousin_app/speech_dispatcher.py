@@ -357,3 +357,21 @@ def uninstall(path):
         temporary.replace(config)
     launcher.unlink(missing_ok=True)
     return config
+
+
+def configure(path, remove=False):
+    """Save registration first; restart only this user's systemd service last."""
+    import subprocess
+    config = (uninstall if remove else install)(path)
+    try:
+        subprocess.run(['systemctl', '--user', 'restart', 'speech-dispatcher.service'],
+                       check=True, capture_output=True, text=True, timeout=20)
+        subprocess.run(['systemctl', '--user', 'is-active', '--quiet', 'speech-dispatcher.service'],
+                       check=True, capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.SubprocessError) as error:
+        detail = getattr(error, 'stderr', '') or str(error)
+        if isinstance(detail, bytes):
+            detail = detail.decode(errors='replace')
+        raise RuntimeError('Registration saved; Speech Dispatcher could not be restarted. '
+                           'Restart your user Speech Dispatcher manually. ' + detail.strip()) from error
+    return config

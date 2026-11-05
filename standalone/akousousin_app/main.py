@@ -57,12 +57,12 @@ def main():
         return
     config = resources.bootstrap(args.settings)
     if args.uninstall_speech_dispatcher:
-        from .speech_dispatcher import uninstall
-        print(f'Module removed from {uninstall(args.settings)}. Restart Speech Dispatcher.')
+        from .speech_dispatcher import configure
+        print(f'Module removed from {configure(args.settings, remove=True)}. Speech Dispatcher restarted.')
         return
     if args.install_speech_dispatcher:
-        from .speech_dispatcher import install
-        print(f'Module registered in {install(args.settings)}. Restart Speech Dispatcher, then select akousousin.')
+        from .speech_dispatcher import configure
+        print(f'Module registered in {configure(args.settings)}. Speech Dispatcher restarted; select akousousin.')
         return
     if args.wine_prefix:
         config['wine_prefix'] = str(args.wine_prefix.expanduser().resolve())

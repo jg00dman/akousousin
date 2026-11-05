@@ -42,7 +42,8 @@ its permanent location, then run:
 This creates a user-owned launcher in `$XDG_DATA_HOME/Akousousin` (normally
 `~/.local/share/Akousousin`) and adds an `AddModule` entry to your user
 `$XDG_CONFIG_HOME/speech-dispatcher/speechd.conf`. Existing settings and the default
-output module are preserved. Restart your user Speech Dispatcher service, then:
+output module are preserved. Installation restarts your systemd user Speech
+Dispatcher service as its final step and verifies it is active, then:
 
 ```sh
 spd-say -o akousousin -w 'Testing Akousousin through Speech Dispatcher.'
@@ -66,7 +67,8 @@ one caller must not stop another caller's synthesis. Synthesis sharing is bounde
 
 To remove module registration, remove the `AddModule "akousousin"` line from your
 user speechd.conf and delete `~/.local/share/Akousousin/speech-dispatcher-module`.
-Restart Speech Dispatcher. This leaves other modules and Akousousin settings intact.
+Use the Remove button or `--uninstall-speech-dispatcher` to restart the user
+service after removal. Other modules and Akousousin settings are retained.
 
 ## Validation
 
@@ -85,7 +87,9 @@ Dispatcher tag `0.12.1`.
 
 Settings provides Install/Remove Speech Dispatcher support. Removal is also
 available with `--uninstall-speech-dispatcher`. Other modules and the default
-module are preserved. Restart the user dispatcher after registration changes.
+module are preserved. Install/remove restarts the systemd user dispatcher as the final step. Current
+speech is interrupted. If the user service is unavailable or fails, the app reports
+that registration was saved and a manual restart is needed.
 
 Voice library, default voice, language override, speed and volume are shared
 across SAPI and native clients. The stored `book_language` key remains for
@@ -109,7 +113,7 @@ Each interface owns its playback; no cross-interface ducking is introduced.
 Keep the working AppImage and eSpeak configuration available for rollback.
 
 1. Place the candidate AppImage at its permanent path. Install Speech Dispatcher
-   support in Settings, restart the user dispatcher, and run the `spd-say` tests
+   support in Settings, wait for the automatic restart, and run the `spd-say` tests
    above. Choose akousousin in Orca's speech settings.
 2. Navigate a document and menus. Check characters, keys, capitals, spaces,
    punctuation and Unicode. Start Say All, interrupt by navigating, and verify
