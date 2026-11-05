@@ -1,8 +1,9 @@
 # Desktop dictation development
 
-This increment moves recognition into the per-user controller and implements KDE
-Wayland shortcut dictation. It is experimental: state, protocol, capture-pipe and
-real-model tests do not establish live KDE/portal compatibility.
+Recognition belongs to the per-user controller, with KDE Wayland shortcut
+dictation and temporary portal/KWin sessions. It remains experimental: automated
+state, protocol, capture-pipe and real-model tests complement the limited desktop
+acceptance recorded below.
 
 ## Use in a recognition-enabled build
 

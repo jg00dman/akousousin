@@ -11,7 +11,7 @@ on:
         type: boolean
         default: false
   push:
-    branches: [whisper, codex/standalone-control-panel, codex/speech-dispatcher-on-demand, codex/linux-speech-dispatcher, codex/control-panel-updates]
+    branches: [main, whisper, codex/standalone-control-panel, codex/speech-dispatcher-on-demand, codex/linux-speech-dispatcher, codex/control-panel-updates]
     paths: [engine/**, standalone/**, backend/**, tests/**, .github/workflows/standalone.yml]
 permissions:
   contents: read
@@ -93,7 +93,7 @@ jobs:
         if: runner.os == 'Linux'
         run: xvfb-run -a python standalone/ci_smoke.py
       - name: Real Whisper inference from the packaged application
-        if: runner.os == 'Linux' && github.ref == 'refs/heads/whisper'
+        if: runner.os == 'Linux' && (github.ref == 'refs/heads/whisper' || github.ref == 'refs/heads/main')
         env:
           APPIMAGE_EXTRACT_AND_RUN: '1'
         run: |
@@ -159,7 +159,7 @@ jobs:
             build/standalone-ci/appdata/Akousousin/akousousin.log
 
   release:
-    if: github.ref != 'refs/heads/whisper' && github.event_name == 'workflow_dispatch' && inputs.publish
+    if: github.ref != 'refs/heads/whisper' && ((github.event_name == 'workflow_dispatch' && inputs.publish) || (github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[publish beta]')))
     needs: [engine, package]
     runs-on: ubuntu-22.04
     permissions:

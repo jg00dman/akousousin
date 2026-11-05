@@ -1,3 +1,8 @@
+> **Historical CLI-only snapshot, superseded by the main AppImage beta.** The
+> instructions and glibc requirement below describe that older standalone archive.
+> Use the [current Voice Input guide](PANEL-TESTING.md) for the AppImage, control
+> panel and KDE Wayland dictation. Its Linux target is glibc 2.35+.
+
 # Akousousin Whisper — experimental Linux test build
 
 This snapshot contains command-line recognition, not SAPI recognition or hotkey
@@ -65,7 +70,7 @@ Known limits: fixed-duration capture (1–30 seconds), two CPU inference threads
 no device recovery, no global hotkey, no SAPI recognizer, no automatic document
 language tagging, no AKS speech suppression. Linux only; no Windows build is
 claimed. Actual human-microphone accuracy and fifth-generation i5 performance
-remain to be measured. See VALIDATION.md for earlier backend test evidence.
+remain to be measured. See the current Voice Input guide and repository CI for subsequent test evidence.
 
 Uninstall the program by deleting this extracted directory. Downloaded models
 remain in the shared data directory until you remove them yourself. Build provenance is in build.json;

@@ -2,8 +2,9 @@
 
 **akousousin:** *The unified neural speech engine for Linux, implementing Microsoft SAPI and Speech Dispatcher, based on Piper and Whisper.*
 
-This describes the project vision. The current beta implements SAPI text-to-speech
-using Piper; Speech Dispatcher and Whisper recognition are planned. See the
+The 0.6.0b3 beta implements SAPI text-to-speech using Piper, native Linux Speech
+Dispatcher output and experimental local Whisper voice input on Linux. SAPI
+recognition and native Windows microphone capture are not implemented. See the
 [compatibility table](../COMPATIBILITY.md) for the implemented capabilities.
 
 
@@ -23,7 +24,9 @@ The Ubuntu 22.04 / x86-64 / glibc 2.35+ build target is unchanged.
 
 - Preferences: `~/.config/Akousousin/settings.json`.
 - Downloaded voices: `~/.local/share/Akousousin/voices/`.
-- Imported models remain in the location you explicitly select.
+- Whisper models: `~/.local/share/Akousousin/models/whisper/`, retained between upgrades.
+- Imported Piper models remain in the location you explicitly select. Whisper
+  imports are copied into the persistent Whisper cache.
 - Logs: `~/.local/state/Akousousin/akousousin.log`.
 - Private session/socket/control files: `$XDG_RUNTIME_DIR/Akousousin/`, with a
   private `/tmp/akousousin-<uid>/Akousousin/` fallback when no runtime directory exists.
@@ -54,12 +57,16 @@ playback. Next test Logos Read Aloud using the same Wine package.
 
 The original Akousousin waveform artwork is shared by the AppImage, window and tray.
 A tray badge reports stopped, starting, running or error. Its menu provides
-Start/Stop, installed voices grouped by readable language names, Configure, Quit.
+Start/Stop Speech, Start/Stop Dictation, Default Voice (grouped by readable
+language names), Configure, Quit. A single left-click opens the menu; double-click
+opens the control panel.
 Default changes apply to subsequent speech; applications caching a SAPI voice may
 need restarting. Newly downloaded voices need registration through Settings.
 
 Closing the configuration panel leaves Akousousin/Piper running. Tray Quit stops
-Piper and exits Akousousin, warning when application sessions are active. An
+Piper, microphone capture, recognition/download workers and portal sessions, closes
+control panels launched by that controller and exits Akousousin. It warns when
+application speech sessions are active. An
 application releasing the last session also stops Piper and exits Akousousin when
 Akousousin was started automatically. An independent/manual start is left running.
 On desktops without a tray, the panel and command interface remain usable.
@@ -74,7 +81,10 @@ On desktops without a tray, the panel and command interface remain usable.
 "$IMAGE" --status                                    # JSON status, does not start anything
 "$IMAGE" --start-server                              # independent/manual start
 "$IMAGE" --stop-server                               # explicit backend stop, tray remains
-"$IMAGE" --quit                                      # explicit stop and exit
+"$IMAGE" --quit                                      # stop speech/input, close panels and exit
+"$IMAGE" --dictation-toggle                          # KDE dictation; starts permission setup if needed
+"$IMAGE" --dictation-cancel                          # discard pending dictation
+"$IMAGE" --dictation-status                          # shared voice-input status/transcripts
 ```
 
 Use a distinct random ID per application session; repeat acquisition is idempotent.
@@ -99,8 +109,9 @@ an administrator terminal. Windows data/config are under LocalAppData/Akousousin
 
 Language routing uses SAPI hints or a manually selected book language; automatic
 foreign-word detection and full localisation are not implemented. Standard Piper
-has no general pitch slider. Arabic/Hebrew auxiliary models are not distributed
-and those languages remain unavailable in this program-only beta. Model licences
+has no general pitch slider. Arabic/Hebrew auxiliary Piper output models are not distributed. This is separate
+from multilingual Whisper input, which includes those language tokens but has
+variable recognition accuracy. Model licences
 vary; upstream cards and provenance are retained when downloading.
 
 Sources/licences accompany the release: engine LGPL-2.1-or-later; panel/Piper
@@ -126,5 +137,35 @@ update is refused. Restarted speech starts on demand as usual.
 Windows ZIP and source installations offer the matching release download for
 manual installation after quitting Akousousin. Automatic replacement is currently
 available for Linux AppImages only. Release tags include the package version,
-for example `standalone-beta-0.6.0b2-<build>-1`; older run-number-only tags are not
+for example `standalone-beta-0.6.0b3-<build>-1`; older run-number-only tags are not
 offered as updates. Each new release must increase the package version.
+
+## Experimental Voice Input on Linux
+
+Install `pulseaudio-utils` for `parec`/`paplay`; PipeWire remains your audio server
+through its PulseAudio-compatible service. Open Voice Input and select Small
+(default). Enable voice input downloads its pinned weights once if necessary and
+loads them; Disable voice input stops recognition and frees model memory without
+deleting the download. The ready status and two 300 Hz tones announce readiness;
+Test ready sound checks playback separately on the system default output.
+
+Choose a readable microphone or System default, and Automatic detection or a
+language from the searchable, scrollable picker. The detected language is displayed
+separately and does not silently lock the next recording. Start recording tests a
+ten-second capture and displays text. Spoken punctuation commands are not interpreted.
+
+On KDE Wayland, enable desktop shortcuts and approve KDE's shortcut and keyboard
+input dialogs. The proposed shortcut is Ctrl+Alt+Space, subject to KDE approval.
+Toggle listening is the default; push-to-talk is also available. A registered
+shortcut can enable/load voice input again after it was disabled. Tray Start
+Dictation can initiate permission setup when necessary. Stop/Cancel controls remain
+in the panel, and cancellation is available from the command interface.
+
+Voice Input and Settings support wheel scrolling and visible vertical scrollbars;
+the voice library exposes vertical/horizontal scrollbars. The initial window fits
+the available screen, and Settings remains accessible at smaller sizes.
+
+[Voice Input testing and cache/portal troubleshooting](https://github.com/jg00dman/akousousin/blob/main/recognition/PANEL-TESTING.md)
+explains the experimental limits. SAPI recognition, other Wayland compositors and
+a general native input framework remain future work. No automatic word-processor
+proofing-language tagging is implemented.

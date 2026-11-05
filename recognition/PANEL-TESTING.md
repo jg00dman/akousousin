@@ -1,6 +1,6 @@
-# Whisper Voice Input panel trial
+# Voice Input — beta testing guide
 
-Use the direct `Akousousin-x86_64.AppImage` link in the trial release, make it
+Use the direct `Akousousin-x86_64.AppImage` link in the beta or trial release, make it
 executable and launch it. The AppImage is the only download needed for testing;
 matching sources and checksums are separate release assets, and diagnostic
 artifacts remain on the GitHub Actions run. Open
@@ -13,7 +13,7 @@ Whisper speech models are NOT bundled. They are retained in
 To reuse your first test download, choose **Import existing model…**, then select
 its `models/small` folder (the folder containing `model.bin`). Alternatively,
 **Enable voice input** downloads Small once, about 485 MB. Wait for **Ready**.
-Turbo is import-only in this trial.
+Turbo currently supports importing converted local models.
 
 Install microphone/audio utilities if needed:
 
@@ -32,7 +32,8 @@ from the dropdown or use Refresh after connecting a device. **Automatic detectio
 keeps language detection enabled. Choose… opens a searchable, scrollable language
 list, and the panel shows the last automatically detected language separately.
 
-Closing the panel unloads its diagnostic recognition worker. Imported/downloaded
+Closing the panel leaves the shared controller and recognition worker available.
+Disable voice input, idle model unloading or Quit releases model memory. Imported/downloaded
 models survive closing, updates and replacement of the AppImage. Do not delete the
 earlier bundle until model import finishes successfully.
 
@@ -48,7 +49,7 @@ Microphone capture and dictation into Kate were confirmed on Kubuntu 26.04 Wayla
 on 5 November 2026. The ready cue was enabled but inaudible; use Test ready sound
 to check playback in the newer trial. Other desktop acceptance cases remain open.
 Existing SAPI support is text-to-speech only. Full dependency licences and matching
-sources accompany the build. No Whisper model weights occur in the AppImage;
+sources accompany the build as separate downloads. No Whisper model weights occur in the AppImage;
 the small bundled VAD asset and existing approved Piper starter voice remain.
 
 No configuration reset is required when updating from the trial that reported
