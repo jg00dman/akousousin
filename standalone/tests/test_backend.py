@@ -102,6 +102,8 @@ class RoutingTests(unittest.TestCase):
     def test_idle_unloads_and_next_request_reloads(self):
         self.router.synthesize({'text': 'Hello'})
         previous = self.router.synth
+        # Keep exact boundary checks independent of host uptime/float rounding.
+        self.router.last_activity = 100.0
         self.assertFalse(self.router.expire(self.router.last_activity + 299))
         self.assertTrue(self.router.expire(self.router.last_activity + 300))
         self.assertTrue(previous.closed)
