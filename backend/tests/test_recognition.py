@@ -2,6 +2,7 @@ import io
 from pathlib import Path
 import tempfile
 import time
+import threading
 import subprocess
 import unittest
 import wave
@@ -36,7 +37,31 @@ def fake_worker(pipe, config):
         pipe.close()
 
 
+def slow_start_worker(pipe, config):
+    time.sleep(10)
+
+
 class RecognitionTests(unittest.TestCase):
+    def test_cancel_loading_and_inference_recover(self):
+        recognizer = Recognizer(target=slow_start_worker)
+        event = threading.Event()
+        timer = threading.Timer(.1, event.set); timer.start()
+        try:
+            with self.assertRaises(InterruptedError):
+                recognizer.start(event)
+            self.assertIsNone(recognizer.process)
+            recognizer.target = fake_worker
+            recognizer.start()
+            event.clear()
+            timer = threading.Timer(.1, event.set); timer.start()
+            with self.assertRaises(InterruptedError):
+                recognizer.transcribe(wav(), 'de', event)
+            self.assertIsNone(recognizer.process)
+            self.assertEqual(recognizer.transcribe(wav())['text'], 'hello')
+        finally:
+            timer.cancel()
+            recognizer.close()
+
     def test_language_mapping(self):
         for value in ('de-DE', 'de_DE', 1031):
             self.assertEqual(language_token(value), 'de')

@@ -8,7 +8,8 @@ DEFAULTS = {'version': 1, 'voice': 'en_US-ljspeech-medium', 'speed': 1.0, 'volum
             'noise_scale': 0.667, 'noise_w_scale': 0.8, 'book_language': '',
             'language_voices': {}, 'voices': {}, 'wine_prefix': '', 'wine': '', 'port': 5000,
             'idle_timeout': 300, 'stt_model': 'small', 'stt_language': '',
-            'stt_source': '', 'stt_beep': True}
+            'stt_source': '', 'stt_beep': True, 'stt_mode': 'toggle',
+            'stt_idle_timeout': 300, 'stt_threshold': 250}
 
 
 def config_path():
@@ -33,6 +34,12 @@ def load(path):
 
 
 def validate(value):
+    if value.get('stt_mode', 'toggle') not in ('toggle', 'push-to-talk'):
+        raise ValueError('Invalid dictation activation mode')
+    for key, low, high in [('stt_idle_timeout', 0, 86400), ('stt_threshold', 1, 10000)]:
+        number = value.get(key, DEFAULTS[key])
+        if isinstance(number, bool) or not isinstance(number, int) or not low <= number <= high:
+            raise ValueError('Invalid dictation preference: ' + key)
     if value.get('stt_model', 'small') not in ('small', 'turbo'):
         raise ValueError('Invalid recognition model')
     if not isinstance(value.get('stt_beep', True), bool):

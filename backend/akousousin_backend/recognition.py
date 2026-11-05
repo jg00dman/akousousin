@@ -124,7 +124,7 @@ class Recognizer(Synthesizer):
         super().__init__('', timeout, startup_timeout, target)
         self.model = {'root': str(root if root is not None else model_root()), 'model': model}
 
-    def start(self):
+    def start(self, cancelled=None):
         self.close()
         ctx = mp.get_context('spawn')
         self.pipe, child = ctx.Pipe()
@@ -132,19 +132,17 @@ class Recognizer(Synthesizer):
         self.process.start()
         child.close()
         try:
-            if not self.pipe.poll(self.startup_timeout):
-                raise TimeoutError('Whisper model loading timed out')
-            ok, self.rate = self.pipe.recv()
+            ok, self.rate = self.receive(self.startup_timeout, cancelled)
             if not ok:
                 raise RuntimeError(self.rate)
         except BaseException:
-            self.close()
+            self.close(graceful=False)
             raise
 
-    def close(self):
+    def close(self, graceful=True):
         # Let idle native runtimes release their multiprocessing resources. A
         # failed or hung request still uses the bounded terminate/kill path.
-        if self.process is not None and self.pipe is not None and not self.lock.locked():
+        if graceful and self.process is not None and self.pipe is not None and not self.lock.locked():
             try:
                 if self.process.is_alive():
                     self.pipe.send(None)
@@ -157,18 +155,16 @@ class Recognizer(Synthesizer):
     def status(self):
         return self.rate
 
-    def transcribe(self, wav, language=None):
+    def transcribe(self, wav, language=None, cancelled=None):
         pcm = read_wav(wav)
         token = language_token(language)
         if not self.lock.acquire(blocking=False):
             raise BlockingIOError('Whisper is busy')
         try:
             if self.process is None or not self.process.is_alive():
-                self.start()
+                self.start(cancelled)
             self.pipe.send({'pcm': pcm, 'language': token})
-            if not self.pipe.poll(self.timeout):
-                raise TimeoutError('Whisper recognition timed out')
-            ok, result = self.pipe.recv()
+            ok, result = self.receive(self.timeout, cancelled)
             if not ok:
                 raise RuntimeError(result)
             return result

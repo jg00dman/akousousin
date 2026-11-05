@@ -28,7 +28,14 @@ Closing the panel unloads its diagnostic recognition worker. Imported/downloaded
 models survive closing, updates and replacement of the AppImage. Do not delete the
 earlier bundle until model import finishes successfully.
 
-This trial does not yet implement global hotkeys, text insertion, or SAPI recognition.
+Desktop dictation is experimental in this trial. Quit the older AKS controller
+first, then choose Enable desktop shortcuts in Voice Input and approve KDE's
+shortcut and keyboard-control dialogs. Default mode is toggle; push-to-talk is
+also available. Test in a plain text editor. Switching windows retains the result;
+a switch during insertion may leave a partial result. Cancel is available in the
+panel and tray. Closing the panel leaves the shared worker/controller running.
+See recognition/DICTATION.md in the corresponding source for implementation,
+limitations and acceptance checks. SAPI recognition remains unimplemented.
 The ready cue and live microphone behavior need testing on your KDE Wayland desktop.
 Existing SAPI support is text-to-speech only. Full dependency licences and matching
 sources accompany the build. No Whisper model weights occur in the AppImage;

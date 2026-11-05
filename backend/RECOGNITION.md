@@ -117,3 +117,12 @@ text insertion, cancellation and SAPI recognition remain subsequent work. The
 control panel requires desktop validation; headless tests do not establish KDE
 Wayland compatibility. CLI test bundles no longer include speech model weights by
 default; use `--download-model` or `--import-model` once.
+
+## Controller-owned desktop dictation
+
+The panel now uses the resident controller's input commands, not a private worker.
+KDE Wayland portal shortcuts/insertion, focus guarding, streaming phrase capture,
+cancellation and idle unloading are implemented experimentally. See
+[desktop dictation development](../recognition/DICTATION.md) for current behavior,
+TTS playback timing limits and outstanding live acceptance. The older development
+notes above describe the initial diagnostic-only increment.

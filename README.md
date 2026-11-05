@@ -4,7 +4,7 @@
 
 This is the project vision. The current beta implements SAPI text-to-speech with
 Piper. This development branch adds experimental Speech Dispatcher output,
-on-demand startup and idle model unloading. Whisper recognition remains planned.
+on-demand startup and idle model unloading. This Whisper branch also develops local recognition and KDE Wayland dictation; live desktop acceptance testing is pending.
 See [branch testing instructions](standalone/SPEECH-DISPATCHER.md); the published
 0.5 beta does not include these additions.
 
@@ -20,7 +20,9 @@ The name comes from Greek **ἀκούσουσιν**, “they will hear” (John 
 | Automatic application-language hints | Partial; Logos language selection needs further investigation |
 | Speech Dispatcher output module | Experimental on this branch; desktop validation pending |
 | Streaming TTS, complete pause/resume and stream/word events | Not complete; future work |
-| Whisper, SAPI recognition and Linux dictation | Planned |
+| Whisper CPU recognition and Voice Input panel | Experimental on whisper; model import and diagnostic recording desktop-tested |
+| KDE Wayland shortcut dictation and guarded text insertion | Implemented on whisper; private protocol/state tests pass, live KDE acceptance pending |
+| SAPI recognition | Planned |
 | macOS deployment, 32-bit callers and full UI localisation | Not currently supported |
 
 See [COMPATIBILITY.md](COMPATIBILITY.md) for evidence, limits and the distinction

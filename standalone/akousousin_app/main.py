@@ -15,7 +15,7 @@ def main():
         sys.argv = [sys.argv[0], *sys.argv[2:]]
         recognition_main()
         return
-    parser = argparse.ArgumentParser(description='Akousousin — Neural Voice Engine. SAPI TTS via Piper; experimental Speech Dispatcher; Whisper planned.')
+    parser = argparse.ArgumentParser(description='Akousousin — Neural Voice Engine. SAPI TTS via Piper; experimental Speech Dispatcher and local Whisper dictation.')
     parser.add_argument('--wine-prefix', type=Path, help='Install into this initialized 64-bit Wine prefix')
     parser.add_argument('--wine', help='Wine executable or AppImage used by this prefix')
     parser.add_argument('--install', action='store_true', help='Install into native Windows')
@@ -34,6 +34,9 @@ def main():
     parser.add_argument('--install-speech-dispatcher', action='store_true', help='Register the output module in your user Speech Dispatcher configuration')
     parser.add_argument('--uninstall-speech-dispatcher', action='store_true', help='Remove your user output-module registration')
     parser.add_argument('--speech-dispatcher', action='store_true', help='Run a Speech Dispatcher output module on stdin/stdout')
+    parser.add_argument('--dictation-toggle', action='store_true', help='Toggle enabled desktop dictation')
+    parser.add_argument('--dictation-cancel', action='store_true', help='Cancel capture, recognition and pending insertion')
+    parser.add_argument('--dictation-status', action='store_true', help='Show shared recognition state and latest transcripts')
     parser.add_argument('--status', action='store_true')
     parser.add_argument('--quit', action='store_true', help='Stop Piper and quit Akousousin')
     parser.add_argument('--controller', action='store_true', help=argparse.SUPPRESS)
@@ -103,7 +106,9 @@ def main():
     import json
     import os
     request = None
-    if args.api_start:
+    if args.dictation_toggle or args.dictation_cancel or args.dictation_status:
+        request = {'command': 'stt-toggle' if args.dictation_toggle else 'stt-cancel' if args.dictation_cancel else 'stt-status'}
+    elif args.api_start:
         request = {'command': 'wake'}
     elif args.acquire_session:
         request = {'command': 'acquire', 'session': args.acquire_session, 'pid': args.owner_pid or os.getppid()}
@@ -115,7 +120,7 @@ def main():
     elif not args.panel and not args.smoke_test:
         request = {'command': 'configure', 'independent': not args.configure}
     if request:
-        response = runtime.call(args.settings, request, launch=request['command'] not in ('release', 'stop', 'quit', 'status'))
+        response = runtime.call(args.settings, request, launch=request['command'] not in ('release', 'stop', 'quit', 'status', 'stt-status', 'stt-cancel'))
         print(json.dumps(response or {'running': False, 'sessions': 0}))
         return
     runtime.initialize()

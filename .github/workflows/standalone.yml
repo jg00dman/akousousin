@@ -11,7 +11,7 @@ on:
         type: boolean
         default: false
   push:
-    branches: [codex/standalone-control-panel, codex/speech-dispatcher-on-demand, codex/linux-speech-dispatcher, codex/control-panel-updates]
+    branches: [whisper, codex/standalone-control-panel, codex/speech-dispatcher-on-demand, codex/linux-speech-dispatcher, codex/control-panel-updates]
     paths: [engine/**, standalone/**, backend/**, tests/**, .github/workflows/standalone.yml]
 permissions:
   contents: read
@@ -60,6 +60,10 @@ jobs:
         shell: bash
         run: PYTHONPATH=standalone:backend python -m unittest discover -s standalone/tests -v
         if: runner.os == 'Linux'
+      - name: Private desktop-portal protocol tests
+        if: runner.os == 'Linux'
+        shell: bash
+        run: AKS_TEST_PORTALS=1 PYTHONPATH=standalone:backend dbus-run-session -- python -m unittest discover -s standalone/tests -p test_portal_bus.py -v
       - name: Backend failure and cancellation tests
         if: runner.os == 'Linux'
         shell: bash

@@ -161,7 +161,7 @@ else:
     shutil.copytree(PACKAGE, app / 'usr/lib/akousousin', dirs_exist_ok=True)
     shutil.copy(ROOT / 'standalone/AppRun', app / 'AppRun')
     (app / 'AppRun').chmod(0o755)
-    (app / 'akousousin.desktop').write_text('[Desktop Entry]\nType=Application\nName=Akousousin — Neural Voice Engine\nComment=Microsoft SAPI voice engine; Speech Dispatcher and Whisper planned\nExec=AppRun\nIcon=akousousin\nCategories=AudioVideo;Accessibility;\nTerminal=false\n')
+    (app / 'akousousin.desktop').write_text('[Desktop Entry]\nType=Application\nName=Akousousin — Neural Voice Engine\nComment=Local neural speech and experimental Whisper dictation\nExec=AppRun\nIcon=akousousin\nCategories=AudioVideo;Accessibility;\nTerminal=false\n')
     (app / 'akousousin.svg').write_text('<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"><rect width="128" height="128" rx="24" fill="#087e82"/><path d="M30 52v24m17-40v56m17-66v76m17-62v48m17-32v16" stroke="white" stroke-width="7" stroke-linecap="round"/></svg>')
     runtime = CACHE / 'appimage-runtime'
     fetch('https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64', runtime,

@@ -78,3 +78,20 @@ class SessionsTests(unittest.TestCase):
         self.assertFalse(self.state.independent)
         self.state.request({'command': 'quit'})
         self.state.service.stop.assert_called_once()
+
+    def test_dictation_ownership_survives_last_tts_session(self):
+        self.acquire('logos')
+        with patch.object(self.state.input, 'prepare') as prepare:
+            result = self.state.request({'command': 'stt-prepare'})
+        prepare.assert_called_once()
+        self.assertIn('desktop', result)
+        self.state.request({'command': 'release', 'session': 'logos'})
+        self.state.service.stop.assert_not_called()
+        self.assertFalse(self.state.closed)
+
+    def test_bad_recording_duration_never_starts_capture(self):
+        with patch.object(self.state.input, 'start') as start:
+            for seconds in (0, 31, True, '10'):
+                with self.assertRaises(ValueError):
+                    self.state.request({'command': 'stt-start', 'seconds': seconds})
+        start.assert_not_called()
