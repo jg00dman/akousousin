@@ -10,6 +10,11 @@ from .install import Installer
 
 def main():
     multiprocessing.freeze_support()
+    if len(sys.argv) > 1 and sys.argv[1] == '--whisper':
+        from akousousin_backend.recognition import main as recognition_main
+        sys.argv = [sys.argv[0], *sys.argv[2:]]
+        recognition_main()
+        return
     parser = argparse.ArgumentParser(description='Akousousin — Neural Voice Engine. SAPI TTS via Piper; experimental Speech Dispatcher; Whisper planned.')
     parser.add_argument('--wine-prefix', type=Path, help='Install into this initialized 64-bit Wine prefix')
     parser.add_argument('--wine', help='Wine executable or AppImage used by this prefix')
@@ -117,6 +122,8 @@ def main():
     from .panel import Panel
     panel = Panel(args.settings)
     if args.smoke_test:
+        panel.show('Voice Input')
+        assert panel.voice_input.state.get()
         panel.root.after(1500, panel.root.destroy)
     panel.root.mainloop()
 
