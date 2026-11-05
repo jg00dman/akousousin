@@ -134,11 +134,10 @@ jobs:
         run: |
           version=$(sed -n 's/^version = "\([^"]*\)"/\1/p' standalone/pyproject.toml)
           tag="standalone-beta-${version}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          actual=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha' 2>/dev/null || true)
-          if [ -z "$actual" ]; then
-            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$tag" -f sha="$GITHUB_SHA"
-          else
+          if actual=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha' 2>/dev/null); then
             [[ "$actual" == "$GITHUB_SHA" ]]
+          else
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$tag" -f sha="$GITHUB_SHA"
           fi
           gh release create "$tag" --verify-tag --repo "$GITHUB_REPOSITORY" \
             --prerelease --title "Akousousin standalone beta ${GITHUB_RUN_ID}" \
