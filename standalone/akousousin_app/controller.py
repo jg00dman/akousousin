@@ -279,14 +279,17 @@ def run(path):
                 status = 'Error'
             if state.error and not running:
                 status = 'Error'
+            input_status = state.input.status()
+            color = {'Idle': '#737b80', 'Running': '#20a45b', 'Stopped': '#737b80', 'Starting': '#e3aa26', 'Error': '#bd3838'}[status]
+            if input_status['busy']:
+                color = '#e3aa26' if input_status['phase'] in ('loading', 'opening') or input_status['state'].startswith('Paused') else '#d94747' if input_status['phase'] == 'listening' else '#327bd2'
             pixmap = QPixmap(str(resources.root() / 'akousousin.png')).scaled(64, 64)
             painter = QPainter(pixmap)
-            painter.setBrush(QColor({'Idle': '#737b80', 'Running': '#20a45b', 'Stopped': '#737b80', 'Starting': '#e3aa26', 'Error': '#bd3838'}[status]))
+            painter.setBrush(QColor(color))
             painter.setPen(QPen(QColor('white'), 3))
             painter.drawEllipse(44, 44, 18, 18)
             painter.end()
             tray.setIcon(QIcon(pixmap))
-            input_status = state.input.status()
             tray.setToolTip('Akousousin · ' + status + '\nVoice input: ' + input_status['state'])
             dictation_toggle.setEnabled(bool(state.desktop and state.desktop.enabled))
             dictation_toggle.setText('Stop dictation recording' if input_status['busy'] else 'Start dictation recording')

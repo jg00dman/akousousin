@@ -32,3 +32,13 @@ class VoiceInputTests(unittest.TestCase):
             page.destroy(Mock(widget=page.panel.root))
             self.assertTrue(page.closed)
             call.assert_not_called()
+
+    def test_shared_poll_does_not_hide_model_download_progress(self):
+        page = self.page()
+        page.busy = True
+        page.local_error = False
+        page.state = Mock()
+        page.desktop_state = Mock()
+        page.last_sequence = 0
+        page.shared({'busy': False, 'state': 'Not loaded', 'desktop': {'state': 'Disabled'}, 'sequence': 0})
+        page.state.set.assert_not_called()

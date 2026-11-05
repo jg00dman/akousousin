@@ -189,7 +189,7 @@ class VoiceInput:
         if not result:
             return
         self.shared_busy = result['busy']
-        if not self.local_error:
+        if not self.local_error and not self.busy:
             self.state.set(result['state'])
         self.desktop_state.set(result['desktop']['state'])
         if result['sequence'] != self.last_sequence:
