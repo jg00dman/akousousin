@@ -236,7 +236,7 @@ jobs:
                   shutil.copy2(file, target / file.name)
           shutil.copy2('recognition/PANEL-TESTING.md', target / 'TESTING.md')
           tag = 'whisper-panel-' + os.environ['BUILT_SHA'][:8]
-          subprocess.run(['gh', 'release', 'create', tag, '--target', os.environ['BUILT_SHA'],
+          subprocess.run(['gh', 'release', 'create', tag, '--verify-tag',
                           '--prerelease', '--title', 'Whisper control panel trial ' + os.environ['BUILT_SHA'][:8],
                           '--notes-file', 'recognition/PANEL-TESTING.md',
                           *map(str, target.iterdir())], check=True)
