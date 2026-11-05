@@ -44,12 +44,11 @@ jobs:
           gh api "repos/$GITHUB_REPOSITORY/contents/standalone/pyproject.toml?ref=$source_sha" --jq '.content' | base64 -d > project.toml
           version=$(sed -n 's/^version = "\([^"]*\)"/\1/p' project.toml)
           tag="standalone-beta-${version}-${SOURCE_RUN}-1"
-          actual=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha' 2>/dev/null || true)
           expected=$(python3 -c "import json; print(json.load(open('run.json'))['head_sha'])")
-          if [ -z "$actual" ]; then
-            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$tag" -f sha="$expected"
-          else
+          if actual=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha' 2>/dev/null); then
             [[ "$actual" == "$expected" ]]
+          else
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$tag" -f sha="$expected"
           fi
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
