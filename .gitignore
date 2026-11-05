@@ -4,3 +4,9 @@ __pycache__/
 *.reg
 
 /standalone-dist/
+
+/.venv-whisper/
+*.egg-info/
+/backend/build/
+
+/recognition-dist/

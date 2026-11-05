@@ -2,23 +2,35 @@ name: Standalone Akousousin
 on:
   workflow_dispatch:
     inputs:
+      reuse_run_id:
+        description: Publish a previously tested Whisper run without rebuilding
+        type: string
+        default: ''
       publish:
         description: Publish a unique experimental prerelease after all tests pass
         type: boolean
         default: false
   push:
-    branches: [codex/standalone-control-panel, codex/speech-dispatcher-on-demand, codex/linux-speech-dispatcher, codex/control-panel-updates]
+    branches: [whisper, codex/standalone-control-panel, codex/speech-dispatcher-on-demand, codex/linux-speech-dispatcher, codex/control-panel-updates]
     paths: [engine/**, standalone/**, backend/**, tests/**, .github/workflows/standalone.yml]
 permissions:
   contents: read
 jobs:
   engine:
+    if: inputs.reuse_run_id == ''
     runs-on: ubuntu-22.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with: {persist-credentials: false}
+      - name: Use standard Ubuntu archive mirror
+        run: |
+          if [ -f /etc/apt/apt-mirrors.txt ]; then
+            sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/apt-mirrors.txt
+          fi
       - name: Install cross compiler (no Wine compilation)
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64
+        timeout-minutes: 12
+        run: sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update && sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends gcc-mingw-w64-x86-64
       - name: Build standard Windows engine DLL and test clients
         run: sh engine/build.sh
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -27,11 +39,12 @@ jobs:
           path: build/standalone-engine/*
 
   package:
+    if: inputs.reuse_run_id == ''
     needs: engine
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, windows-2022]
+        os: ${{ fromJSON(github.ref == 'refs/heads/whisper' && '["ubuntu-22.04"]' || '["ubuntu-22.04", "windows-2022"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 35
     steps:
@@ -43,15 +56,29 @@ jobs:
         with:
           name: standalone-engine
           path: build/standalone-engine
+      - name: Use standard Ubuntu archive mirror
+        if: runner.os == 'Linux'
+        run: |
+          if [ -f /etc/apt/apt-mirrors.txt ]; then
+            sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/apt-mirrors.txt
+          fi
       - name: Install Linux packaging/test tools
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends squashfs-tools xvfb xauth libxcb-cursor0 libxkbcommon-x11-0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 libegl1 libgl1 libopengl0 speech-dispatcher speech-dispatcher-audio-plugins
       - name: Install pinned Python backend and packager
-        run: python -m pip install ./backend ./standalone pyinstaller==6.16.0 pillow
+        run: python -m pip install './backend[recognition]' './standalone[recognition]' pyinstaller==6.16.0 pillow
       - name: Unit tests
         shell: bash
         run: PYTHONPATH=standalone:backend python -m unittest discover -s standalone/tests -v
         if: runner.os == 'Linux'
+      - name: Voice Input button visibility and recording action
+        if: runner.os == 'Linux'
+        shell: bash
+        run: xvfb-run -a env PYTHONPATH=standalone:backend python -m unittest discover -s standalone/tests -p test_voice_input_gui.py -v
+      - name: Private desktop-portal protocol tests
+        if: runner.os == 'Linux'
+        shell: bash
+        run: AKS_TEST_PORTALS=1 PYTHONPATH=standalone:backend dbus-run-session -- python -m unittest discover -s standalone/tests -p test_portal_bus.py -v
       - name: Backend failure and cancellation tests
         if: runner.os == 'Linux'
         shell: bash
@@ -65,6 +92,34 @@ jobs:
       - name: Wine installer, COM engine, real speech and panel tests
         if: runner.os == 'Linux'
         run: xvfb-run -a python standalone/ci_smoke.py
+      - name: Real Whisper inference from the packaged application
+        if: runner.os == 'Linux' && github.ref == 'refs/heads/whisper'
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: '1'
+        run: |
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          python - <<'PYTHON'
+          from huggingface_hub import snapshot_download
+          snapshot_download('Systran/faster-whisper-small',
+                            revision='536b0662742c02347bc0e980a01041f333bce120',
+                            local_dir='build/test-models/small')
+          PYTHON
+          curl --fail --location --max-time 60 https://raw.githubusercontent.com/openai/whisper/main/tests/jfk.flac -o build/jfk.flac
+          echo '63a4b1e4c1dc655ac70961ffbf518acd249df237e5a0152faae9a4a836949715  build/jfk.flac' | sha256sum --check
+          ffmpeg -v error -i build/jfk.flac -ac 1 -ar 16000 -c:a pcm_s16le build/jfk.wav
+          python - <<'PYTHON'
+          import json, os, subprocess
+          from pathlib import Path
+          env = dict(os.environ, HF_HUB_OFFLINE='1')
+          result = subprocess.run([str(Path('standalone-dist/Akousousin-x86_64.AppImage').resolve()),
+                                  '--whisper', '--wav', str(Path('build/jfk.wav').resolve()),
+                                  '--models', str(Path('build/test-models').resolve())],
+                                  env=env, text=True, capture_output=True, timeout=120, check=True)
+          print(result.stdout)
+          data = json.loads(result.stdout)
+          assert data['language'] == 'en'
+          assert 'ask not what your country can do for you' in data['text'].lower()
+          PYTHON
       - name: Real Speech Dispatcher module and interruption tests
         if: ${{ !cancelled() && runner.os == 'Linux' && steps.package.outcome == 'success' }}
         shell: bash
@@ -104,7 +159,7 @@ jobs:
             build/standalone-ci/appdata/Akousousin/akousousin.log
 
   release:
-    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    if: github.ref != 'refs/heads/whisper' && github.event_name == 'workflow_dispatch' && inputs.publish
     needs: [engine, package]
     runs-on: ubuntu-22.04
     permissions:
@@ -142,3 +197,83 @@ jobs:
           gh release create "$tag" --verify-tag --repo "$GITHUB_REPOSITORY" \
             --prerelease --title "Akousousin standalone beta ${GITHUB_RUN_ID}" \
             --notes-file standalone/RELEASE-NOTES.md release-assets/*
+
+  whisper-test-build:
+    if: ${{ !cancelled() && github.ref == 'refs/heads/whisper' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish)) && (inputs.reuse_run_id != '' || needs.package.result == 'success') }}
+    needs: [engine, package]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with: {python-version: '3.12'}
+      - name: Verify the source build passed application tests
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN: ${{ inputs.reuse_run_id || github.run_id }}
+        run: |
+          python - <<'PYTHON'
+          import json, os, subprocess
+          repository = os.environ['GITHUB_REPOSITORY']
+          run = os.environ['SOURCE_RUN']
+          def get(path):
+              return json.loads(subprocess.check_output(['gh', 'api', 'repos/' + repository + path], text=True))
+          metadata = get('/actions/runs/' + run)
+          assert metadata['head_branch'] == 'whisper'
+          assert metadata['path'] == '.github/workflows/standalone.yml'
+          jobs = get('/actions/runs/' + run + '/jobs')['jobs']
+          for name in ('engine', 'package (ubuntu-22.04)'):
+              assert any(job['name'] == name and job['conclusion'] == 'success' for job in jobs), name
+          with open(os.environ['GITHUB_ENV'], 'a') as env:
+              env.write('BUILT_SHA=' + metadata['head_sha'] + '\n')
+          PYTHON
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.reuse_run_id || github.run_id }}
+          pattern: akousousin-standalone-Linux-*
+          path: release-input
+      - name: Publish checked Whisper panel trial
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PYTHON'
+          import hashlib, os, shutil, subprocess
+          from pathlib import Path
+          target = Path('release-assets'); target.mkdir()
+          directory = next(Path('release-input').glob('*/standalone-dist'))
+          for line in (directory / 'SHA256SUMS').read_text().splitlines():
+              digest, name = line.split('  ', 1)
+              file = directory / name
+              with file.open('rb') as stream:
+                  assert hashlib.file_digest(stream, 'sha256').hexdigest() == digest, name
+          for file in directory.iterdir():
+              if file.is_file():
+                  shutil.copy2(file, target / file.name)
+          shutil.copy2('recognition/PANEL-TESTING.md', target / 'TESTING.md')
+          repository = os.environ['GITHUB_REPOSITORY']
+          tag = 'whisper-trial-' + os.environ['GITHUB_RUN_ID'] + '-' + os.environ['GITHUB_RUN_ATTEMPT']
+          base_url = 'https://github.com/' + repository
+          download = base_url + '/releases/download/' + tag + '/Akousousin-x86_64.AppImage'
+          evidence = base_url + '/actions/runs/' + os.environ['GITHUB_RUN_ID']
+          notes = Path('trial-release-notes.md')
+          notes.write_text('[Download the AppImage](' + download + ') — this is the only download needed to try AKS.\n\n'
+                           'Whisper models download separately and remain in '
+                           '`~/.local/share/Akousousin/models/whisper/` (respecting `XDG_DATA_HOME`).\n\n'
+                           'Matching sources and checksums are separate release assets. '
+                           '[Build logs and diagnostic artifacts](' + evidence + ') remain on GitHub.\n\n'
+                           + Path('recognition/PANEL-TESTING.md').read_text())
+          subprocess.run(['gh', 'api', 'repos/' + repository + '/git/refs',
+                          '-f', 'ref=refs/tags/' + tag, '-f', 'sha=' + os.environ['BUILT_SHA']], check=True)
+          subprocess.run(['gh', 'release', 'create', tag, '--verify-tag',
+                          '--repo', repository, '--latest=false',
+                          '--prerelease', '--title', 'Whisper control panel trial ' + os.environ['BUILT_SHA'][:8],
+                          '--notes-file', str(notes),
+                          *map(str, target.iterdir())], check=True)
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write('## Trial download\n\n[Akousousin-x86_64.AppImage](' + download + ')\n\n'
+                            'Download the AppImage alone; sources and diagnostics are optional separate downloads.\n')
+          PYTHON

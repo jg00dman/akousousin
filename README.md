@@ -8,6 +8,13 @@ native Linux Speech Dispatcher output module. On-demand startup, idle model
 unloading and control-panel update checks are shipped. Neither interface has
 full API coverage; recognition is not included in this beta.
 
+The **`whisper` development branch** adds local Whisper recognition, a Voice Input
+panel and KDE Wayland shortcut dictation. Microphone discovery, diagnostic recording
+and dictation into Kate and this chat's text box have been desktop-tested on Kubuntu
+26.04 Wayland. These input features are experimental and separate from the published
+beta. See [Whisper trial instructions](recognition/PANEL-TESTING.md) and
+[dictation implementation and acceptance checks](recognition/DICTATION.md).
+
 The name comes from Greek **ἀκούσουσιν**, “they will hear” (John 5:25).
 
 | API area | Implemented | Partial / remaining |
@@ -62,6 +69,6 @@ and Piper are GPL-3.0-or-later; dependency and voice notices are included.
 
 The next output milestones are exact alignment-backed word events, more complete
 pause/resume behaviour and broader speech markup/accessibility support.
-Recognition is separately scoped. See the
+SAPI recognition and a future native input framework remain separately scoped. See the
 [Speech Dispatcher desktop checklist](standalone/SPEECH-DISPATCHER.md#desktop-acceptance-checklist)
 for ongoing Orca and application testing.

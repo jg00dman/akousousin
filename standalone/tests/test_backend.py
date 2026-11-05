@@ -55,6 +55,19 @@ class RoutingTests(unittest.TestCase):
         self.router = Router(self.path)
         self.addCleanup(self.router.close)
 
+    def test_speech_activity_covers_synthesis_and_expected_playback(self):
+        self.assertFalse(self.router.speaking())
+        original = FakeSynth.synthesize
+        def synthesize(instance, request, cancelled=None):
+            self.assertTrue(self.router.speaking())
+            return original(instance, request, cancelled)
+        with patch.object(FakeSynth, 'synthesize', synthesize):
+            with patch('akousousin_app.backend.time.monotonic', return_value=100):
+                self.router.synthesize({'text': 'Hello'})
+                self.assertTrue(self.router.speaking())
+            with patch('akousousin_app.backend.time.monotonic', return_value=102):
+                self.assertFalse(self.router.speaking())
+
     def test_explicit_sapi_language_routes_and_resamples(self):
         result = self.router.synthesize({'text': 'Guten Tag', 'language': 0x407, 'sample_rate': 22050})
         self.assertEqual(self.router.voice, 'german')

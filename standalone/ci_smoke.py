@@ -83,6 +83,17 @@ def public(*args):
     return __import__('json').loads(completed.stdout.splitlines()[-1])
 try:
     assert public('--acquire-session', 'logos-ci', '--owner-pid', str(os.getpid()))['running']
+    if not native:
+        identity = Path(env['XDG_DATA_HOME']) / 'applications/org.akousousin.Akousousin.desktop'
+        assert identity.is_file(), 'Packaged controller did not install desktop identity'
+        print(identity.read_text(), flush=True)
+        # The real portal uses GIO lookup by ID, not merely file existence.
+        subprocess.run([sys.executable, '-c',
+                        "import ctypes; lib=ctypes.CDLL('libgio-2.0.so.0'); "
+                        "lookup=lib.g_desktop_app_info_new; lookup.argtypes=[ctypes.c_char_p]; "
+                        "lookup.restype=ctypes.c_void_p; "
+                        "assert lookup(b'org.akousousin.Akousousin.desktop'), 'Packaged desktop identity cannot be resolved by host GIO'"],
+                       env=env, check=True, timeout=10)
     assert public('--acquire-session', 'second-ci', '--owner-pid', str(os.getpid()))['sessions'] == 2
     wav = WORK / 'real-sapi.wav'
     command = [str(executable), '--settings', str(settings_path), '--sapi-wav', str(wav), 'Standalone Open SAPI is speaking.']
@@ -129,6 +140,19 @@ finally:
     config['idle_timeout'] = 300
     settings.save(settings_path, config)
     time.sleep(2)
+
+# Exercise Quit against a real panel process owned by the packaged controller.
+owned_panels = public('--configure')['panels']
+assert owned_panels, 'Configure did not register its panel with the controller'
+time.sleep(2)
+public('--quit')
+import psutil
+for pid in owned_panels:
+    deadline = time.monotonic() + 10
+    while psutil.pid_exists(pid) and time.monotonic() < deadline:
+        time.sleep(.1)
+    assert not psutil.pid_exists(pid), 'Quit left a packaged control panel running'
+print('PASS: Quit closes owned packaged control panels', flush=True)
 
 assert not (WORK / 'data/Akousousin/runtimes').exists(), 'An extracted runtime was retained'
 subprocess.run([str(executable), '--settings', str(settings_path), '--smoke-test'], env=env, check=True, timeout=30)
