@@ -49,3 +49,17 @@ class ModelsTests(unittest.TestCase):
                 install(root=folder)
                 install(root=folder)
                 call.assert_called_once()
+
+
+    def test_abandoned_download_stage_is_removed_without_deleting_cached_assets(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            stage = root / '.install-cancelled'; stage.mkdir()
+            (stage / 'partial.bin').write_bytes(b'incomplete download')
+            target = root / 'small'; target.mkdir()
+            from akousousin_backend.models import FILES
+            for name in FILES:
+                (target / name).write_bytes(b'cached asset')
+            install(root=root)
+            self.assertFalse(stage.exists())
+            self.assertEqual((target / 'model.bin').read_bytes(), b'cached asset')

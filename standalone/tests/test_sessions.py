@@ -95,3 +95,29 @@ class SessionsTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     self.state.request({'command': 'stt-start', 'seconds': seconds})
         start.assert_not_called()
+
+
+    def test_quit_closes_owned_panel_even_if_input_cleanup_fails(self):
+        import subprocess, sys
+        panel = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])
+        self.addCleanup(lambda: panel.kill() if panel.poll() is None else None)
+        self.state.panels.append(panel)
+        self.state.desktop = Mock()
+        desktop = self.state.desktop
+        with patch.object(self.state.input, 'close', side_effect=RuntimeError('Input cleanup failed')), self.assertLogs(level='ERROR'):
+            self.state.request({'command': 'quit'})
+        self.assertIsNotNone(panel.poll())
+        self.assertEqual(self.state.panels, [])
+        desktop.close.assert_called_once()
+        self.state.service.stop.assert_called_once()
+        self.assertTrue(self.state.closed)
+
+    def test_start_dictation_enables_desktop_on_first_use(self):
+        with patch('akousousin_app.desktop_input.Desktop') as factory:
+            self.state.request({'command': 'stt-toggle'})
+        factory.return_value.start.assert_called_once_with(listen=True)
+
+    def test_shutdown_does_not_accept_new_work(self):
+        self.state.quit()
+        with self.assertRaisesRegex(RuntimeError, 'shutting down'):
+            self.state.request({'command': 'configure'})

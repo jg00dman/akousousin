@@ -27,6 +27,11 @@ def install(model='small', root=None, source=None, progress=lambda text: None):
     root = Path(root if root is not None else model_root())
     root.mkdir(parents=True, exist_ok=True)
     with FileLock(str(root / '.install.lock'), timeout=0):
+        # A cancelled download worker may leave its temporary stage behind.
+        # The exclusive install lock proves these stages have no live installer.
+        for orphan in root.glob('.install-*'):
+            if orphan.is_dir() and not orphan.is_symlink():
+                shutil.rmtree(orphan)
         if installed(model, root):
             return root / model
         with tempfile.TemporaryDirectory(prefix='.install-', dir=root) as temporary:

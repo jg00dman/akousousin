@@ -16,6 +16,7 @@ class Sessions:
         self.path = path
         self.service = Service(path)
         self.owners = {}
+        self.panels = []
         self.independent = False
         self.on_demand = False
         self.closed = False
@@ -48,10 +49,16 @@ class Sessions:
             self.input_owned = True
             self.input.start(seconds=seconds)
         elif operation == 'stt-finish':
+            if self.desktop:
+                self.desktop.start_requested = False
             self.input.finish()
         elif operation == 'stt-cancel':
+            if self.desktop:
+                self.desktop.start_requested = False
             self.input.cancel()
         elif operation == 'stt-unload':
+            if self.desktop:
+                self.desktop.start_requested = False
             self.input.unload()
             self.input_owned = self.desktop is not None
         elif operation == 'stt-desktop-enable':
@@ -62,13 +69,17 @@ class Sessions:
             self.desktop = Desktop(self.input, lambda: settings.load(self.path), runtime.directory(), identity)
             self.input.insert = self.desktop.insert
             self.input_owned = True
-            self.desktop.start()
-            if not self.input.status()['busy']:
-                self.input.prepare()
+            self.desktop.start(listen=request.get('listen', False))
         elif operation == 'stt-toggle':
-            if not self.desktop or not self.desktop.enabled:
-                raise RuntimeError('Enable desktop dictation in Voice Input first')
-            self.desktop.trigger()
+            if self.input.status()['busy']:
+                self.input.finish()
+            elif self.desktop and self.desktop.start_requested:
+                self.desktop.close()
+                self.desktop = None
+            elif not self.desktop or not self.desktop.enabled:
+                self.input_request({'command': 'stt-desktop-enable', 'listen': True})
+            else:
+                self.desktop.trigger()
         elif operation == 'stt-desktop-disable':
             if self.desktop:
                 self.desktop.close()
@@ -85,6 +96,9 @@ class Sessions:
     def request(self, request):
         with self.lock:
             operation = request['command']
+            self.panels = [panel for panel in self.panels if panel.poll() is None]
+            if self.closed and operation not in ('quit', 'status', 'stt-status'):
+                raise RuntimeError('Akousousin is shutting down')
             if operation.startswith('stt-'):
                 return self.input_request(request)
             if operation in ('start', 'acquire', 'stop', 'wake'):
@@ -96,7 +110,7 @@ class Sessions:
                 self.owners[request['session']] = (owner.pid, owner.create_time())
             elif operation == 'release':
                 previous = self.owners.pop(request['session'], None)
-                if previous and not self.owners and not self.independent and not self.on_demand and not self.input_owned:
+                if previous and not self.owners and not self.independent and not self.on_demand and not self.input_owned and not self.panels:
                     self.quit()
             elif operation == 'wake':
                 self.service.start(port)
@@ -110,14 +124,16 @@ class Sessions:
                 self.quit()
             elif operation == 'configure':
                 self.independent |= request.get('independent', False)
-                subprocess.Popen(runtime.command('--panel', '--settings', str(self.path)), env=runtime.environment())
+                self.panels = [panel for panel in self.panels if panel.poll() is None]
+                self.panels.append(subprocess.Popen(runtime.command('--panel', '--settings', str(self.path)), env=runtime.environment()))
             elif operation == 'voice':
                 pending = settings.select_voice(self.path, request['voice'])
                 return {'pending_registration': pending}
             elif operation != 'status':
                 raise ValueError('Unknown Akousousin command')
             return {'sessions': len(self.owners), 'running': bool(self.service.health(port)),
-                    'independent': self.independent, 'closed': self.closed}
+                    'independent': self.independent, 'closed': self.closed,
+                    'panels': [panel.pid for panel in self.panels]}
 
     def reap(self):
         with self.lock:
@@ -134,19 +150,51 @@ class Sessions:
                 self.request({'command': 'release', 'session': session})
 
     def quit(self):
-        self.input.close()
-        if self.desktop:
-            self.desktop.close()
-            self.desktop = None
-        self.service.stop(settings.load(self.path)['port'])
+        import logging
         self.closed = True
+        cleanup = [self.input.close]
+        if self.desktop:
+            desktop, self.desktop = self.desktop, None
+            cleanup.append(desktop.close)
+        cleanup.append(lambda: self.service.stop(settings.load(self.path)['port']))
+        for action in cleanup:
+            try:
+                action()
+            except Exception:
+                logging.exception('Shutdown cleanup failed')
+        for panel in self.panels:
+            if panel.poll() is not None:
+                continue
+            # Only descendants of a panel launched by this controller are owned.
+            try:
+                children = psutil.Process(panel.pid).children(recursive=True)
+            except psutil.Error:
+                children = []
+            for child in children:
+                try:
+                    child.terminate()
+                except psutil.Error:
+                    pass
+            panel.terminate()
+            try:
+                panel.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                panel.kill(); panel.wait(timeout=2)
+            _, alive = psutil.wait_procs(children, timeout=2)
+            for child in alive:
+                try:
+                    child.kill()
+                except psutil.Error:
+                    pass
+            psutil.wait_procs(alive, timeout=2)
+        self.panels.clear()
 
 
 def run(path):
     from PySide6.QtCore import QCoreApplication, QLockFile, QObject, QTimer, Signal
+    from PySide6.QtGui import QColor, QCursor, QIcon, QPainter, QPen, QPixmap
     from PySide6.QtNetwork import QLocalServer
-    from PySide6.QtWidgets import QApplication, QMessageBox, QSystemTrayIcon, QMenu
-    from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
+    from PySide6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
     from shiboken6 import isValid
     graphical = os.name == 'nt' or bool(os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY'))
     if graphical and os.name != 'nt':
@@ -234,9 +282,11 @@ def run(path):
         tray.setToolTip('Akousousin — Neural Voice Engine')
         tray.setIcon(QIcon(str(resources.root() / 'akousousin.png')))
         menu = QMenu()
-        toggle = menu.addAction('Start')
-        toggle.triggered.connect(lambda: submit({'command': 'stop' if toggle.text() == 'Stop' else 'start'}))
-        voices = menu.addMenu('Default voice')
+        toggle = menu.addAction('Start Speech')
+        toggle.triggered.connect(lambda: submit({'command': 'stop' if toggle.text() == 'Stop Speech' else 'start'}))
+        dictation_toggle = menu.addAction('Start Dictation')
+        dictation_toggle.triggered.connect(lambda: submit({'command': 'stt-toggle'}))
+        voices = menu.addMenu('Default Voice')
         def populate():
             voices.clear()
             config = settings.load(path)
@@ -251,10 +301,7 @@ def run(path):
                 action.setChecked(identifier == config['voice'])
                 action.triggered.connect(lambda checked=False, key=identifier: submit({'command': 'voice', 'voice': key}))
         voices.aboutToShow.connect(populate)
-        dictation_toggle = menu.addAction('Start dictation recording')
-        dictation_toggle.triggered.connect(lambda: submit({'command': 'stt-toggle'}))
-        menu.addAction('Cancel dictation', lambda: submit({'command': 'stt-cancel'}))
-        menu.addAction('Configure…', lambda: submit({'command': 'configure'}))
+        menu.addAction('Configure', lambda: submit({'command': 'configure'}))
         def quit_requested():
             if (state.owners or state.service.health(settings.load(path)['port'])) and QMessageBox.question(None, 'Quit Akousousin?',
                     'Speech is in use. Quit and stop Piper, interrupting speech?') != QMessageBox.Yes:
@@ -262,8 +309,12 @@ def run(path):
             submit({'command': 'quit'})
         menu.addAction('Quit', quit_requested)
         tray.setContextMenu(menu)
-        tray.activated.connect(lambda reason: submit({'command': 'configure'})
-                               if reason == QSystemTrayIcon.DoubleClick else None)
+        def activate_tray(reason):
+            if reason == QSystemTrayIcon.Trigger:
+                menu.popup(QCursor.pos())
+            elif reason == QSystemTrayIcon.DoubleClick:
+                submit({'command': 'configure'})
+        tray.activated.connect(activate_tray)
         tray.show()
 
     def tick():
@@ -301,9 +352,9 @@ def run(path):
             painter.end()
             tray.setIcon(QIcon(pixmap))
             tray.setToolTip('Akousousin · ' + status + '\nVoice input: ' + input_status['state'])
-            dictation_toggle.setEnabled(bool(state.desktop and state.desktop.enabled))
-            dictation_toggle.setText('Stop dictation recording' if input_status['busy'] else 'Start dictation recording')
-            toggle.setText('Stop' if running else 'Start')
+            pending_input = bool(state.desktop and state.desktop.start_requested)
+            dictation_toggle.setText('Stop Dictation' if input_status['busy'] or pending_input else 'Start Dictation')
+            toggle.setText('Stop Speech' if running else 'Start Speech')
     timer = QTimer()
     timer.timeout.connect(tick)
     timer.start(1500)

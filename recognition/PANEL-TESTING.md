@@ -12,7 +12,7 @@ Whisper speech models are NOT bundled. They are retained in
 
 To reuse your first test download, choose **Import existing model…**, then select
 its `models/small` folder (the folder containing `model.bin`). Alternatively,
-**Enable / prepare model** downloads Small once, about 485 MB. Wait for **Ready**.
+**Enable voice input** downloads Small once, about 485 MB. Wait for **Ready**.
 Turbo is import-only in this trial.
 
 Install microphone/audio utilities if needed:
@@ -21,7 +21,7 @@ Install microphone/audio utilities if needed:
 sudo apt install pulseaudio-utils
 ```
 
-Click **Start recording (10 seconds)**. Wait for the two short 250 Hz tones and
+Click **Start recording (10 seconds)**. Wait for the two short 300 Hz tones and
 **Listening — speak now**, then speak. The transcript and detected language appear
 in the panel. The model stays loaded for subsequent recordings. Try silence and
 another language too. The sound can be disabled. **Test ready sound** plays the
@@ -62,3 +62,20 @@ If “App info not found” persists despite a valid launcher, quit active porta
 sessions and run `systemctl --user restart xdg-desktop-portal.service`, then enable
 shortcuts again. This resolved the failure in the confirmed Kubuntu/Kate test;
 no AKS configuration or model reset was needed.
+
+The model control is a single Enable voice input / Disable voice input button.
+Disable stops recognition and frees model memory without deleting downloads;
+the dictation shortcut or Start recording can enable it again. The first activation
+can download Small in a cancellable worker. Desktop shortcuts still require KDE's
+permission setup once per AKS run. Start Dictation in the tray can open that setup.
+
+The tray menu is Start/Stop Speech, Start/Stop Dictation, Default Voice, Configure,
+Quit. A single left-click opens it; a double-click opens Configure. Closing a panel
+leaves the controller available. Quit closes all panels launched by that controller,
+microphone capture, recognition and speech workers and portal sessions.
+
+Voice Input and Settings have a vertical scrollbar and wheel scrolling; the voice
+library also exposes scrollbars. The initial window fits the available screen and
+Settings remains accessible at smaller sizes. The two ready tones now use 300 Hz
+and a peak of 32700/32767 (about +10.3 dB from the previous trial); a full +12 dB
+at the previous amplitude would clip.

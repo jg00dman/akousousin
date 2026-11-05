@@ -167,9 +167,12 @@ class ReadyCueTests(unittest.TestCase):
                 self.assertEqual((sound.getframerate(), sound.getnchannels()), (16000, 1))
                 pcm = sound.readframes(sound.getnframes())
             samples = struct.unpack('<' + 'h' * (len(pcm) // 2), pcm)
-            self.assertGreater(max(samples[:1600]), 9000)
+            self.assertGreater(max(samples[:1600]), 32000)
+            self.assertLessEqual(max(samples), 32767)
+            crossings = sum(samples[i] <= 0 < samples[i + 1] for i in range(1599))
+            self.assertIn(crossings, (29, 30, 31))
             self.assertEqual(set(samples[1600:3040]), {0})
-            self.assertGreater(max(samples[3040:]), 9000)
+            self.assertGreater(max(samples[3040:]), 32000)
             self.assertEqual(options['env']['LD_LIBRARY_PATH'], '/host/lib')
             self.assertIn('--client-name=Akousousin', arguments)
             self.assertTrue(options['check'])
@@ -186,3 +189,17 @@ class ReadyCueTests(unittest.TestCase):
         with patch('shutil.which', return_value=None):
             with self.assertRaisesRegex(RuntimeError, 'paplay or pw-play'):
                 ready_cue()
+
+
+class AssetActivationTests(unittest.TestCase):
+    def test_inference_does_not_download_but_explicit_activation_downloads_once(self):
+        from akousousin_backend.recognition import prepare_model_assets
+        cached = set()
+        config = {'root': '/model-cache', 'model': 'turbo'}
+        with patch('akousousin_backend.models.installed', side_effect=lambda model, root: model in cached), patch('akousousin_backend.models.install', side_effect=lambda model, **kwargs: cached.add(model)) as install:
+            prepare_model_assets(config)
+            install.assert_not_called()
+            config['download_missing'] = True
+            prepare_model_assets(config)
+            prepare_model_assets(config)
+            install.assert_called_once_with('small', root='/model-cache')

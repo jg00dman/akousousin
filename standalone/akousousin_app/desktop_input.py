@@ -93,12 +93,14 @@ class Desktop:
         self.requests = {}
         self.early = {}
         self.focus_waiters = {}
+        self.start_requested = False
         self.shortcut_down = False
         self.shortcut_description = ''
         self.tasks = set()
         self.setup_task = None
 
-    def start(self):
+    def start(self, listen=False):
+        self.start_requested = listen
         if self.thread and self.thread.is_alive():
             return
         self.thread = threading.Thread(target=self._run, daemon=True)
@@ -306,6 +308,9 @@ class Desktop:
             raise RuntimeError('Keyboard permission was not granted')
         self.enabled = True
         self.status = 'Desktop dictation enabled — ' + self.shortcut_description
+        if self.start_requested:
+            self.start_requested = False
+            await self.toggle_recording()
 
     async def confirm_focus(self, require_window=True):
         identifier = uuid.uuid4().hex
@@ -320,16 +325,17 @@ class Desktop:
         finally:
             self.focus_waiters.pop(identifier, None)
 
+    async def toggle_recording(self):
+        try:
+            if self.dictation.status()['busy']:
+                self.dictation.finish()
+            else:
+                self.dictation.start(target=await self.confirm_focus())
+        except Exception as error:
+            self.status = str(error)
+
     def trigger(self):
-        async def toggle():
-            try:
-                if self.dictation.status()['busy']:
-                    self.dictation.finish()
-                else:
-                    self.dictation.start(target=await self.confirm_focus())
-            except Exception as error:
-                self.status = str(error)
-        self.loop.call_soon_threadsafe(lambda: self.loop.create_task(toggle()))
+        self.loop.call_soon_threadsafe(lambda: self.loop.create_task(self.toggle_recording()))
 
     async def shortcut(self, active):
         if not hasattr(self, '_shortcut_lock'):
@@ -411,6 +417,7 @@ class Desktop:
         self.bus.disconnect()
 
     def close(self):
+        self.start_requested = False
         self.stopping.set()
         self.enabled = False
         self.guard.invalidate()

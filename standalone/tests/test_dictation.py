@@ -99,11 +99,26 @@ class DictationTests(unittest.TestCase):
         self.manager.start(); self.wait()
         self.assertTrue(Audio.instances[-1].options['paused']())
 
-    def test_no_model_does_not_start_microphone(self):
-        with patch('akousousin_backend.models.installed', return_value=False):
+    def test_failed_first_download_does_not_start_microphone(self):
+        def fail(cancelled=None):
+            self.assertTrue(self.manager.recognizer.model['download_missing'])
+            raise RuntimeError('Download failed')
+        with patch('akousousin_backend.models.installed', return_value=False), patch.object(Recognition, 'start', side_effect=fail):
             self.manager.start(); self.wait()
         self.assertEqual(Audio.instances, [])
         self.assertEqual(self.manager.status()['phase'], 'error')
+        self.assertIn('Download failed', self.manager.status()['state'])
+
+    def test_recording_reenables_input_after_disabling_and_idle_unloads_keep_enabled(self):
+        self.manager.prepare(); self.wait()
+        self.manager.last_activity = time.monotonic() - 301
+        self.manager.expire()
+        self.assertTrue(self.manager.status()['enabled'])
+        self.manager.unload()
+        self.assertFalse(self.manager.status()['enabled'])
+        self.manager.start(); self.wait()
+        self.assertTrue(self.manager.status()['enabled'])
+        self.assertTrue(self.manager.status()['loaded'])
 
     def test_push_to_talk_recognizes_but_does_not_insert_before_release(self):
         config = settings.load(self.path)

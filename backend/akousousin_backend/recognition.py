@@ -83,10 +83,22 @@ def load_model(root, selected, factory):
         return model, 'small', 'Selected Turbo model could not load; using Small'
 
 
+
+def prepare_model_assets(config):
+    """Only explicit voice-input activation permits a first download."""
+    if config.get('download_missing'):
+        from . import models
+        if not models.installed(config['model'], config['root']):
+            # Turbo currently falls back to the pinned Small download.
+            if not models.installed('small', config['root']):
+                models.install('small', root=config['root'])
+
+
 def worker(pipe, config):
     try:
         import numpy as np
         from faster_whisper import WhisperModel
+        prepare_model_assets(config)
         model, active, fallback = load_model(config['root'], config['model'], WhisperModel)
         pipe.send((True, {'model': active, 'fallback': fallback}))
         while True:
@@ -176,14 +188,14 @@ class Recognizer(Synthesizer):
 
 
 def ready_cue():
-    """Two short 250 Hz tones, synchronously, before accepted speech audio."""
+    """Two short 300 Hz tones, synchronously, before accepted speech audio."""
     output = io.BytesIO()
     samples = []
     for duration, tone in ((.10, True), (.09, False), (.10, True)):
         count = int(RATE * duration)
         for index in range(count):
             envelope = min(1, index / 160, (count - index) / 160)
-            sample = int(10000 * envelope * math.sin(2 * math.pi * 250 * index / RATE)) if tone else 0
+            sample = int(32700 * envelope * math.sin(2 * math.pi * 300 * index / RATE)) if tone else 0
             samples.append(struct.pack('<h', sample))
     with wave.open(output, 'wb') as audio:
         audio.setparams((1, 2, RATE, 0, 'NONE', ''))

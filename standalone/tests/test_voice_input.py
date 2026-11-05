@@ -20,14 +20,12 @@ class VoiceInputTests(unittest.TestCase):
         page.ensure_model = Mock()
         return page
 
-    def test_recording_uses_shared_controller_after_model_install(self):
+    def test_recording_delegates_model_lifecycle_to_shared_controller(self):
         page = self.page()
-        order = []
-        page.ensure_model.side_effect = lambda model: order.append('model installed')
         with patch('akousousin_app.voice_input.runtime.call') as call:
-            call.side_effect = lambda *a, **k: self.assertEqual(order, ['model installed'])
             page.record()
             self.assertEqual(call.call_args.args[1], {'command': 'stt-start', 'seconds': 10})
+        page.ensure_model.assert_not_called()
 
     def test_closing_panel_does_not_stop_shared_recognition(self):
         page = self.page()
@@ -48,7 +46,7 @@ class VoiceInputTests(unittest.TestCase):
 
     def test_cancel_during_model_import_prevents_late_recording(self):
         page = self.page()
-        page.ensure_model.side_effect = lambda model: page.action_cancelled.set()
+        page.action_cancelled.set()
         with patch('akousousin_app.voice_input.runtime.call') as call:
             page.record()
             call.assert_not_called()
@@ -74,3 +72,13 @@ class VoiceInputTests(unittest.TestCase):
         self.assertEqual((kind, message), ('sound', 'Playback failed'))
         cue.assert_called_once_with()
         page.ensure_model.assert_not_called()
+
+
+    def test_single_toggle_prepares_or_disables_input(self):
+        page = self.page()
+        page.busy = False
+        page.prepare = Mock(); page.unload = Mock()
+        page.input_enabled = False; page.toggle_input()
+        page.prepare.assert_called_once()
+        page.input_enabled = True; page.toggle_input()
+        page.unload.assert_called_once()

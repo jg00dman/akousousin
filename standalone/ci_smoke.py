@@ -141,6 +141,19 @@ finally:
     settings.save(settings_path, config)
     time.sleep(2)
 
+# Exercise Quit against a real panel process owned by the packaged controller.
+owned_panels = public('--configure')['panels']
+assert owned_panels, 'Configure did not register its panel with the controller'
+time.sleep(2)
+public('--quit')
+import psutil
+for pid in owned_panels:
+    deadline = time.monotonic() + 10
+    while psutil.pid_exists(pid) and time.monotonic() < deadline:
+        time.sleep(.1)
+    assert not psutil.pid_exists(pid), 'Quit left a packaged control panel running'
+print('PASS: Quit closes owned packaged control panels', flush=True)
+
 assert not (WORK / 'data/Akousousin/runtimes').exists(), 'An extracted runtime was retained'
 subprocess.run([str(executable), '--settings', str(settings_path), '--smoke-test'], env=env, check=True, timeout=30)
 if not native:

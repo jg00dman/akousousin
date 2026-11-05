@@ -37,8 +37,10 @@ class Panel:
         if icon.exists():
             self.window_icon = tk.PhotoImage(file=str(icon))
             self.root.iconphoto(True, self.window_icon)
-        self.root.geometry('1160x820')
-        self.root.minsize(940, 700)
+        width = min(1160, max(640, self.root.winfo_screenwidth() - 80))
+        height = min(820, max(400, self.root.winfo_screenheight() - 100))
+        self.root.geometry(f'{width}x{height}')
+        self.root.minsize(min(760, width), min(480, height))
         self.root.configure(bg='#f4f5f3')
         self.root.protocol('WM_DELETE_WINDOW', self.close)
         style = ttk.Style(self.root)
@@ -197,13 +199,20 @@ class Panel:
         self.installed_only = tk.BooleanVar()
         ttk.Checkbutton(row, text='Installed only', variable=self.installed_only,
                         command=self.refresh_library).pack(side='right')
-        self.tree = ttk.Treeview(page, columns=('language', 'quality', 'size', 'status'), show='tree headings', height=12)
+        table = ttk.Frame(page); table.pack(fill='both', expand=True, pady=8)
+        table.rowconfigure(0, weight=1); table.columnconfigure(0, weight=1)
+        self.tree = ttk.Treeview(table, columns=('language', 'quality', 'size', 'status'), show='tree headings', height=12)
         self.tree.heading('#0', text='Voice')
         self.tree.column('#0', width=160)
         for name, width in [('language', 190), ('quality', 80), ('size', 80), ('status', 230)]:
             self.tree.heading(name, text=name.title())
             self.tree.column(name, width=width)
-        self.tree.pack(fill='both', expand=True, pady=8)
+        self.tree.grid(row=0, column=0, sticky='nsew')
+        self.library_scrollbar = ttk.Scrollbar(table, orient='vertical', command=self.tree.yview)
+        self.library_scrollbar.grid(row=0, column=1, sticky='ns')
+        horizontal = ttk.Scrollbar(table, orient='horizontal', command=self.tree.xview)
+        horizontal.grid(row=1, column=0, sticky='ew')
+        self.tree.configure(yscrollcommand=self.library_scrollbar.set, xscrollcommand=horizontal.set)
         row = ttk.Frame(page)
         row.pack(fill='x', pady=8)
         ttk.Button(row, text='Review licence & download', command=self.download).pack(side='left', padx=3)
@@ -343,7 +352,10 @@ class Panel:
             self.language_rows.insert('', 'end', text=label(language), values=(voice,))
 
     def build_settings(self):
-        page = self.pages['Settings']
+        from .scrolling import ScrollArea
+        self.settings_scroll = ScrollArea(self.pages['Settings'])
+        self.settings_scroll.pack(fill='both', expand=True)
+        page = self.settings_scroll.inner
         frame = self.card(page, 'Install into a Wine prefix or Windows')
         if os.name != 'nt':
             ttk.Label(frame, text='Wine prefix', style='Card.TLabel').pack(anchor='w')

@@ -15,16 +15,12 @@ class VoiceInput:
         self.events = queue.Queue()
         self.busy = False
         self.closed = False
-        canvas = self.canvas = tk.Canvas(page, highlightthickness=0, bg='#f4f5f3')
-        scrollbar = ttk.Scrollbar(page, orient='vertical', command=canvas.yview)
-        scrollbar.pack(side='right', fill='y')
-        canvas.pack(fill='both', expand=True)
-        canvas.configure(yscrollcommand=scrollbar.set)
-        inner = ttk.Frame(canvas)
-        window = canvas.create_window((0, 0), window=inner, anchor='nw')
-        inner.bind('<Configure>', lambda event: canvas.configure(scrollregion=canvas.bbox('all')))
-        canvas.bind('<Configure>', lambda event: canvas.itemconfigure(window, width=event.width))
-        page = inner
+        from .scrolling import ScrollArea
+        self.scroller = ScrollArea(page)
+        self.scroller.pack(fill='both', expand=True)
+        self.canvas = self.scroller.canvas
+        page = self.scroller.inner
+        self.input_enabled = False
         config = panel.config
         self.model = tk.StringVar(value=config.get('stt_model', 'small'))
         self.language = tk.StringVar(value=config.get('stt_language', ''))
@@ -57,10 +53,11 @@ class VoiceInput:
                   style='Card.TLabel', wraplength=760).pack(anchor='w')
         self.buttons = []
         row = ttk.Frame(frame, style='Card.TFrame'); row.pack(fill='x', pady=10)
-        for text, function in [('Enable / prepare model', self.prepare), ('Import existing model…', self.import_model),
-                               ('Unload model', self.unload)]:
-            button = ttk.Button(row, text=text, command=function)
-            button.pack(side='left', padx=3); self.buttons.append(button)
+        self.model_button = ttk.Button(row, text='Enable voice input', command=self.toggle_input)
+        self.model_button.pack(side='left', padx=3)
+        ttk.Button(row, text='Import existing model…', command=self.import_model).pack(side='left', padx=3)
+        ttk.Label(frame, text='Enable downloads the model once if needed and loads it. Disable stops dictation and frees model memory; downloaded files stay.',
+                  style='Card.TLabel', wraplength=760).pack(anchor='w', pady=5)
         ttk.Label(frame, textvariable=self.state, style='Card.TLabel', wraplength=760).pack(anchor='w', pady=8)
         frame = panel.card(page, 'Desktop dictation — KDE Wayland')
         row = ttk.Frame(frame, style='Card.TFrame'); row.pack(fill='x')
@@ -88,7 +85,7 @@ class VoiceInput:
         ttk.Label(frame, textvariable=self.detected_language, style='Card.TLabel', wraplength=760).pack(anchor='w')
         ttk.Label(frame, text='Selections apply to the next recording.', style='Card.TLabel').pack(anchor='w')
         row = ttk.Frame(frame, style='Card.TFrame'); row.pack(fill='x', pady=6)
-        ttk.Checkbutton(row, text='Play two short ready tones (250 Hz)', variable=self.beep,
+        ttk.Checkbutton(row, text='Play two short ready tones (300 Hz)', variable=self.beep,
                         command=self.save).pack(side='left')
         self.sound_button = ttk.Button(row, text='Test ready sound', command=self.test_ready_sound)
         self.sound_button.pack(side='left', padx=8)
@@ -180,9 +177,15 @@ class VoiceInput:
         self.ensure_model(model, source)
         self.start_command({'command': 'stt-prepare'})
 
+    def toggle_input(self):
+        if self.input_enabled or self.busy:
+            self.unload()
+        else:
+            self.prepare()
+
     def prepare(self):
-        model, *_ = self.save()
-        self.run(lambda: self.ensure_ready(model))
+        self.save()
+        self.run(lambda: self.start_command({'command': 'stt-prepare'}))
 
     def import_model(self):
         model, *_ = self.save()
@@ -213,18 +216,12 @@ class VoiceInput:
         self.command('stt-unload')
 
     def enable_desktop(self):
-        model, *_ = self.save()
-        def task():
-            self.ensure_model(model)
-            self.start_command({'command': 'stt-desktop-enable'})
-        self.run(task)
+        self.save()
+        self.run(lambda: self.start_command({'command': 'stt-desktop-enable'}))
 
     def record(self):
-        model, *_ = self.save()
-        def task():
-            self.ensure_model(model)
-            self.start_command({'command': 'stt-start', 'seconds': 10})
-        self.run(task)
+        self.save()
+        self.run(lambda: self.start_command({'command': 'stt-start', 'seconds': 10}))
 
     def test_ready_sound(self):
         if self.shared_busy:
@@ -270,6 +267,9 @@ class VoiceInput:
         if not result:
             return
         self.shared_busy = result['busy']
+        self.input_enabled = result.get('enabled', result.get('loaded', False))
+        if hasattr(self, 'model_button'):
+            self.model_button.configure(text='Disable voice input' if self.input_enabled else 'Enable voice input')
         if not self.local_error and not self.busy:
             self.state.set(result['state'])
         self.desktop_state.set(result['desktop']['state'])

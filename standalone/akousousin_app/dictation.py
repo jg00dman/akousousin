@@ -24,12 +24,13 @@ class Dictation:
         self.results = []
         self.last_activity = time.monotonic()
         self.insert = None
+        self.enabled = False
         self.closed = False
         self.unloading = False
 
     def status(self):
         with self.lock:
-            return {'state': self.state, 'phase': self.phase,
+            return {'enabled': self.enabled, 'state': self.state, 'phase': self.phase,
                     'busy': self.thread is not None and self.thread.is_alive(),
                     'loaded': self.recognizer is not None and self.recognizer.process is not None and self.recognizer.process.is_alive(),
                     'sequence': self.sequence, 'results': [dict(item) for item in self.results]}
@@ -57,6 +58,7 @@ class Dictation:
             self.cancelled = threading.Event()
             self.finished = threading.Event()
             config = settings.load(self.path)
+            self.enabled = True
             self.change('Loading model…', 'loading')
             self.thread = threading.Thread(target=self._run, args=(record, target, seconds, config), daemon=True)
             self.thread.start()
@@ -65,14 +67,17 @@ class Dictation:
         from akousousin_backend import models
         from akousousin_backend.recognition import Recognizer
         model = config['stt_model']
-        if not models.installed(model) and not (model == 'turbo' and models.installed('small')):
-            raise RuntimeError('Prepare or import a speech model in Voice Input first.')
+        missing = not models.installed(model) and not (model == 'turbo' and models.installed('small'))
         if self.recognizer and self.recognizer.model['model'] != model:
             self.recognizer.close()
             self.recognizer = None
         if self.recognizer is None:
             self.recognizer = (self.recognizer_factory or Recognizer)(model=model)
         if self.recognizer.process is None or not self.recognizer.process.is_alive():
+            self.recognizer.model['download_missing'] = missing
+            if missing:
+                self.change('Downloading Small (about 485 MB), then loading…', 'loading')
+                self.recognizer.startup_timeout = 900
             self.recognizer.start(self.cancelled)
         if self.cancelled.is_set():
             raise InterruptedError('Dictation cancelled')
@@ -196,6 +201,8 @@ class Dictation:
             self.last_activity = time.monotonic()
 
     def finish(self):
+        if self.phase == 'loading':
+            self.cancelled.set()
         self.finished.set()
         if self.capture:
             self.capture.finish()
@@ -210,6 +217,8 @@ class Dictation:
         with self.lock:
             if self.unloading or (only_if_idle and self.status()['busy']):
                 return
+            if not only_if_idle:
+                self.enabled = False
             self.unloading = True
             self.cancel()
             thread = self.thread
@@ -234,4 +243,10 @@ class Dictation:
 
     def close(self):
         self.closed = True
-        self.unload()
+        try:
+            self.unload()
+        finally:
+            if self.capture:
+                self.capture.close()
+            if self.recognizer:
+                self.recognizer.close()

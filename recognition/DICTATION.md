@@ -27,7 +27,7 @@ recordings and panels, and unloads after 300 seconds idle by default.
 
 Closing the panel leaves dictation available in the tray. Disable desktop dictation
 closes its permission sessions and unloads the focus observer. Quit AKS closes all
-input workers and sessions. The Recording test still displays text only. The most
+input workers, sessions and control panels launched by that controller. The Recording test still displays text only. The most
 recent five transcripts are kept in memory and shown with their language and output
 status; Copy transcript is an explicit clipboard action. No transcript file is
 written. Program updates do not bundle or remove speech model weights.
@@ -125,3 +125,19 @@ Refresh reruns bounded `pactl` discovery off the UI thread. The language picker 
 searchable by name/code and scrollable. Automatic detection remains a choice,
 while the last detected language is displayed separately; detection never silently
 locks the user's language preference. Selections apply to the next recording.
+
+## Voice-input activation
+
+Enable voice input downloads the pinned Small assets once when required and loads
+the model. Disable voice input cancels recording/loading and frees model memory,
+retaining model files and the approved desktop shortcut connection. The next
+shortcut or recording activation enables and loads recognition again. Idle unloading
+also retains the enabled state, with automatic loading on the next recording.
+Automatic downloads run in the cancellable recognition worker; ordinary WAV/CLI
+inference still requires already installed assets and does not download. The next
+installation removes abandoned temporary stages under the exclusive install lock.
+
+Start Dictation in the tray can initiate KDE shortcut/keyboard consent when needed.
+It waits for successful setup and verified focus before recording. Stop Dictation
+also cancels a setup or a loading operation. The shorter menu keeps cancellation
+available in the panel and command interface.

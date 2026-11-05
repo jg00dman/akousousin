@@ -82,3 +82,54 @@ class VoiceInputGuiTests(unittest.TestCase):
                         root.update(); time.sleep(.01)
                     cue.assert_called_once_with()
                     self.assertIn('Playback completed', page.sound_status.get())
+
+
+    def test_wheel_routes_only_to_visible_scroll_area(self):
+        from akousousin_app.scrolling import ScrollArea
+        root = tk.Tk(); self.addCleanup(root.destroy)
+        root.geometry('450x300')
+        first, second = ScrollArea(root), ScrollArea(root)
+        first.pack(fill='both', expand=True)
+        labels = []
+        for area in (first, second):
+            for number in range(50):
+                label = ttk.Label(area.inner, text='Row ' + str(number), padding=10)
+                label.pack()
+            labels.append(label)
+        root.update()
+        labels[0].event_generate('<Button-5>'); root.update()
+        self.assertGreater(first.canvas.yview()[0], 0)
+        before = first.canvas.yview()
+        first.pack_forget(); second.pack(fill='both', expand=True); root.update()
+        labels[1].event_generate('<MouseWheel>', delta=-120); root.update()
+        self.assertGreater(second.canvas.yview()[0], 0)
+        self.assertEqual(first.canvas.yview(), before)
+        labels[1].event_generate('<MouseWheel>', delta=120); root.update()
+        self.assertEqual(second.canvas.yview()[0], 0)
+
+    def test_settings_fit_small_window_and_library_has_scrollbars(self):
+        from akousousin_app.panel import Panel
+        with tempfile.TemporaryDirectory() as folder, patch('akousousin_app.resources.bootstrap', return_value=copy.deepcopy(settings.DEFAULTS)), patch('akousousin_app.catalogue.catalogue', return_value={}), patch('akousousin_app.voice_input.discover_microphones', return_value=[('', 'System default')]), patch('akousousin_app.runtime.call', return_value=None):
+            panel = Panel(Path(folder) / 'settings.json')
+            self.addCleanup(panel.root.destroy)
+            panel.root.geometry('760x480')
+            panel.show('Settings'); panel.root.update()
+            scroll = panel.settings_scroll
+            self.assertTrue(scroll.scrollbar.winfo_ismapped())
+            self.assertLess(scroll.canvas.yview()[1], 1)
+            scroll.canvas.yview_moveto(1); panel.root.update()
+            def buttons(widget):
+                for child in widget.winfo_children():
+                    if isinstance(child, ttk.Button): yield child
+                    yield from buttons(child)
+            save = next(button for button in buttons(scroll.inner) if button.cget('text') == 'Save settings')
+            self.assertLess(save.winfo_rooty() + save.winfo_height(), panel.root.winfo_rooty() + panel.root.winfo_height())
+            panel.show('Voice library'); panel.root.update()
+            self.assertTrue(panel.library_scrollbar.winfo_ismapped())
+            panel.show('Voice Input'); panel.root.update()
+            page = panel.voice_input
+            page.shared({'busy': False, 'loaded': True, 'enabled': True, 'state': 'Ready', 'desktop': {'state': 'Disabled'}, 'sequence': 0, 'results': []})
+            self.assertEqual(page.model_button.cget('text'), 'Disable voice input')
+            with patch.object(page, 'unload') as unload:
+                page.model_button.invoke()
+                unload.assert_called_once()
