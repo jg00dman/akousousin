@@ -12,7 +12,7 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 import urllib.request
 import webbrowser
 
-from . import catalogue, resources, runtime, settings
+from . import __version__, catalogue, resources, runtime, settings, updates
 from .languages import label
 from .install import Installer
 from .service import Service
@@ -30,6 +30,7 @@ class Panel:
         self.service = Service(path)
         self.events = queue.Queue()
         self.busy = 0
+        self.updating = False
         self.root = tk.Tk()
         self.root.title('Akousousin — Neural Voice Engine')
         icon = resources.root() / 'akousousin.png'
@@ -55,7 +56,7 @@ class Panel:
         header.pack(fill='x')
         ttk.Label(header, text='▥  Akousousin', style='Title.TLabel').pack(side='left')
         ttk.Label(header, text='SAPI · Speech Dispatcher (experimental)', padding=(18, 8)).pack(side='left')
-        ttk.Label(header, text='Standalone beta').pack(side='right')
+        ttk.Label(header, text=f'Beta {__version__}').pack(side='right')
         body = ttk.Frame(self.root)
         body.pack(fill='both', expand=True, padx=20)
         nav = ttk.Frame(body, width=165, padding=(0, 10, 16, 0))
@@ -63,7 +64,7 @@ class Panel:
         self.content = ttk.Frame(body)
         self.content.pack(side='left', fill='both', expand=True)
         self.pages = {}
-        for name in ('Overview', 'Voice library', 'Languages', 'Settings'):
+        for name in ('Overview', 'Voice library', 'Languages', 'Settings', 'Updates'):
             ttk.Button(nav, text=name, command=lambda name=name: self.show(name)).pack(fill='x', pady=4)
             self.pages[name] = ttk.Frame(self.content)
         self.status = tk.StringVar(value='Ready')
@@ -82,6 +83,7 @@ class Panel:
         self.build_library()
         self.build_languages()
         self.build_settings()
+        self.build_updates()
         footer = ttk.Frame(self.root, padding=(22, 12))
         footer.pack(fill='x')
         ttk.Label(footer, textvariable=self.status, wraplength=760).pack(side='left')
@@ -123,6 +125,7 @@ class Panel:
                 kind, callback, result = self.events.get_nowait()
                 self.busy = max(0, self.busy - 1)
                 if kind == 'error':
+                    self.updating = False
                     self.status.set(result)
                     messagebox.showerror('Akousousin', result, parent=self.root)
                 elif callback:
@@ -375,6 +378,38 @@ class Panel:
         ttk.Button(frame, text='Save settings', command=self.save).pack(anchor='e')
         ttk.Button(page, text='Open service log', command=lambda: webbrowser.open(self.service.log.as_uri())).pack(anchor='w')
 
+    def build_updates(self):
+        frame = self.card(self.pages['Updates'], 'Application updates')
+        ttk.Label(frame, text=f'Installed version: {__version__}', style='Card.TLabel').pack(anchor='w')
+        self.update_status = tk.StringVar(value='Check GitHub for a newer release, including betas.')
+        ttk.Label(frame, textvariable=self.update_status, wraplength=760, style='Card.TLabel').pack(anchor='w', pady=12)
+        ttk.Button(frame, text='Check for updates', command=self.check_updates).pack(anchor='w')
+
+    def check_updates(self):
+        if self.busy:
+            return
+        self.update_status.set('Checking for updates…')
+        def checked(update):
+            if update is None:
+                self.update_status.set('No newer compatible release is available.')
+                return
+            self.update_status.set(f'New version available: {update["version"]}')
+            automatic = os.name != 'nt' and bool(os.environ.get('APPIMAGE'))
+            text = (f'Update from {__version__} to {update["version"]}?\n\n'
+                    + ('Close Wine applications first. Speech will stop and the control panel will restart. '
+                       'Your voices and preferences will be kept.' if automatic else
+                       'Open the release download? Quit Akousousin before replacing your installed files.'))
+            if not messagebox.askyesno('Akousousin update', text, parent=self.root):
+                return
+            if not automatic:
+                webbrowser.open(update['url'])
+                return
+            if self.save():
+                self.updating = True
+                self.update_status.set('Downloading and installing update…')
+                self.worker(lambda: updates.install(update, self.path), lambda _: self.root.destroy())
+        self.worker(updates.check, checked)
+
     def save(self):
         try:
             self.config.update(speed=float(self.speed.get()), volume=float(self.volume.get()) / 100,
@@ -457,6 +492,9 @@ class Panel:
         self.worker(preview, self.status.set)
 
     def close(self):
+        if self.updating:
+            messagebox.showinfo('Akousousin update', 'Please wait for the update to finish before closing the panel.')
+            return
         if self.busy and not messagebox.askyesno('Akousousin', 'An operation is still running. Close the panel?'):
             return
         self.root.destroy()
