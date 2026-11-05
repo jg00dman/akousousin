@@ -6,6 +6,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 
 from akousousin_app.desktop_identity import APP_ID, MARKER, desktop_exec, ensure_desktop_entry
 
@@ -53,3 +54,38 @@ class IdentityTests(unittest.TestCase):
                 time.sleep(.02)
             import json
             self.assertEqual(json.loads(result.read_text()), arguments)
+
+
+    def test_unchanged_entry_keeps_inode_and_mtime(self):
+        with tempfile.TemporaryDirectory() as folder:
+            entry = ensure_desktop_entry([sys.executable, '--version'], folder)
+            before = entry.stat()
+            ensure_desktop_entry([sys.executable, '--version'], folder)
+            after = entry.stat()
+            self.assertEqual((after.st_ino, after.st_mtime_ns), (before.st_ino, before.st_mtime_ns))
+
+    def test_removed_or_nonexecutable_running_image_has_actionable_error(self):
+        with tempfile.TemporaryDirectory() as folder:
+            image = Path(folder) / 'trial.AppImage'
+            with patch.dict(os.environ, {'APPIMAGE': str(image)}):
+                with self.assertRaisesRegex(RuntimeError, 'moved or been removed'):
+                    ensure_desktop_entry(data_home=folder)
+                image.write_text('download'); image.chmod(0o644)
+                with self.assertRaisesRegex(RuntimeError, 'not executable'):
+                    ensure_desktop_entry(data_home=folder)
+
+    @unittest.skipUnless(os.name != 'nt', 'Requires Linux GIO')
+    def test_host_gio_finds_installed_identity_by_id(self):
+        with tempfile.TemporaryDirectory() as folder:
+            ensure_desktop_entry([sys.executable, '--version'], folder)
+            code = """import ctypes
+lib=ctypes.CDLL('libgio-2.0.so.0')
+lookup=lib.g_desktop_app_info_new
+lookup.argtypes=[ctypes.c_char_p]; lookup.restype=ctypes.c_void_p
+assert lookup(b'org.akousousin.Akousousin.desktop'), 'Host GIO cannot resolve AKS identity'
+"""
+            environment = dict(os.environ, XDG_DATA_HOME=folder)
+            environment.pop('LD_LIBRARY_PATH', None)
+            result = subprocess.run([sys.executable, '-c', code], env=environment,
+                                    capture_output=True, text=True, timeout=5)
+            self.assertEqual(result.returncode, 0, result.stderr)

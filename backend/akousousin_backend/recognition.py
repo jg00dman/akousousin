@@ -183,7 +183,7 @@ def ready_cue():
         count = int(RATE * duration)
         for index in range(count):
             envelope = min(1, index / 160, (count - index) / 160)
-            sample = int(5000 * envelope * math.sin(2 * math.pi * 250 * index / RATE)) if tone else 0
+            sample = int(10000 * envelope * math.sin(2 * math.pi * 250 * index / RATE)) if tone else 0
             samples.append(struct.pack('<h', sample))
     with wave.open(output, 'wb') as audio:
         audio.setparams((1, 2, RATE, 0, 'NONE', ''))
@@ -198,7 +198,25 @@ def ready_cue():
     with tempfile.NamedTemporaryFile(suffix='.wav') as file:
         file.write(output.getvalue())
         file.flush()
-        subprocess.run([player, file.name], check=True, timeout=5)
+        # PyInstaller prepends its private libraries for AKS. System audio tools
+        # must load the host libraries, as they do when launched from a terminal.
+        environment = os.environ.copy()
+        if 'LD_LIBRARY_PATH_ORIG' in environment:
+            environment['LD_LIBRARY_PATH'] = environment['LD_LIBRARY_PATH_ORIG']
+        else:
+            environment.pop('LD_LIBRARY_PATH', None)
+        arguments = [player]
+        if Path(player).name == 'paplay':
+            arguments += ['--client-name=Akousousin', '--stream-name=Dictation ready',
+                          '--property=media.role=event']
+        try:
+            subprocess.run([*arguments, file.name], check=True, timeout=5,
+                           env=environment, capture_output=True, text=True)
+        except subprocess.CalledProcessError as error:
+            detail = (error.stderr or '').strip()[:400]
+            raise RuntimeError('Ready sound playback failed' + (': ' + detail if detail else '')) from error
+        except subprocess.TimeoutExpired as error:
+            raise RuntimeError('Ready sound playback timed out; check the system default output') from error
 
 
 def capture(seconds, source=None, on_ready=None, cue=None):

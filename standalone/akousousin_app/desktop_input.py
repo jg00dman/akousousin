@@ -219,9 +219,23 @@ class Desktop:
         # desktopFileName alone does not identify dbus-next's separate connection.
         # Registration must precede every other portal call on a new connection.
         from .desktop_identity import APP_ID, ensure_desktop_entry
-        ensure_desktop_entry()
-        await self.call('org.freedesktop.portal.Desktop', '/org/freedesktop/portal/desktop',
-                        'org.freedesktop.host.portal.Registry', 'Register', 'sa{sv}', [APP_ID, {}])
+        entry = ensure_desktop_entry()
+        # GIO's desktop-file monitor may not have processed a just-installed or
+        # updated launcher. Failed lookups do not associate this peer with an ID.
+        for attempt in range(4):
+            try:
+                await self.call('org.freedesktop.portal.Desktop', '/org/freedesktop/portal/desktop',
+                                'org.freedesktop.host.portal.Registry', 'Register', 'sa{sv}', [APP_ID, {}])
+                return
+            except RuntimeError as error:
+                if 'App info not found' not in str(error):
+                    raise
+                if attempt == 3:
+                    raise RuntimeError('Desktop portal could not find ' + str(entry)
+                                       + '. Check that its AppImage exists and is executable. '
+                                       'If it does, sign out and back in to refresh the desktop application cache. '
+                                       'Your settings and models can stay in place.') from error
+                await asyncio.sleep(.25 * 2 ** attempt)
 
     async def setup(self):
         if os.name == 'nt' or not os.environ.get('WAYLAND_DISPLAY'):

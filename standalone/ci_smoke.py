@@ -83,6 +83,17 @@ def public(*args):
     return __import__('json').loads(completed.stdout.splitlines()[-1])
 try:
     assert public('--acquire-session', 'logos-ci', '--owner-pid', str(os.getpid()))['running']
+    if not native:
+        identity = Path(env['XDG_DATA_HOME']) / 'applications/org.akousousin.Akousousin.desktop'
+        assert identity.is_file(), 'Packaged controller did not install desktop identity'
+        print(identity.read_text(), flush=True)
+        # The real portal uses GIO lookup by ID, not merely file existence.
+        subprocess.run([sys.executable, '-c',
+                        "import ctypes; lib=ctypes.CDLL('libgio-2.0.so.0'); "
+                        "lookup=lib.g_desktop_app_info_new; lookup.argtypes=[ctypes.c_char_p]; "
+                        "lookup.restype=ctypes.c_void_p; "
+                        "assert lookup(b'org.akousousin.Akousousin.desktop'), 'Packaged desktop identity cannot be resolved by host GIO'"],
+                       env=env, check=True, timeout=10)
     assert public('--acquire-session', 'second-ci', '--owner-pid', str(os.getpid()))['sessions'] == 2
     wav = WORK / 'real-sapi.wav'
     command = [str(executable), '--settings', str(settings_path), '--sapi-wav', str(wav), 'Standalone Open SAPI is speaking.']

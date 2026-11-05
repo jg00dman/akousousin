@@ -145,3 +145,20 @@ class IdentityStartupTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(portal_calls[0], ('org.freedesktop.host.portal.Registry', 'Register'))
             from akousousin_app.desktop_identity import APP_ID
             self.assertTrue((Path(folder) / 'applications' / (APP_ID + '.desktop')).exists())
+
+
+    async def test_identity_retries_only_transient_app_lookup_failures(self):
+        import tempfile
+        from unittest.mock import Mock, patch
+        with tempfile.TemporaryDirectory() as folder:
+            desktop = Desktop(Mock(), lambda: {}, folder, 'startup')
+            desktop.call = AsyncMock(side_effect=[RuntimeError('Register: App info not found'), []])
+            with patch('akousousin_app.desktop_identity.ensure_desktop_entry', return_value=folder), patch('akousousin_app.desktop_input.asyncio.sleep', new_callable=AsyncMock) as delay:
+                await desktop.register_identity()
+                delay.assert_awaited_once_with(.25)
+            self.assertEqual(desktop.call.await_count, 2)
+            desktop.call = AsyncMock(side_effect=RuntimeError('Register: Permission denied'))
+            with patch('akousousin_app.desktop_identity.ensure_desktop_entry', return_value=folder):
+                with self.assertRaisesRegex(RuntimeError, 'Permission denied'):
+                    await desktop.register_identity()
+            self.assertEqual(desktop.call.await_count, 1)

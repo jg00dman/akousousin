@@ -87,7 +87,14 @@ class VoiceInput:
         self.language_picker.pack(fill='x', pady=5)
         ttk.Label(frame, textvariable=self.detected_language, style='Card.TLabel', wraplength=760).pack(anchor='w')
         ttk.Label(frame, text='Selections apply to the next recording.', style='Card.TLabel').pack(anchor='w')
-        ttk.Checkbutton(frame, text='Play two short ready tones (250 Hz)', variable=self.beep).pack(anchor='w', pady=6)
+        row = ttk.Frame(frame, style='Card.TFrame'); row.pack(fill='x', pady=6)
+        ttk.Checkbutton(row, text='Play two short ready tones (250 Hz)', variable=self.beep,
+                        command=self.save).pack(side='left')
+        self.sound_button = ttk.Button(row, text='Test ready sound', command=self.test_ready_sound)
+        self.sound_button.pack(side='left', padx=8)
+        self.sound_status = tk.StringVar(value='Sound uses the system default playback device.')
+        self.sound_testing = False
+        ttk.Label(frame, textvariable=self.sound_status, style='Card.TLabel', wraplength=760).pack(anchor='w')
         row = ttk.Frame(frame, style='Card.TFrame'); row.pack(fill='x')
         self.record_button = ttk.Button(row, text='Start recording (10 seconds)', command=self.record)
         self.record_button.pack(side='left', pady=5)
@@ -219,6 +226,25 @@ class VoiceInput:
             self.start_command({'command': 'stt-start', 'seconds': 10})
         self.run(task)
 
+    def test_ready_sound(self):
+        if self.shared_busy:
+            self.sound_status.set('Stop recording before testing the ready sound.')
+            return
+        if self.sound_testing:
+            return
+        self.sound_testing = True
+        self.sound_button.configure(state='disabled')
+        self.sound_status.set('Playing on the system default output…')
+        def play():
+            from akousousin_backend.recognition import ready_cue
+            try:
+                ready_cue()
+                message = 'Playback completed. If silent, check the default output and AKS volume in KDE audio settings.'
+            except Exception as error:
+                message = str(error)
+            self.events.put(('sound', message))
+        threading.Thread(target=play, daemon=True).start()
+
     def copy(self):
         if self.latest_text:
             self.panel.root.clipboard_clear()
@@ -267,7 +293,11 @@ class VoiceInput:
         try:
             while True:
                 kind, value = self.events.get_nowait()
-                if kind == 'devices':
+                if kind == 'sound':
+                    self.sound_status.set(value)
+                    self.sound_testing = False
+                    self.sound_button.configure(state='normal')
+                elif kind == 'devices':
                     self.apply_sources(*value)
                 elif kind == 'shared':
                     self.shared(result=value)

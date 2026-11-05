@@ -75,3 +75,10 @@ class VoiceInputGuiTests(unittest.TestCase):
                              'results': [{'text': 'Guten Morgen', 'language': 'de', 'language_source': 'detected', 'output': 'displayed'}]})
                 self.assertIn('German (de)', page.detected_language.get())
                 self.assertEqual(page.language.get(), '', 'Detection must not silently lock the language')
+                with patch('akousousin_backend.recognition.ready_cue') as cue:
+                    page.sound_button.invoke()
+                    deadline = time.monotonic() + 2
+                    while page.sound_testing and time.monotonic() < deadline:
+                        root.update(); time.sleep(.01)
+                    cue.assert_called_once_with()
+                    self.assertIn('Playback completed', page.sound_status.get())

@@ -1,4 +1,6 @@
 import io
+import os
+import struct
 from pathlib import Path
 import tempfile
 import time
@@ -8,7 +10,7 @@ import unittest
 import wave
 from unittest.mock import patch, Mock
 
-from akousousin_backend.recognition import Recognizer, language_token, load_model, read_wav, model_root, capture
+from akousousin_backend.recognition import Recognizer, language_token, load_model, read_wav, model_root, capture, ready_cue
 
 
 def wav(rate=16000, seconds=.1):
@@ -155,3 +157,32 @@ class RecognitionTests(unittest.TestCase):
                 recognizer.lock.release()
         finally:
             recognizer.close()
+
+
+@unittest.skipIf(os.name == 'nt', 'Linux system audio player')
+class ReadyCueTests(unittest.TestCase):
+    def test_two_tones_use_host_libraries_and_identifiable_stream(self):
+        def play(arguments, **options):
+            with wave.open(arguments[-1], 'rb') as sound:
+                self.assertEqual((sound.getframerate(), sound.getnchannels()), (16000, 1))
+                pcm = sound.readframes(sound.getnframes())
+            samples = struct.unpack('<' + 'h' * (len(pcm) // 2), pcm)
+            self.assertGreater(max(samples[:1600]), 9000)
+            self.assertEqual(set(samples[1600:3040]), {0})
+            self.assertGreater(max(samples[3040:]), 9000)
+            self.assertEqual(options['env']['LD_LIBRARY_PATH'], '/host/lib')
+            self.assertIn('--client-name=Akousousin', arguments)
+            self.assertTrue(options['check'])
+        with patch.dict(os.environ, {'LD_LIBRARY_PATH': '/private/appimage', 'LD_LIBRARY_PATH_ORIG': '/host/lib'}), patch('shutil.which', return_value='/usr/bin/paplay'), patch('subprocess.run', side_effect=play):
+            ready_cue()
+
+    def test_playback_error_retains_player_diagnostic(self):
+        error = subprocess.CalledProcessError(1, ['paplay'], stderr='Connection refused')
+        with patch('shutil.which', return_value='/usr/bin/paplay'), patch('subprocess.run', side_effect=error):
+            with self.assertRaisesRegex(RuntimeError, 'Ready sound playback failed: Connection refused'):
+                ready_cue()
+
+    def test_no_player_has_clear_error(self):
+        with patch('shutil.which', return_value=None):
+            with self.assertRaisesRegex(RuntimeError, 'paplay or pw-play'):
+                ready_cue()

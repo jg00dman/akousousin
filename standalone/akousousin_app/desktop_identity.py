@@ -32,10 +32,19 @@ def ensure_desktop_entry(arguments=None, data_home=None):
         # An existing user-installed launcher already supplies this identity.
         # Do not rewrite a custom launcher to make portal registration work.
         return destination
+    if arguments is None:
+        image = os.environ.get('APPIMAGE')
+        if image and not Path(image).is_file():
+            raise RuntimeError('The running AppImage has moved or been removed. Quit AKS and launch it from its current location.')
+        if image and not os.access(image, os.X_OK):
+            raise RuntimeError('The AppImage is not executable. Enable executable permission in its file Properties, then restart AKS.')
     invocation = runtime.command('--configure') if arguments is None else arguments
     content = ('[Desktop Entry]\nType=Application\nName=Akousousin\n'
                'Comment=Local neural speech and dictation\nNoDisplay=true\nTerminal=false\n'
                'Exec=' + desktop_exec(invocation) + '\n' + MARKER + '\n')
+    # Do not invalidate the desktop service's application cache on every attempt.
+    if destination.exists() and destination.read_text(encoding='utf-8') == content:
+        return destination
     temporary = None
     try:
         with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=directory,

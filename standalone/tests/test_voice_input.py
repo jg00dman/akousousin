@@ -62,3 +62,15 @@ class VoiceInputTests(unittest.TestCase):
         page.source.set.assert_not_called()
         self.assertEqual(page.source_options['Unavailable — USB microphone'], 'missing-source')
         page.source_caption.set.assert_called_with('Unavailable — USB microphone')
+
+
+    def test_ready_sound_test_needs_no_model_and_reports_failure(self):
+        page = self.page()
+        page.shared_busy = page.sound_testing = False
+        page.sound_button = Mock(); page.sound_status = Mock()
+        with patch('akousousin_backend.recognition.ready_cue', side_effect=RuntimeError('Playback failed')) as cue:
+            page.test_ready_sound()
+            kind, message = page.events.get(timeout=2)
+        self.assertEqual((kind, message), ('sound', 'Playback failed'))
+        cue.assert_called_once_with()
+        page.ensure_model.assert_not_called()

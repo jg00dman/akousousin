@@ -149,6 +149,15 @@ def run(path):
     from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
     from shiboken6 import isValid
     graphical = os.name == 'nt' or bool(os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY'))
+    if graphical and os.name != 'nt':
+        # Install before Qt/portal startup so the desktop service can discover it
+        # before the user enables shortcuts. Failures must not prevent TTS use.
+        from .desktop_identity import ensure_desktop_entry
+        try:
+            ensure_desktop_entry()
+        except (OSError, ValueError, RuntimeError):
+            import logging
+            logging.exception('Could not prepare desktop identity')
     app = QApplication([]) if graphical else QCoreApplication([])
     app.setApplicationName('Akousousin')
     if graphical:

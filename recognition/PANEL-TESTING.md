@@ -24,7 +24,10 @@ sudo apt install pulseaudio-utils
 Click **Start recording (10 seconds)**. Wait for the two short 250 Hz tones and
 **Listening — speak now**, then speak. The transcript and detected language appear
 in the panel. The model stays loaded for subsequent recordings. Try silence and
-another language too. The sound can be disabled. **System default** follows the Linux default microphone; choose a named input
+another language too. The sound can be disabled. **Test ready sound** plays the
+two tones without loading a model or recording; it uses the system default
+playback device. If playback completes silently, check AKS output routing and
+volume in KDE audio settings. **System default** follows the Linux default microphone; choose a named input
 from the dropdown or use Refresh after connecting a device. **Automatic detection**
 keeps language detection enabled. Choose… opens a searchable, scrollable language
 list, and the panel shows the last automatically detected language separately.
@@ -48,5 +51,7 @@ the small bundled VAD asset and existing approved Piper starter voice remain.
 
 No configuration reset is required when updating from the trial that reported
 “An app id is required.” The updated controller registers its portal connection
-with a stable application identity before requesting shortcuts. Quit the old AKS
+with a stable application identity before requesting shortcuts. The entry is now
+prepared at controller startup and unchanged entries are retained; registration
+retries briefly while the desktop cache catches up. Quit the old AKS
 from its tray and launch the new build; keep your models and preferences.
