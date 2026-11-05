@@ -76,9 +76,9 @@ class Sessions:
 
 def run(path):
     from PySide6.QtCore import QCoreApplication, QLockFile, QObject, QTimer, Signal
+    from PySide6.QtGui import QColor, QCursor, QIcon, QPainter, QPen, QPixmap
     from PySide6.QtNetwork import QLocalServer
-    from PySide6.QtWidgets import QApplication, QMessageBox, QSystemTrayIcon, QMenu
-    from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
+    from PySide6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
     graphical = os.name == 'nt' or bool(os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY'))
     app = QApplication([]) if graphical else QCoreApplication([])
     if graphical:
@@ -175,8 +175,12 @@ def run(path):
             submit({'command': 'quit'})
         menu.addAction('Quit', quit_requested)
         tray.setContextMenu(menu)
-        tray.activated.connect(lambda reason: submit({'command': 'configure'})
-                               if reason == QSystemTrayIcon.DoubleClick else None)
+        def activate_tray(reason):
+            if reason == QSystemTrayIcon.Trigger:
+                menu.popup(QCursor.pos())
+            elif reason == QSystemTrayIcon.DoubleClick:
+                submit({'command': 'configure'})
+        tray.activated.connect(activate_tray)
         tray.show()
 
     def tick():
