@@ -12,7 +12,7 @@ import urllib.request
 
 from packaging.version import InvalidVersion, Version
 
-from . import __version__, runtime
+from . import __version__, resources, runtime, settings
 
 REPOSITORY = 'jg00dman/akousousin'
 API = f'https://api.github.com/repos/{REPOSITORY}/releases?per_page=100'
@@ -160,3 +160,18 @@ def _install(update, path, target):
         raise
     finally:
         stage.unlink(missing_ok=True)
+
+
+def refresh_registrations(path):
+    """Refresh active installations only; respect prior uninstall/removal choices."""
+    from .install import Installer
+    config = settings.load(path)
+    for registration in config.get('registrations', []):
+        prefix = registration['prefix'] or None
+        if os.name != 'nt' and (not prefix or not (Path(prefix).expanduser() / 'system.reg').is_file()):
+            continue
+        if os.name == 'nt' and prefix:
+            continue
+        installer = Installer(resources.root(), prefix, registration['wine'] or None)
+        if installer.manifest.is_file():
+            installer.install(config, path)

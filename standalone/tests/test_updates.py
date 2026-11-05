@@ -116,3 +116,20 @@ class UpdateTests(unittest.TestCase):
             panel.check_updates()
         install.assert_not_called()
         call.assert_not_called()
+
+    def test_refresh_does_not_reinstall_uninstalled_or_deleted_prefixes(self):
+        active, removed = self.root / 'active', self.root / 'removed'
+        for prefix in (active, removed):
+            prefix.mkdir()
+            (prefix / 'system.reg').touch()
+        records = [{'prefix': str(prefix), 'wine': 'wine64'}
+                   for prefix in (active, removed, self.root / 'deleted')]
+        current, uninstalled = Mock(), Mock()
+        current.manifest.is_file.return_value = True
+        uninstalled.manifest.is_file.return_value = False
+        with patch.object(updates.settings, 'load', return_value={'registrations': records}), \
+                patch('akousousin_app.install.Installer', side_effect=[current, uninstalled]) as installer:
+            updates.refresh_registrations(self.root / 'settings.json')
+        self.assertEqual(installer.call_count, 2)
+        current.install.assert_called_once()
+        uninstalled.install.assert_not_called()

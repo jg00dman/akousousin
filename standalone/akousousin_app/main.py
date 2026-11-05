@@ -58,8 +58,8 @@ def main():
         return
     config = resources.bootstrap(args.settings)
     if args.refresh_registrations:
-        for registration in config.get('registrations', []):
-            Installer(resources.root(), registration['prefix'] or None, registration['wine'] or None).install(config, args.settings)
+        from .updates import refresh_registrations
+        refresh_registrations(args.settings)
         return
     if args.uninstall_speech_dispatcher:
         from .speech_dispatcher import configure
