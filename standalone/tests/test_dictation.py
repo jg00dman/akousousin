@@ -104,3 +104,44 @@ class DictationTests(unittest.TestCase):
             self.manager.start(); self.wait()
         self.assertEqual(Audio.instances, [])
         self.assertEqual(self.manager.status()['phase'], 'error')
+
+    def test_push_to_talk_recognizes_but_does_not_insert_before_release(self):
+        config = settings.load(self.path)
+        config['stt_mode'] = 'push-to-talk'
+        settings.save(self.path, config)
+        class HeldAudio(Audio):
+            def start(self):
+                self.ready.set()
+                self.segments.put(wav(b'\x01\0' * 3200))
+                self.segments.put(wav(b'\x01\0' * 3200))
+        self.manager.capture_factory = HeldAudio
+        self.manager.insert = Mock()
+        self.manager.start(target=('editor', 1))
+        deadline = time.monotonic() + 2
+        while self.manager.status()['sequence'] < 2 and time.monotonic() < deadline:
+            time.sleep(.01)
+        self.assertEqual(self.manager.status()['results'][-1]['output'], 'pending')
+        self.manager.insert.assert_not_called()
+        self.manager.finish()
+        self.wait()
+        self.manager.insert.assert_called_once_with('Guten Morgen Guten Morgen', ('editor', 1), self.manager.cancelled)
+        self.assertEqual(self.manager.status()['results'][-1]['output'], 'inserted')
+
+    def test_cancelling_push_to_talk_discards_pending_insertion(self):
+        config = settings.load(self.path)
+        config['stt_mode'] = 'push-to-talk'
+        settings.save(self.path, config)
+        class HeldAudio(Audio):
+            def start(self):
+                self.ready.set()
+                self.segments.put(wav(b'\x01\0' * 3200))
+        self.manager.capture_factory = HeldAudio
+        self.manager.insert = Mock()
+        self.manager.start(target=('editor', 1))
+        deadline = time.monotonic() + 2
+        while self.manager.status()['sequence'] < 1 and time.monotonic() < deadline:
+            time.sleep(.01)
+        self.manager.cancel()
+        self.wait()
+        self.manager.insert.assert_not_called()
+        self.assertEqual(self.manager.status()['results'][-1]['output'], 'cancelled')

@@ -32,7 +32,7 @@ class Dictation:
             return {'state': self.state, 'phase': self.phase,
                     'busy': self.thread is not None and self.thread.is_alive(),
                     'loaded': self.recognizer is not None and self.recognizer.process is not None and self.recognizer.process.is_alive(),
-                    'sequence': self.sequence, 'results': list(self.results)}
+                    'sequence': self.sequence, 'results': [dict(item) for item in self.results]}
 
     def change(self, state, phase=None):
         with self.lock:
@@ -84,8 +84,24 @@ class Dictation:
             if self.phase != 'error' and not self.cancelled.is_set():
                 self.change(text, 'listening')
 
+    def store_result(self, result, outcome, error=None):
+        with self.lock:
+            self.sequence += 1
+            record = dict(result, text=result['text'][:4000], sequence=self.sequence,
+                          output=outcome, error=error)
+            self.results.append(record)
+            self.results = self.results[-5:]
+            return record
+
+    def update_result(self, record, **values):
+        with self.lock:
+            record.update(values)
+            self.sequence += 1
+
     def _run(self, record, target, seconds, config):
         timer = None
+        pending = None
+        deferred = target is not None and config.get('stt_mode', 'toggle') == 'push-to-talk'
         try:
             from akousousin_backend.audio_input import Capture
             from akousousin_backend.recognition import ready_cue
@@ -122,6 +138,18 @@ class Dictation:
                     raise InterruptedError('Dictation cancelled')
                 if not result['text']:
                     continue
+                if deferred:
+                    text = (pending['text'] + ' ' if pending else '') + result['text']
+                    if len(text) > 4000:
+                        self.capture.cancel()
+                        raise RuntimeError('Push-to-talk text limit reached; transcript retained. Use shorter recordings.')
+                    if pending is None:
+                        pending = self.store_result(result, 'pending')
+                    else:
+                        language = pending['language'] if pending['language'] == result['language'] else None
+                        self.update_result(pending, text=text, language=language)
+                    self.last_activity = time.monotonic()
+                    continue
                 outcome = 'displayed'
                 error = None
                 if target is not None:
@@ -132,20 +160,33 @@ class Dictation:
                         outcome = 'inserted'
                     except Exception as failure:
                         outcome, error = 'retained', str(failure)
-                with self.lock:
-                    self.sequence += 1
-                    self.results.append(dict(result, text=result['text'][:4000], sequence=self.sequence,
-                                             output=outcome, error=error))
-                    self.results = self.results[-5:]
+                self.store_result(result, outcome, error)
                 if error:
                     self.capture.cancel()
                     raise RuntimeError(error + ' — transcript retained in Voice Input')
                 self.last_activity = time.monotonic()
+            if self.cancelled.is_set():
+                raise InterruptedError('Dictation cancelled')
+            if pending is not None:
+                if not self.finished.is_set():
+                    raise RuntimeError('Push-to-talk capture ended before key release')
+                if self.insert is None:
+                    raise RuntimeError('Keyboard session is unavailable')
+                self.change('Inserting transcript…', 'transcribing')
+                self.insert(pending['text'], target, self.cancelled)
+                self.update_result(pending, output='inserted')
             self.change('Ready — recording stopped', 'ready')
         except InterruptedError:
+            if pending is not None:
+                self.update_result(pending, output='cancelled')
             self.change('Cancelled', 'ready' if self.recognizer and self.recognizer.process else 'unloaded')
         except Exception as error:
-            self.change(str(error), 'error')
+            message = str(error)
+            if pending is not None:
+                self.update_result(pending, output='retained', error=message)
+                if 'retained' not in message:
+                    message += ' — transcript retained in Voice Input'
+            self.change(message, 'error')
         finally:
             if timer:
                 timer.cancel()

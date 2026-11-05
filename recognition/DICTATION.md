@@ -19,7 +19,7 @@ Ctrl+Alt+Space, but KDE decides the actual binding shown in the panel.
 
 Focus a text editor, use the approved shortcut, and wait for the ready tones before
 speaking. Toggle mode keeps listening, endpointing phrases at approximately 0.8
-seconds of silence. Push-to-talk stops capture on release. Long phrases are split
+seconds of silence. Push-to-talk recognizes while held, stops capture on release, then inserts its collected transcript (up to 4000 characters). Release all shortcut keys before expecting text; an unmodified key is convenient for initial testing. Long phrases are split
 at 15 seconds. Stop recording flushes the last speech fragment; Cancel discards
 pending recognition/insertion. A missed/early release while loading does not start
 a microphone recording later. Recognition runs in one worker, reused between
