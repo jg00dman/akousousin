@@ -108,3 +108,23 @@ GPL-3.0-or-later; Qt/PySide LGPL-3.0 and third-party notices. The source archive
 includes matching Wine, Piper, eSpeak, Qt and PySide sources. Automated deterministic
 WAV checks, real Piper output and session tests do not establish audible playback
 or every Logos desktop behavior; test in a backed-up prefix.
+
+## Checking for application updates
+
+Open **Updates → Check for updates** in the control panel. Akousousin checks its
+GitHub releases only when requested and offers newer versioned releases, including
+betas. Cancel leaves the installation and speech untouched.
+
+For Linux AppImages, accepting downloads and verifies the release asset's SHA-256
+and size before stopping speech. Close Wine applications first. The AppImage is
+replaced at its existing registered path, saved SAPI registrations are refreshed,
+and the panel restarts. Voices and preferences are retained. The previous image
+is kept alongside it as `.AppImage.previous`; a failed registration restores the
+previous image and attempts to restore its registrations. A second simultaneous
+update is refused. Restarted speech starts on demand as usual.
+
+Windows ZIP and source installations offer the matching release download for
+manual installation after quitting Akousousin. Automatic replacement is currently
+available for Linux AppImages only. Release tags include the package version,
+for example `standalone-beta-0.6.0b2-<build>-1`; older run-number-only tags are not
+offered as updates. Each new release must increase the package version.

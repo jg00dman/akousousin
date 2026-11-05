@@ -7,7 +7,7 @@ on:
         type: boolean
         default: false
   push:
-    branches: [codex/standalone-control-panel, codex/speech-dispatcher-on-demand, codex/linux-speech-dispatcher]
+    branches: [codex/standalone-control-panel, codex/speech-dispatcher-on-demand, codex/linux-speech-dispatcher, codex/control-panel-updates]
     paths: [engine/**, standalone/**, backend/**, tests/**, .github/workflows/standalone.yml]
 permissions:
   contents: read
@@ -61,6 +61,9 @@ jobs:
       - name: Build package with reviewed LJSpeech starter voice, licences and sources
         id: package
         run: python standalone/package.py
+      - name: Packaged AppImage update and registration refresh
+        if: runner.os == 'Linux'
+        run: python standalone/ci_update.py standalone-dist/Akousousin-x86_64.AppImage
       - name: Wine installer, COM engine, real speech and panel tests
         if: runner.os == 'Linux'
         run: xvfb-run -a python standalone/ci_smoke.py
@@ -131,7 +134,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          tag="standalone-beta-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          version=$(sed -n 's/^version = "\([^"]*\)"/\1/p' standalone/pyproject.toml)
+          tag="standalone-beta-${version}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          if actual=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha' 2>/dev/null); then
+            [[ "$actual" == "$GITHUB_SHA" ]]
+          else
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$tag" -f sha="$GITHUB_SHA"
+          fi
           gh release create "$tag" --verify-tag --repo "$GITHUB_REPOSITORY" \
             --prerelease --title "Akousousin standalone beta ${GITHUB_RUN_ID}" \
             --notes-file standalone/RELEASE-NOTES.md release-assets/*

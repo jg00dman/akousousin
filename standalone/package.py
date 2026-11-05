@@ -45,7 +45,7 @@ shutil.copytree(ROOT / 'standalone/resources', RESOURCE, dirs_exist_ok=True)
 
 # The user explicitly approved this one reviewed starter voice for redistribution.
 # Catalogue downloads preserve its upstream model card and MIT/public-domain provenance.
-from akousousin_app import catalogue
+from akousousin_app import catalogue, __version__
 with tempfile.TemporaryDirectory(dir=BUILD) as temporary:
     entry = catalogue.catalogue(ROOT / 'standalone/resources')['en_US-ljspeech-medium']
     voice = catalogue.install(entry, Path(temporary), reviewed=True)
@@ -79,7 +79,7 @@ icon.save(RESOURCE / 'akousousin.png')
 
 commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
 (RESOURCE / 'build.json').write_text(json.dumps({'build': commit[:12] + '-' + sys.platform,
-                                               'commit': commit, 'version': '0.6.0b1'}, indent=2))
+                                               'commit': commit, 'version': __version__}, indent=2))
 recognition_options = []
 if importlib.util.find_spec('faster_whisper') is not None:
     for dependency in ('faster_whisper', 'ctranslate2', 'tokenizers', 'av'):

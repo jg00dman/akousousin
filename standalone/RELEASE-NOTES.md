@@ -1,13 +1,23 @@
-Akousousin — Neural Voice Engine 0.5 rebranding beta.
+# Akousousin 0.6.0b2 beta
 
-Project vision: the unified neural speech engine for Linux, implementing Microsoft SAPI and Speech Dispatcher, based on Piper and Whisper. The current beta implements SAPI TTS with Piper. Speech Dispatcher is the next milestone; Whisper recognition is planned. See COMPATIBILITY.md for implemented features and limitations.
+Native Linux speech through Speech Dispatcher now shares Piper and the voice
+library with SAPI. Orca SSML text and progress marks, punctuation/spelling fallback,
+request-specific cancellation and bounded shared synthesis are included. Installing
+or removing Speech Dispatcher support restarts the user service as its final step.
 
-Download Akousousin-x86_64.AppImage for Linux, or Akousousin-Windows-x86_64.zip for Windows. Read TESTING.md for installation, storage paths, commands and rollback. The reviewed en_US-ljspeech-medium starter voice is bundled with its model card,
-licence declarations and checksum provenance. No Wine runtime or other voice
-models are bundled. Existing selected voices are preserved.
+SAPI starts Akousousin on demand. Idle inference unloads automatically without
+requiring launcher lifecycle management. Voice, language, speed and volume defaults
+are shared across interfaces.
 
-The tray reports stopped/starting/running/error and offers Start/Stop, installed voices grouped by readable language names, Configure and Quit. The original waveform artwork is now also used by the configuration window.
+The control panel's Updates page checks GitHub for newer versioned releases and
+offers installation. Linux AppImage updates verify SHA-256 and size, preserve a
+previous image, refresh saved SAPI registrations and restart the panel. Windows ZIP
+and source installations link to the matching download. Updates are user initiated.
 
-Closing the panel leaves speech running. Quit stops Piper and exits Akousousin. A launcher's last released session automatically stops/exits an automatically started Akousousin; independent/manual instances remain. Concurrent application sessions and crashed owner processes are handled by Akousousin, using the version-2 command interface. Piper stays in the AppImage; persistent runtime copies are no longer made.
+Linux targets x86-64/glibc 2.35+ and existing 64-bit Wine prefixes. Native Windows
+64-bit SAPI remains supported. The reviewed LJSpeech starter voice, model card,
+licence notices, checksums and corresponding sources accompany the packages.
 
-Linux stays x86-64/glibc 2.35+ (Ubuntu 22.04). Existing 64-bit prefixes only; native Windows system SAPI is unchanged. Model licence review/import remains explicit. Qt/PySide matching sources, existing engine/Wine/Piper/eSpeak sources, notices, checksums and testing instructions accompany the release. Language-hint investigation and full localisation remain future work.
+Exact word highlighting, localized symbol names, pitch control, sound icons and
+general SSML prosody remain incomplete. Whisper recognition remains separately
+scoped. See COMPATIBILITY.md and TESTING.md for evidence and desktop test limits.
