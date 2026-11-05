@@ -121,3 +121,19 @@ class SessionsTests(unittest.TestCase):
         self.state.quit()
         with self.assertRaisesRegex(RuntimeError, 'shutting down'):
             self.state.request({'command': 'configure'})
+
+
+    def test_update_handoff_keeps_only_the_updater_panel_alive(self):
+        import subprocess, sys
+        panels = [subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']) for _ in range(2)]
+        def cleanup():
+            for panel in panels:
+                if panel.poll() is None: panel.kill()
+                panel.wait(timeout=3)
+        self.addCleanup(cleanup)
+        self.state.panels = panels.copy()
+        self.state.request({'command': 'quit', 'update_pid': panels[0].pid})
+        self.assertIsNone(panels[0].poll(), 'Updater was killed during replacement')
+        self.assertIsNotNone(panels[1].poll(), 'Unrelated panel survived update shutdown')
+        self.assertTrue(self.state.closed)
+        self.assertEqual(self.state.panels, [])

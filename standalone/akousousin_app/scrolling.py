@@ -24,7 +24,7 @@ class ScrollArea(ttk.Frame):
         self.canvas.itemconfigure(self.window, width=event.width)
         def wrap(widget):
             for child in widget.winfo_children():
-                if isinstance(child, ttk.Label) and int(child.cget('wraplength') or 0):
+                if isinstance(child, ttk.Label) and self.canvas.winfo_pixels(str(child.cget('wraplength') or 0)):
                     child.configure(wraplength=max(200, event.width - 60))
                 wrap(child)
         wrap(self.inner)

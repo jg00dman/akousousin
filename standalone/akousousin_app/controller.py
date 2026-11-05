@@ -121,7 +121,7 @@ class Sessions:
             elif operation == 'stop':
                 self.service.stop(port)
             elif operation == 'quit':
-                self.quit()
+                self.quit(update_pid=request.get('update_pid'))
             elif operation == 'configure':
                 self.independent |= request.get('independent', False)
                 self.panels = [panel for panel in self.panels if panel.poll() is None]
@@ -149,7 +149,7 @@ class Sessions:
             for session in dead:
                 self.request({'command': 'release', 'session': session})
 
-    def quit(self):
+    def quit(self, update_pid=None):
         import logging
         self.closed = True
         cleanup = [self.input.close]
@@ -170,6 +170,10 @@ class Sessions:
                 children = psutil.Process(panel.pid).children(recursive=True)
             except psutil.Error:
                 children = []
+            # The updater must finish replacement before its panel exits. Only
+            # that owned panel tree is detached; ordinary Quit preserves none.
+            if isinstance(update_pid, int) and not isinstance(update_pid, bool) and update_pid in {panel.pid, *(child.pid for child in children)}:
+                continue
             for child in children:
                 try:
                     child.terminate()

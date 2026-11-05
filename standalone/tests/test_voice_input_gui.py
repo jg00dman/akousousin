@@ -15,6 +15,12 @@ from akousousin_app.voice_input import VoiceInput
 
 @unittest.skipUnless(os.environ.get('DISPLAY'), 'Run under xvfb-run for the GUI test')
 class VoiceInputGuiTests(unittest.TestCase):
+    def setUp(self):
+        self.callback_errors = []
+        reporter = patch.object(tk.Tk, 'report_callback_exception', side_effect=lambda *args: self.callback_errors.append(args))
+        reporter.start(); self.addCleanup(reporter.stop)
+        self.addCleanup(lambda: self.assertEqual(self.callback_errors, [], 'Tk callback errors'))
+
     def test_start_button_is_visible_and_starts_a_recording(self):
         with tempfile.TemporaryDirectory() as folder:
             root = tk.Tk(); self.addCleanup(root.destroy)

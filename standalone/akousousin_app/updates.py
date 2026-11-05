@@ -122,7 +122,7 @@ def _install(update, path, target):
     env = environment()
     try:
         shutil.copy2(target, backup)
-        runtime.call(path, {'command': 'quit'}, launch=False)
+        runtime.call(path, {'command': 'quit', 'update_pid': os.getpid()}, launch=False)
         stopped = True
         deadline = time.monotonic() + 10
         while runtime.call(path, {'command': 'status'}, launch=False) is not None:
@@ -135,7 +135,7 @@ def _install(update, path, target):
                        env=env, capture_output=True, text=True, check=True, timeout=180)
         # A native client may have woken the old resident during replacement.
         # After the path swap, every subsequent cold start loads the new image.
-        runtime.call(path, {'command': 'quit'}, launch=False)
+        runtime.call(path, {'command': 'quit', 'update_pid': os.getpid()}, launch=False)
         deadline = time.monotonic() + 10
         while runtime.call(path, {'command': 'status'}, launch=False) is not None:
             if time.monotonic() >= deadline:
