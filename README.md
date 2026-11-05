@@ -2,31 +2,33 @@
 
 **akousousin:** *The unified neural speech engine for Linux, implementing Microsoft SAPI and Speech Dispatcher, based on Piper and Whisper.*
 
-This is the project vision. The current beta implements SAPI text-to-speech with
-Piper. This development branch adds experimental Speech Dispatcher output,
-on-demand startup and idle model unloading. This Whisper branch also develops local recognition and KDE Wayland dictation; live desktop acceptance testing is pending.
-See [branch testing instructions](standalone/SPEECH-DISPATCHER.md); the published
-0.5 beta does not include these additions.
+**Published beta: [0.6.0b2](https://github.com/jg00dman/akousousin/releases/tag/standalone-beta-0.6.0b2-41949762674-1).**
+Core speech output works through 64-bit SAPI (Wine and native Windows) and the
+native Linux Speech Dispatcher output module. On-demand startup, idle model
+unloading and control-panel update checks are shipped. Neither interface has
+full API coverage; recognition is not included in this beta.
+
+The **`whisper` development branch** adds local Whisper recognition, a Voice Input
+panel and KDE Wayland shortcut dictation. Microphone discovery, diagnostic recording
+and dictation into Kate and this chat's text box have been desktop-tested on Kubuntu
+26.04 Wayland. These input features are experimental and separate from the published
+beta. See [Whisper trial instructions](recognition/PANEL-TESTING.md) and
+[dictation implementation and acceptance checks](recognition/DICTATION.md).
 
 The name comes from Greek **ἀκούσουσιν**, “they will hear” (John 5:25).
 
-| Capability | Current status |
-| --- | --- |
-| SAPI TTS in existing 64-bit Wine prefixes | Working beta; Logos Read Aloud, speed and navigation desktop-tested |
-| Native Windows 64-bit SAPI TTS | Working beta; integration, failure/recovery and real Piper WAV tests in CI |
-| Local Piper synthesis and bundled LJSpeech starter voice | Working beta |
-| Shared per-user service, tray, voice library and session lifecycle | Working beta |
-| Manual voice/book-language selection | Working beta; German reading tested |
-| Automatic application-language hints | Partial; Logos language selection needs further investigation |
-| Speech Dispatcher output module | Experimental on this branch; desktop validation pending |
-| Streaming TTS, complete pause/resume and stream/word events | Not complete; future work |
-| Whisper CPU recognition and Voice Input panel | Experimental on whisper; model import and diagnostic recording desktop-tested |
-| KDE Wayland shortcut dictation and guarded text insertion | Implemented on whisper; private protocol/state tests pass, live KDE acceptance pending |
-| SAPI recognition | Planned |
-| macOS deployment, 32-bit callers and full UI localisation | Not currently supported |
+| API area | Implemented | Partial / remaining |
+| --- | --- | --- |
+| SAPI engine integration | COM activation, voice tokens/enumeration, `ISpTTSEngine` and `ISpObjectWithToken` | Application-facing SAPI is supplied by Windows/Wine; not a complete SAPI implementation |
+| SAPI speech output | Text/Unicode, voices, rate, volume, silence, async host use, cancellation and cold startup | Language hints and limited XML effects; full pause/resume, skip, word events, pitch, phonemes/visemes and general SSML incomplete or unsupported |
+| Speech Dispatcher output | Server audio, voice/language selection, rate/volume, text, characters/keys, cancellation and lifecycle events | Daemon owns queues/priorities; no separate speechd server |
+| Orca and reading feedback | SSML text/entities, coarse index marks, punctuation and spelling fallback | Exact word highlighting, full resume-position validation, localized symbols and sound icons remain |
+| Shared runtime and updates | Piper, voice library/preferences, on-demand loading, idle unloading, optional registration, update checks and Linux AppImage updates | Windows ZIP/source updates use manual downloads; speechd pitch and functional debug/log-level controls are absent |
+| Speech input | Not included in the published beta | SAPI recognition and a future native input API are separately scoped |
 
-See [COMPATIBILITY.md](COMPATIBILITY.md) for evidence, limits and the distinction
-between deterministic audio tests, neural synthesis and audible desktop playback.
+See **[API coverage and implementation status](COMPATIBILITY.md)** for the
+command/interface matrix, unsupported operations and validation evidence.
+We report feature coverage rather than an invented percentage of the full APIs.
 
 ## Try the beta
 
@@ -41,11 +43,12 @@ The build target remains x86-64 Linux with glibc 2.35+ (Ubuntu 22.04), and exist
 working 64-bit Wine prefixes. Native Windows system SAPI is not replaced.
 
 Akousousin uses one configuration per user. On Linux, config is under
-`~/.config/Akousousin`, the AppImage and downloaded voices under
-`~/.local/share/Akousousin`, and logs under `~/.local/state/Akousousin`.
-XDG overrides are respected. Closing the panel leaves speech running; Quit stops
-Piper and exits the resident application. Application sessions are managed through
-the public launcher interface. OuDedetai stores only its Enable speech preference.
+`~/.config/Akousousin`, downloaded voices under `~/.local/share/Akousousin`,
+and logs under `~/.local/state/Akousousin`. The AppImage runs wherever you place
+it; `~/.local/share/Akousousin/Akousousin-x86_64.AppImage` is the recommended path.
+XDG overrides are respected. Closing the panel leaves speech available; Quit stops
+Piper and exits the resident application. SAPI can start speech on demand without
+launcher lifecycle hooks. An optional session interface remains available to clients.
 
 ## Implementation and validation
 
@@ -53,9 +56,10 @@ The standalone [engine](engine/) implements public Windows COM/SAPI interfaces.
 Those standard API names and contracts are unchanged by the project rebrand.
 The [control panel and controller](standalone/) manage voices and backend sessions.
 [CI](.github/workflows/standalone.yml) cross-compiles the engine and tests packages
-on Wine and Windows without compiling Wine. It retains the 13 deterministic
-integration tests, seven failure/recovery tests, real Piper WAV generation,
-GUI launch, concurrent sessions, shutdown/restart and uninstall restoration.
+on Wine and Windows without compiling Wine. The released build passed 60 standalone and 8 backend tests, plus packaged
+Wine/Windows checks covering 14 deterministic integration tests, seven failure
+tests, real Piper output, GUI/service lifecycle, registration refresh and rollback.
+Linux checks also exercise a real speechd daemon and verified AppImage updating.
 
 The [Wine patches](patches/) and [Wine build workflow](.github/workflows/appimage.yml)
 remain available for custom Wine builds. Wine compilation belongs in GitHub Actions,
@@ -63,7 +67,8 @@ not the cloud development environment. Matching sources and licence notices
 accompany downloadable packages. Engine code is LGPL-2.1-or-later; panel/service
 and Piper are GPL-3.0-or-later; dependency and voice notices are included.
 
-This branch develops Speech Dispatcher output, lower first-audio latency and
-service reliability. Complete streaming and accurate word events remain future
-work; word offsets must be mapped to real model alignment data. Recognition is
-separately scoped.
+The next output milestones are exact alignment-backed word events, more complete
+pause/resume behaviour and broader speech markup/accessibility support.
+SAPI recognition and a future native input framework remain separately scoped. See the
+[Speech Dispatcher desktop checklist](standalone/SPEECH-DISPATCHER.md#desktop-acceptance-checklist)
+for ongoing Orca and application testing.

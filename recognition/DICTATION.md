@@ -91,7 +91,8 @@ suppression needs audible desktop testing and does not cover unrelated sound.
   This does not measure physical capture or the fifth-generation i5.
 
 On 5 November 2026, a user confirmed microphone discovery, the ten-second recording
-test, KDE permission setup and dictation into Kate on Kubuntu 26.04 Wayland. The
+test, KDE permission setup and dictation into Kate and the chat text box on
+Kubuntu 26.04 Wayland. The
 installed desktop entry launched successfully through `gtk-launch`, while the
 already-running portal initially reported “App info not found”. Restarting
 `xdg-desktop-portal.service` resolved registration and enabled working dictation.
