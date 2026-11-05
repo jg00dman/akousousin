@@ -241,7 +241,8 @@ def install_action(path):
     if os.name == 'nt':
         raise RuntimeError('The selection shortcut action is for Linux desktops.')
     def command(flag):
-        arguments = runtime.command(flag, '--settings', str(Path(path).resolve()))
+        arguments = ['/usr/bin/env', 'APPIMAGE_EXTRACT_AND_RUN=1', 'PYINSTALLER_RESET_ENVIRONMENT=1',
+                     *runtime.command(flag, '--settings', str(Path(path).resolve()))]
         if any(any(c in arg for c in '\r\n\0') for arg in arguments):
             raise ValueError('Unsupported newline or control character in the launcher path')
         # Desktop Exec syntax is not shell syntax; quote every argument and

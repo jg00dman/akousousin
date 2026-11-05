@@ -103,7 +103,8 @@ class SelectionTests(unittest.TestCase):
                 patch.object(selection.runtime, 'command', side_effect=lambda *args: ['/an image.AppImage', *args]):
             target = selection.install_action(self.path)
         text = target.read_text()
-        self.assertIn('Exec="/an image.AppImage" "--read-selection"', text)
+        self.assertIn('"/an image.AppImage" "--read-selection"', text)
+        self.assertIn('Exec="/usr/bin/env" "APPIMAGE_EXTRACT_AND_RUN=1"', text)
         self.assertIn('"--read-clipboard"', text)
         self.assertIn('StartupNotify=false', text)
         self.assertNotIn('Ctrl+C', text)
