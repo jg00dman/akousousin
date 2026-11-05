@@ -22,6 +22,8 @@ def host_environment():
         env['LD_LIBRARY_PATH'] = env['LD_LIBRARY_PATH_ORIG']
     else:
         env.pop('LD_LIBRARY_PATH', None)
+    env.pop('QT_PLUGIN_PATH', None)
+    env.pop('QT_QPA_PLATFORM_PLUGIN_PATH', None)
     return env
 
 

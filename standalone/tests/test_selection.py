@@ -107,3 +107,12 @@ class SelectionTests(unittest.TestCase):
         self.assertIn('"--read-clipboard"', text)
         self.assertIn('StartupNotify=false', text)
         self.assertNotIn('Ctrl+C', text)
+
+
+    def test_host_tools_use_host_libraries_and_qt_plugins(self):
+        with patch.dict(os.environ, {'LD_LIBRARY_PATH': '/bundled/lib', 'LD_LIBRARY_PATH_ORIG': '/host/lib',
+                                     'QT_PLUGIN_PATH': '/bundled/qt', 'QT_QPA_PLATFORM_PLUGIN_PATH': '/bundled/platforms'}):
+            env = selection.host_environment()
+        self.assertEqual(env['LD_LIBRARY_PATH'], '/host/lib')
+        self.assertNotIn('QT_PLUGIN_PATH', env)
+        self.assertNotIn('QT_QPA_PLATFORM_PLUGIN_PATH', env)
