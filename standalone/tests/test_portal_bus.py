@@ -1,10 +1,11 @@
 """Opt-in protocol tests on a private D-Bus; never opens desktop consent dialogs."""
 import asyncio
 import os
+from pathlib import Path
 import tempfile
 import threading
 import unittest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 from akousousin_app.desktop_input import Desktop
 
 
@@ -12,7 +13,7 @@ from akousousin_app.desktop_input import Desktop
 class PortalBusTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         from dbus_next.aio import MessageBus
-        from dbus_next import Variant
+        from dbus_next import Variant, DBusError
         from dbus_next.service import ServiceInterface, method, signal
         self.folder = tempfile.TemporaryDirectory()
         self.server = await MessageBus().connect()
@@ -24,6 +25,9 @@ class PortalBusTests(unittest.IsolatedAsyncioTestCase):
         self.desktop.bus.add_message_handler(self.desktop.message)
         await self.desktop.call('org.freedesktop.DBus', '/org/freedesktop/DBus',
             'org.freedesktop.DBus', 'AddMatch', 's', ["type='signal',sender='org.freedesktop.portal.Desktop'"])
+        self.identity = None
+        self.data_patch = patch.dict(os.environ, {'XDG_DATA_HOME': self.folder.name})
+        self.data_patch.start()
         self.keys = []
         self.deny = False
         owner = self
@@ -43,11 +47,22 @@ class PortalBusTests(unittest.IsolatedAsyncioTestCase):
             # Signal before the method return to test the request/response race.
             request.Response(1 if owner.deny else 0, values)
             return path
+        class Registry(ServiceInterface):
+            def __init__(self):
+                super().__init__('org.freedesktop.host.portal.Registry')
+            @method()
+            def Register(self, app_id: 's', options: 'a{sv}'):
+                from akousousin_app.desktop_identity import APP_ID
+                assert app_id == APP_ID
+                assert (Path(owner.folder.name) / 'applications' / (app_id + '.desktop')).is_file()
+                owner.identity = app_id
         class Portal(ServiceInterface):
             def __init__(self):
                 super().__init__('org.freedesktop.portal.RemoteDesktop')
             @method()
             def CreateSession(self, options: 'a{sv}') -> 'o':
+                if owner.identity is None:
+                    raise DBusError('org.freedesktop.portal.Error.Failed', 'An app id is required.')
                 return response(options, {'session_handle': Variant('s', '/session/test')})
             @method()
             def SelectDevices(self, session: 'o', options: 'a{sv}') -> 'o':
@@ -60,16 +75,19 @@ class PortalBusTests(unittest.IsolatedAsyncioTestCase):
             @method()
             def NotifyKeyboardKeysym(self, session: 'o', options: 'a{sv}', symbol: 'i', state: 'u'):
                 owner.keys.append((symbol, state))
+        self.server.export('/org/freedesktop/portal/desktop', Registry())
         self.server.export('/org/freedesktop/portal/desktop', Portal())
 
     async def asyncTearDown(self):
         self.desktop.bus.disconnect()
         self.server.disconnect()
         await asyncio.sleep(.02)
+        self.data_patch.stop()
         self.folder.cleanup()
 
     async def test_early_response_and_actual_keyboard_messages(self):
         from dbus_next import Variant
+        await self.desktop.register_identity()
         interface = 'org.freedesktop.portal.RemoteDesktop'
         self.desktop.remote = await self.desktop.session(interface)
         await self.desktop.request(interface, 'SelectDevices', '', 'o', [self.desktop.remote], {'types': Variant('u', 1)})
@@ -82,8 +100,14 @@ class PortalBusTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.keys, [(104, 1), (104, 0), (233, 1), (233, 0), (32, 1), (32, 0)])
 
     async def test_denial_never_types(self):
+        await self.desktop.register_identity()
         self.deny = True
         with self.assertRaisesRegex(RuntimeError, 'denied'):
             await self.desktop.session('org.freedesktop.portal.RemoteDesktop')
         self.assertFalse(self.desktop.enabled)
+        self.assertEqual(self.keys, [])
+
+    async def test_unregistered_peer_reproduces_reported_error(self):
+        with self.assertRaisesRegex(RuntimeError, 'An app id is required'):
+            await self.desktop.session('org.freedesktop.portal.RemoteDesktop')
         self.assertEqual(self.keys, [])

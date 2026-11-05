@@ -95,3 +95,20 @@ lock/unlock, physical audio, TTS feedback and target-hardware performance remain
 acceptance tests. The project has no SAPI recognition engine yet; native Windows
 recognition/audio adapters and application-specific proofing-language tagging are
 later work.
+
+## Application identity and selectors
+
+The host portal connection registers `org.akousousin.Akousousin` through
+`org.freedesktop.host.portal.Registry.Register` before other portal methods. A
+matching desktop entry is provided at the normal XDG applications location. A
+small hidden launcher descriptor is created automatically when needed; existing
+custom launchers are preserved. Qt's desktop name alone does not identify the
+separate dbus-next connection. This fixes the “An app id is required” setup error
+without resetting settings, model caches or portal permissions.
+
+The microphone selector lists readable source names and an explicit System default
+choice, hides speaker monitors, and preserves an unavailable explicit selection.
+Refresh reruns bounded `pactl` discovery off the UI thread. The language picker is
+searchable by name/code and scrollable. Automatic detection remains a choice,
+while the last detected language is displayed separately; detection never silently
+locks the user's language preference. Selections apply to the next recording.

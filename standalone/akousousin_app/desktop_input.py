@@ -214,6 +214,15 @@ class Desktop:
         self.sessions.append(handle)
         return handle
 
+    async def register_identity(self):
+        # Registry associates this exact D-Bus peer with the application. Qt's
+        # desktopFileName alone does not identify dbus-next's separate connection.
+        # Registration must precede every other portal call on a new connection.
+        from .desktop_identity import APP_ID, ensure_desktop_entry
+        ensure_desktop_entry()
+        await self.call('org.freedesktop.portal.Desktop', '/org/freedesktop/portal/desktop',
+                        'org.freedesktop.host.portal.Registry', 'Register', 'sa{sv}', [APP_ID, {}])
+
     async def setup(self):
         if os.name == 'nt' or not os.environ.get('WAYLAND_DISPLAY'):
             raise RuntimeError('Desktop dictation currently requires KDE Wayland')
@@ -225,6 +234,7 @@ class Desktop:
                         'org.freedesktop.DBus', 'StartServiceByName', 'su', ['org.freedesktop.portal.Desktop', 0])
         self.portal_owner = (await self.call('org.freedesktop.DBus', '/org/freedesktop/DBus',
             'org.freedesktop.DBus', 'GetNameOwner', 's', ['org.freedesktop.portal.Desktop']))[0]
+        await self.register_identity()
         self.bus.add_message_handler(self.message)
         for rule in ("type='signal',sender='org.freedesktop.portal.Desktop'",
                      "type='signal',sender='org.freedesktop.DBus',interface='org.freedesktop.DBus',member='NameOwnerChanged'"):

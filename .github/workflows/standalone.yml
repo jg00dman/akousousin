@@ -60,6 +60,10 @@ jobs:
         shell: bash
         run: PYTHONPATH=standalone:backend python -m unittest discover -s standalone/tests -v
         if: runner.os == 'Linux'
+      - name: Voice Input button visibility and recording action
+        if: runner.os == 'Linux'
+        shell: bash
+        run: xvfb-run -a env PYTHONPATH=standalone:backend python -m unittest discover -s standalone/tests -p test_voice_input_gui.py -v
       - name: Private desktop-portal protocol tests
         if: runner.os == 'Linux'
         shell: bash

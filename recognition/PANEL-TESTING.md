@@ -18,11 +18,13 @@ Install microphone/audio utilities if needed:
 sudo apt install pulseaudio-utils
 ```
 
-Click **Record 10 seconds**. Wait for the two short 250 Hz tones and
+Click **Start recording (10 seconds)**. Wait for the two short 250 Hz tones and
 **Listening — speak now**, then speak. The transcript and detected language appear
 in the panel. The model stays loaded for subsequent recordings. Try silence and
-another language too. The sound can be disabled. Blank microphone means the system
-default; blank language means automatic detection.
+another language too. The sound can be disabled. **System default** follows the Linux default microphone; choose a named input
+from the dropdown or use Refresh after connecting a device. **Automatic detection**
+keeps language detection enabled. Choose… opens a searchable, scrollable language
+list, and the panel shows the last automatically detected language separately.
 
 Closing the panel unloads its diagnostic recognition worker. Imported/downloaded
 models survive closing, updates and replacement of the AppImage. Do not delete the
@@ -40,3 +42,8 @@ The ready cue and live microphone behavior need testing on your KDE Wayland desk
 Existing SAPI support is text-to-speech only. Full dependency licences and matching
 sources accompany the build. No Whisper model weights occur in the AppImage;
 the small bundled VAD asset and existing approved Piper starter voice remain.
+
+No configuration reset is required when updating from the trial that reported
+“An app id is required.” The updated controller registers its portal connection
+with a stable application identity before requesting shortcuts. Quit the old AKS
+from its tray and launch the new build; keep your models and preferences.

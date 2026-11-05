@@ -114,3 +114,34 @@ class InsertionTests(unittest.IsolatedAsyncioTestCase):
         desktop.dictation.status.return_value = {'busy': True}
         await desktop.shortcut(True)
         desktop.dictation.finish.assert_called_once()
+
+
+class IdentityStartupTests(unittest.IsolatedAsyncioTestCase):
+    async def test_peer_registers_before_any_other_portal_call(self):
+        import importlib.util
+        if importlib.util.find_spec('dbus_next') is None:
+            self.skipTest('Desktop dependency is not installed')
+        import os
+        from pathlib import Path
+        import tempfile
+        from unittest.mock import Mock, patch
+        with tempfile.TemporaryDirectory() as folder:
+            desktop = Desktop(Mock(), lambda: {}, folder, 'startup')
+            desktop.loop = asyncio.get_running_loop()
+            bus = Mock()
+            bus.request_name = AsyncMock()
+            factory = Mock(); factory.connect = AsyncMock(return_value=bus)
+            calls = []
+            async def call(service, path, interface, member, *args, **kwargs):
+                calls.append((interface, member))
+                if member == 'GetNameOwner': return [':1.2']
+                if service == 'org.kde.KWin': raise RuntimeError('Stop after identity setup')
+                return []
+            desktop.call = call
+            with patch.dict(os.environ, {'WAYLAND_DISPLAY': 'test', 'XDG_DATA_HOME': folder}), patch('dbus_next.aio.MessageBus', return_value=factory):
+                with self.assertRaisesRegex(RuntimeError, 'Stop after identity setup'):
+                    await desktop.setup()
+            portal_calls = [item for item in calls if item[0].startswith('org.freedesktop.') and 'portal.' in item[0]]
+            self.assertEqual(portal_calls[0], ('org.freedesktop.host.portal.Registry', 'Register'))
+            from akousousin_app.desktop_identity import APP_ID
+            self.assertTrue((Path(folder) / 'applications' / (APP_ID + '.desktop')).exists())

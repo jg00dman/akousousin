@@ -152,7 +152,8 @@ def run(path):
     app = QApplication([]) if graphical else QCoreApplication([])
     app.setApplicationName('Akousousin')
     if graphical:
-        app.setDesktopFileName('akousousin')
+        from .desktop_identity import APP_ID
+        app.setDesktopFileName(APP_ID)
     if graphical:
         app.setQuitOnLastWindowClosed(False)
         app.setWindowIcon(QIcon(str(resources.root() / 'akousousin.png')))

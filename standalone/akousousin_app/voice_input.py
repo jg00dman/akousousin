@@ -6,6 +6,7 @@ import tkinter as tk
 from tkinter import filedialog, ttk
 
 from . import settings, runtime
+from .input_choices import LanguagePicker, discover_microphones, language_caption
 
 
 class VoiceInput:
@@ -14,7 +15,7 @@ class VoiceInput:
         self.events = queue.Queue()
         self.busy = False
         self.closed = False
-        canvas = tk.Canvas(page, highlightthickness=0, bg='#f4f5f3')
+        canvas = self.canvas = tk.Canvas(page, highlightthickness=0, bg='#f4f5f3')
         scrollbar = ttk.Scrollbar(page, orient='vertical', command=canvas.yview)
         scrollbar.pack(side='right', fill='y')
         canvas.pack(fill='both', expand=True)
@@ -28,6 +29,11 @@ class VoiceInput:
         self.model = tk.StringVar(value=config.get('stt_model', 'small'))
         self.language = tk.StringVar(value=config.get('stt_language', ''))
         self.source = tk.StringVar(value=config.get('stt_source', ''))
+        self.source_caption = tk.StringVar(value='Finding selected microphone…' if self.source.get() else 'System default')
+        self.source_options = {'System default': ''}
+        self.device_status = tk.StringVar(value='Finding microphones…')
+        self.detected_language = tk.StringVar(value='No speech detected yet')
+        self.refreshing_sources = False
         self.mode = tk.StringVar(value=config.get('stt_mode', 'toggle'))
         self.local_error = False
         self.shared_polling = False
@@ -69,14 +75,23 @@ class VoiceInput:
         ttk.Label(frame, text='KDE asks you to approve shortcuts and keyboard input. Default shortcut: Ctrl+Alt+Space. Switching windows holds the transcript instead of inserting it.',
                   style='Card.TLabel', wraplength=760).pack(anchor='w')
         frame = panel.card(page, 'Recording and transcripts')
-        for caption, variable in [('Microphone source (blank = system default)', self.source),
-                                  ('Language tag (blank = automatic detection)', self.language)]:
-            ttk.Label(frame, text=caption, style='Card.TLabel').pack(anchor='w')
-            ttk.Entry(frame, textvariable=variable).pack(fill='x', pady=5)
+        ttk.Label(frame, text='Microphone', style='Card.TLabel').pack(anchor='w')
+        row = ttk.Frame(frame, style='Card.TFrame'); row.pack(fill='x', pady=5)
+        self.source_combo = ttk.Combobox(row, textvariable=self.source_caption, values=['System default'], state='readonly', height=12)
+        self.source_combo.pack(side='left', fill='x', expand=True)
+        self.source_combo.bind('<<ComboboxSelected>>', lambda event: self.select_source())
+        ttk.Button(row, text='Refresh', command=self.refresh_sources).pack(side='right', padx=(6, 0))
+        ttk.Label(frame, textvariable=self.device_status, style='Card.TLabel', wraplength=760).pack(anchor='w')
+        ttk.Label(frame, text='Dictation language', style='Card.TLabel').pack(anchor='w', pady=(6, 0))
+        self.language_picker = LanguagePicker(frame, self.language, changed=self.save)
+        self.language_picker.pack(fill='x', pady=5)
+        ttk.Label(frame, textvariable=self.detected_language, style='Card.TLabel', wraplength=760).pack(anchor='w')
+        ttk.Label(frame, text='Selections apply to the next recording.', style='Card.TLabel').pack(anchor='w')
         ttk.Checkbutton(frame, text='Play two short ready tones (250 Hz)', variable=self.beep).pack(anchor='w', pady=6)
-        button = ttk.Button(frame, text='Record 10 seconds', command=self.record)
         row = ttk.Frame(frame, style='Card.TFrame'); row.pack(fill='x')
-        button.pack(in_=row, side='left', pady=5); self.buttons.append(button)
+        self.record_button = ttk.Button(row, text='Start recording (10 seconds)', command=self.record)
+        self.record_button.pack(side='left', pady=5)
+        self.buttons.append(self.record_button)
         ttk.Button(row, text='Stop recording', command=lambda: self.command('stt-finish')).pack(side='left', padx=5)
         ttk.Button(row, text='Cancel', command=lambda: self.command('stt-cancel')).pack(side='left')
         ttk.Button(row, text='Copy transcript', command=self.copy).pack(side='right')
@@ -85,7 +100,36 @@ class VoiceInput:
         self.result = tk.Text(frame, height=4, wrap='word')
         self.result.pack(fill='x', pady=8)
         panel.root.bind('<Destroy>', self.destroy, add='+')
+        self.refresh_sources()
         panel.root.after(100, self.poll)
+
+    def select_source(self):
+        self.source.set(self.source_options[self.source_caption.get()])
+        self.save()
+
+    def refresh_sources(self):
+        if self.refreshing_sources:
+            return
+        self.refreshing_sources = True
+        self.device_status.set('Finding microphones…')
+        def task():
+            try:
+                self.events.put(('devices', (discover_microphones(), None)))
+            except Exception as error:
+                self.events.put(('devices', ([('', 'System default')], str(error))))
+        threading.Thread(target=task, daemon=True).start()
+
+    def apply_sources(self, choices, error=None):
+        current = self.source.get()
+        if current and not any(code == current for code, caption in choices):
+            previous = self.source_caption.get()
+            caption = previous if previous.startswith('Unavailable — ') else 'Unavailable — ' + (previous if previous not in ('System default', 'Finding selected microphone…') else 'saved microphone')
+            choices = [*choices, (current, caption)]
+        self.source_options = {caption: code for code, caption in choices}
+        self.source_combo.configure(values=list(self.source_options))
+        self.source_caption.set(next(caption for code, caption in choices if code == current))
+        self.device_status.set(error or ('No microphones found. Check Linux audio settings.' if len(choices) == 1 else ''))
+        self.refreshing_sources = False
 
     def save(self):
         self.panel.config.update(stt_model=self.model.get(), stt_language=self.language.get().strip(),
@@ -206,6 +250,11 @@ class VoiceInput:
         if result['sequence'] != self.last_sequence:
             self.last_sequence = result['sequence']
             self.latest_text = ' '.join(item['text'] for item in result['results'])
+            detected = next((item for item in reversed(result['results'])
+                             if item.get('language_source') == 'detected' and item.get('text')), None)
+            if detected:
+                self.detected_language.set('Last automatically detected: ' +
+                    (language_caption(detected['language']) if detected.get('language') else 'mixed or undetermined'))
             self.result.delete('1.0', 'end')
             for item in result['results']:
                 self.result.insert('end', item['text'] + '\n[' + (item['language'] or 'unknown') + ' · ' + item['output'] + ']\n')
@@ -218,7 +267,9 @@ class VoiceInput:
         try:
             while True:
                 kind, value = self.events.get_nowait()
-                if kind == 'shared':
+                if kind == 'devices':
+                    self.apply_sources(*value)
+                elif kind == 'shared':
                     self.shared(result=value)
                 elif kind == 'control-error':
                     self.local_error = True

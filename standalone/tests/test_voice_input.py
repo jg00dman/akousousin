@@ -52,3 +52,13 @@ class VoiceInputTests(unittest.TestCase):
         with patch('akousousin_app.voice_input.runtime.call') as call:
             page.record()
             call.assert_not_called()
+
+    def test_unplugged_microphone_preference_is_preserved(self):
+        page = self.page()
+        page.source = Mock(); page.source.get.return_value = 'missing-source'
+        page.source_caption = Mock(); page.source_caption.get.return_value = 'USB microphone'
+        page.source_combo = Mock(); page.device_status = Mock()
+        page.apply_sources([('', 'System default'), ('built-in', 'Built-in microphone')])
+        page.source.set.assert_not_called()
+        self.assertEqual(page.source_options['Unavailable — USB microphone'], 'missing-source')
+        page.source_caption.set.assert_called_with('Unavailable — USB microphone')
