@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     steps:
-      - name: Verify tested build and its existing unique tag
+      - name: Verify tested build and prepare its versioned tag
         id: tested
         env:
           GH_TOKEN: ${{ github.token }}
@@ -32,7 +32,7 @@ jobs:
           import json, os
           run = json.load(open('run.json'))
           jobs = json.load(open('jobs.json'))['jobs']
-          assert run['head_branch'] == 'codex/standalone-control-panel'
+          assert run['head_branch'] in ('main', 'codex/standalone-control-panel', 'codex/control-panel-updates')
           assert run['path'] == '.github/workflows/standalone.yml'
           assert run['status'] == 'completed'
           for name in ('engine', 'package (ubuntu-22.04)', 'package (windows-2022)'):
@@ -40,10 +40,17 @@ jobs:
           with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
               output.write('sha=' + run['head_sha'] + '\n')
           PY
-          tag="standalone-beta-${SOURCE_RUN}-1"
-          actual=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha')
+          source_sha=$(python3 -c "import json; print(json.load(open('run.json'))['head_sha'])")
+          gh api "repos/$GITHUB_REPOSITORY/contents/standalone/pyproject.toml?ref=$source_sha" --jq '.content' | base64 -d > project.toml
+          version=$(sed -n 's/^version = "\([^"]*\)"/\1/p' project.toml)
+          tag="standalone-beta-${version}-${SOURCE_RUN}-1"
+          actual=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha' 2>/dev/null || true)
           expected=$(python3 -c "import json; print(json.load(open('run.json'))['head_sha'])")
-          [[ "$actual" == "$expected" ]]
+          if [ -z "$actual" ]; then
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$tag" -f sha="$expected"
+          else
+            [[ "$actual" == "$expected" ]]
+          fi
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
@@ -71,6 +78,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           SOURCE_RUN: ${{ inputs.tested_run }}
         run: |
-          gh release create "standalone-beta-${SOURCE_RUN}-1" --verify-tag --repo "$GITHUB_REPOSITORY" \
+          version=$(sed -n 's/^version = "\([^"]*\)"/\1/p' standalone/pyproject.toml)
+          gh release create "standalone-beta-${version}-${SOURCE_RUN}-1" --verify-tag --repo "$GITHUB_REPOSITORY" \
             --prerelease --title "Akousousin standalone beta ${SOURCE_RUN}" \
             --notes-file standalone/RELEASE-NOTES.md release-assets/*

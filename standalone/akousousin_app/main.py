@@ -19,6 +19,7 @@ def main():
     parser.add_argument('--uninstall', action='store_true', help='Restore backed-up registry settings and DLLs')
     parser.add_argument('--wine-compat', action='store_true', help='Force the Wine 11.21 SAPI compatibility DLL')
     parser.add_argument('--settings', type=Path, default=settings.config_path())
+    parser.add_argument('--refresh-registrations', action='store_true', help='Reapply saved SAPI registrations after an update')
     parser.add_argument('--protocol-version', action='store_true', help='Print launcher protocol version')
     parser.add_argument('--configure', action='store_true', help='Open shared speech preferences')
     parser.add_argument('--acquire-session', metavar='ID', help='Start/reuse speech for this application session')
@@ -56,6 +57,10 @@ def main():
         Module(args.settings).run()
         return
     config = resources.bootstrap(args.settings)
+    if args.refresh_registrations:
+        from .updates import refresh_registrations
+        refresh_registrations(args.settings)
+        return
     if args.uninstall_speech_dispatcher:
         from .speech_dispatcher import configure
         print(f'Module removed from {configure(args.settings, remove=True)}. Speech Dispatcher restarted.')

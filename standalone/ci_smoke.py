@@ -140,6 +140,11 @@ if not native:
     panel.root.update()
     ImageGrab.grab().save(WORK / 'control-panel.png')
     panel.root.destroy()
+# Updates reapply saved active registrations using the new package. Exercise
+# this against the initialized Wine/native Windows installation before rollback.
+subprocess.run([str(executable), '--settings', str(settings_path), '--refresh-registrations'],
+               env=env, check=True, timeout=180)
+print('PASS: packaged refresh of saved active SAPI registrations', flush=True)
 command = [str(executable), '--uninstall', '--settings', str(settings_path)]
 if not native:
     command += ['--wine-prefix', str(prefix), '--wine', str(wine)]
