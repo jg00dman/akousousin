@@ -54,7 +54,7 @@ class Panel:
         header = ttk.Frame(self.root, padding=(24, 18))
         header.pack(fill='x')
         ttk.Label(header, text='▥  Akousousin', style='Title.TLabel').pack(side='left')
-        ttk.Label(header, text='SAPI · Speech Dispatcher (planned)', padding=(18, 8)).pack(side='left')
+        ttk.Label(header, text='SAPI · Speech Dispatcher (experimental)', padding=(18, 8)).pack(side='left')
         ttk.Label(header, text='Standalone beta').pack(side='right')
         body = ttk.Frame(self.root)
         body.pack(fill='both', expand=True, padx=20)
@@ -77,6 +77,7 @@ class Panel:
         self.noise_w = tk.DoubleVar(value=self.config['noise_w_scale'])
         self.language = tk.StringVar(value=label(self.config['book_language']) if self.config['book_language'] else 'Follow application')
         self.port = tk.IntVar(value=self.config['port'])
+        self.idle_timeout = tk.IntVar(value=self.config['idle_timeout'])
         self.build_overview()
         self.build_library()
         self.build_languages()
@@ -311,12 +312,12 @@ class Panel:
     def build_languages(self):
         page = self.pages['Languages']
         frame = self.card(page, 'Reading languages')
-        ttk.Label(frame, text='Book language', style='Card.TLabel').pack(anchor='w')
+        ttk.Label(frame, text='Language override (all applications)', style='Card.TLabel').pack(anchor='w')
         languages = sorted({v['language'] for v in self.config['voices'].values()})
         self.language_combo = ttk.Combobox(frame, textvariable=self.language,
                                            values=['Follow application', *(label(code) for code in languages)], state='readonly')
         self.language_combo.pack(fill='x', pady=10)
-        ttk.Label(frame, text='Follow application uses language IDs supplied through SAPI. It does not guess the language of individual words. Select a language manually for an entire book.',
+        ttk.Label(frame, text='Shared by SAPI and Speech Dispatcher. Follow application uses the requested language; selecting a language here overrides it for all applications.',
                   wraplength=780, style='Card.TLabel').pack(anchor='w', pady=12)
         ttk.Label(frame, text='Preferred voices by language', style='Card.TLabel').pack(anchor='w')
         self.language_rows = ttk.Treeview(frame, columns=('voice',), show='tree headings', height=7)
@@ -352,6 +353,12 @@ class Panel:
                   wraplength=780, style='Card.TLabel').pack(anchor='w', pady=12)
         ttk.Button(frame, text='Install / apply voice registration', style='Accent.TButton', command=self.install).pack(side='left', padx=4)
         ttk.Button(frame, text='Uninstall & restore', command=self.uninstall).pack(side='left', padx=4)
+        if os.name != 'nt':
+            frame = self.card(page, 'Native Linux speech — Speech Dispatcher')
+            ttk.Label(frame, text='Install your distribution’s Speech Dispatcher first. Registration preserves your default module. Installing or removing support restarts your user Speech Dispatcher and interrupts current speech. Then choose your voice in Orca.',
+                      wraplength=780, style='Card.TLabel').pack(anchor='w', pady=8)
+            ttk.Button(frame, text='Install Speech Dispatcher support', command=lambda: self.dispatcher_install(False)).pack(side='left', padx=4)
+            ttk.Button(frame, text='Remove Speech Dispatcher support', command=lambda: self.dispatcher_install(True)).pack(side='left', padx=4)
         frame = self.card(page, 'Advanced synthesis')
         for text, variable in [('Generator variation (noise scale)', self.noise), ('Phoneme variation (noise width)', self.noise_w)]:
             row = ttk.Frame(frame, style='Card.TFrame'); row.pack(fill='x', pady=8)
@@ -360,6 +367,9 @@ class Panel:
         row = ttk.Frame(frame, style='Card.TFrame'); row.pack(fill='x', pady=8)
         ttk.Label(row, text='Loopback port', style='Card.TLabel').pack(side='left')
         ttk.Spinbox(row, textvariable=self.port, from_=1024, to=65535, width=8).pack(side='right')
+        row = ttk.Frame(frame, style='Card.TFrame'); row.pack(fill='x', pady=8)
+        ttk.Label(row, text='Unload Piper after idle seconds (0 = never)', style='Card.TLabel').pack(side='left')
+        ttk.Spinbox(row, textvariable=self.idle_timeout, from_=0, to=86400, increment=60, width=8).pack(side='right')
         ttk.Label(frame, text='Piper has no general pitch slider. Speed and synthesis variation are supported. A port change requires server restart and reapplying voice registration.',
                   wraplength=780, style='Card.TLabel').pack(anchor='w', pady=12)
         ttk.Button(frame, text='Save settings', command=self.save).pack(anchor='e')
@@ -369,7 +379,7 @@ class Panel:
         try:
             self.config.update(speed=float(self.speed.get()), volume=float(self.volume.get()) / 100,
                                noise_scale=float(self.noise.get()), noise_w_scale=float(self.noise_w.get()),
-                               port=int(self.port.get()), wine_prefix=self.prefix.get(), wine=self.wine.get(),
+                               idle_timeout=int(self.idle_timeout.get()), port=int(self.port.get()), wine_prefix=self.prefix.get(), wine=self.wine.get(),
                                book_language=next((code for code in {v['language'] for v in self.config['voices'].values()}
                                                    if label(code) == self.language.get()), ''))
             settings.save(self.path, self.config)
@@ -379,6 +389,13 @@ class Panel:
             messagebox.showerror('Preferences', str(error))
             return False
 
+    def dispatcher_install(self, remove):
+        from .speech_dispatcher import configure
+        if not self.save():
+            return
+        self.worker(lambda: configure(self.path, remove=remove),
+                    lambda _: self.status.set('Speech Dispatcher support ' + ('removed.' if remove else 'installed.') + ' Speech Dispatcher restarted.'))
+
     def install(self):
         if not self.save():
             return
@@ -386,7 +403,7 @@ class Panel:
         def installed(_):
             settings.register(self.path, prefix, wine)
             self.status.set('Installed. Restart the Windows application to use the new default.')
-        self.worker(lambda: Installer(resources.root(), prefix, wine).install(self.config), installed)
+        self.worker(lambda: Installer(resources.root(), prefix, wine).install(self.config, self.path), installed)
 
     def uninstall(self):
         if not messagebox.askyesno('Uninstall Akousousin', 'Restore original DLLs and speech registration in this installation?'):

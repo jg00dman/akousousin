@@ -6,7 +6,8 @@ from pathlib import Path
 
 DEFAULTS = {'version': 1, 'voice': 'en_US-ljspeech-medium', 'speed': 1.0, 'volume': 0.8,
             'noise_scale': 0.667, 'noise_w_scale': 0.8, 'book_language': '',
-            'language_voices': {}, 'voices': {}, 'wine_prefix': '', 'wine': '', 'port': 5000}
+            'language_voices': {}, 'voices': {}, 'wine_prefix': '', 'wine': '', 'port': 5000,
+            'idle_timeout': 300}
 
 
 def config_path():
@@ -35,6 +36,9 @@ def validate(value):
         number = value[key]
         if isinstance(number, bool) or not isinstance(number, (int, float)) or not low <= number <= high:
             raise ValueError(f'Invalid {key}')
+    timeout = value['idle_timeout']
+    if isinstance(timeout, bool) or not isinstance(timeout, int) or not 0 <= timeout <= 86400:
+        raise ValueError('Idle timeout must be 0–86400 seconds (0 disables it)')
     if not isinstance(value['port'], int) or not 1024 <= value['port'] <= 65535:
         raise ValueError('Port must be between 1024 and 65535')
     if not isinstance(value['voices'], dict) or not isinstance(value['language_voices'], dict):

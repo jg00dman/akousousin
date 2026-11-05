@@ -7,8 +7,8 @@ on:
         type: boolean
         default: false
   push:
-    branches: [codex/standalone-control-panel]
-    paths: [engine/**, standalone/**, .github/workflows/standalone.yml]
+    branches: [codex/standalone-control-panel, codex/speech-dispatcher-on-demand, codex/linux-speech-dispatcher]
+    paths: [engine/**, standalone/**, backend/**, tests/**, .github/workflows/standalone.yml]
 permissions:
   contents: read
 jobs:
@@ -47,18 +47,32 @@ jobs:
           path: build/standalone-engine
       - name: Install Linux packaging/test tools
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends squashfs-tools xvfb xauth libxcb-cursor0 libxkbcommon-x11-0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 libegl1 libgl1 libopengl0
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends squashfs-tools xvfb xauth libxcb-cursor0 libxkbcommon-x11-0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 libegl1 libgl1 libopengl0 speech-dispatcher speech-dispatcher-audio-plugins
       - name: Install pinned Python backend and packager
         run: python -m pip install ./backend ./standalone pyinstaller==6.16.0 pillow
       - name: Unit tests
         shell: bash
         run: PYTHONPATH=standalone:backend python -m unittest discover -s standalone/tests -v
         if: runner.os == 'Linux'
+      - name: Backend failure and cancellation tests
+        if: runner.os == 'Linux'
+        shell: bash
+        run: PYTHONPATH=backend python -m unittest discover -s backend/tests -v
       - name: Build package with reviewed LJSpeech starter voice, licences and sources
+        id: package
         run: python standalone/package.py
       - name: Wine installer, COM engine, real speech and panel tests
         if: runner.os == 'Linux'
         run: xvfb-run -a python standalone/ci_smoke.py
+      - name: Real Speech Dispatcher module and interruption tests
+        if: ${{ !cancelled() && runner.os == 'Linux' && steps.package.outcome == 'success' }}
+        shell: bash
+        run: |
+          export APPIMAGE_EXTRACT_AND_RUN=1
+          export XDG_CONFIG_HOME="$PWD/build/dispatcher-ci/config"
+          export XDG_DATA_HOME="$PWD/build/dispatcher-ci/data"
+          export XDG_STATE_HOME="$PWD/build/dispatcher-ci/state"
+          python standalone/ci_speech_dispatcher.py standalone-dist/Akousousin-x86_64.AppImage build/dispatcher-ci/settings.json
       - name: Native Windows SAPI, installer and panel tests
         if: runner.os == 'Windows'
         run: python standalone/ci_smoke.py
@@ -79,6 +93,9 @@ jobs:
             standalone-dist/*.zip
             standalone-dist/*.gz
             standalone-dist/SHA256SUMS
+            build/dispatcher-ci/speech-dispatcher/*.log
+            build/dispatcher-ci/speech-dispatcher/logs/**
+            build/dispatcher-ci/state/**
             build/standalone-ci/*.log
             build/standalone-ci/*.wav
             build/standalone-ci/*.png

@@ -44,6 +44,7 @@ struct piper_engine
     ISpObjectToken *token;
     DWORD rate, port;
     WCHAR voice[128];
+    WCHAR launcher[4096];
     DWORD language, route;
 };
 
@@ -174,6 +175,66 @@ static HRESULT socket_ready(SOCKET socket, BOOL write, ISpTTSEngineSite *site, U
     }
 }
 
+static HRESULT wake_backend(struct piper_engine *engine, ISpTTSEngineSite *site)
+{
+    STARTUPINFOW startup = {0};
+    PROCESS_INFORMATION process;
+    WCHAR command[4096];
+    ULONGLONG deadline = GetTickCount64() + 75000;
+    DWORD status;
+    if (!engine->launcher[0]) return HRESULT_FROM_WIN32(ERROR_WINHTTP_CANNOT_CONNECT);
+    startup.cb = sizeof(startup);
+    wcscpy(command, engine->launcher); /* CreateProcess may modify its command line. */
+    if (!CreateProcessW(NULL, command, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &startup, &process))
+        return HRESULT_FROM_WIN32(GetLastError());
+    /* Wine successfully launches native Unix programs without Win32 handles.
+     * The caller polls the bounded loopback connection while that app starts. */
+    if (!process.hProcess) return S_OK;
+    CloseHandle(process.hThread);
+    for (;;)
+    {
+        if (ISpTTSEngineSite_GetActions(site) & SPVES_ABORT)
+        { CloseHandle(process.hProcess); return S_FALSE; }
+        status = WaitForSingleObject(process.hProcess, 50);
+        if (status == WAIT_OBJECT_0) break;
+        if (status == WAIT_FAILED)
+        { DWORD error = GetLastError(); CloseHandle(process.hProcess); return HRESULT_FROM_WIN32(error); }
+        if (GetTickCount64() >= deadline)
+        { CloseHandle(process.hProcess); return HRESULT_FROM_WIN32(ERROR_WINHTTP_TIMEOUT); }
+    }
+    GetExitCodeProcess(process.hProcess, &status);
+    CloseHandle(process.hProcess);
+    return status ? HRESULT_FROM_WIN32(ERROR_WINHTTP_CANNOT_CONNECT) : S_OK;
+}
+
+/* Best-effort cancellation of this request only. Never wait for an HTTP
+ * response on the already-aborted SAPI thread or terminate a shared backend. */
+static void cancel_request(DWORD port, const char *identifier)
+{
+    SOCKET socket;
+    struct sockaddr_in address = {0};
+    struct timeval interval = {0, 50000};
+    fd_set ready;
+    u_long nonblocking = 1;
+    char request[256];
+    int length;
+    if ((socket = WSASocketW(AF_INET, SOCK_STREAM, IPPROTO_TCP, NULL, 0, 0)) == INVALID_SOCKET) return;
+    ioctlsocket(socket, FIONBIO, &nonblocking);
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    address.sin_port = htons(port);
+    connect(socket, (struct sockaddr *)&address, sizeof(address));
+    FD_ZERO(&ready);
+    FD_SET(socket, &ready);
+    if (select(0, NULL, &ready, NULL, &interval) > 0)
+    {
+        length = sprintf(request, "POST /cancel HTTP/1.0\r\nHost: 127.0.0.1\r\n"
+                         "X-Akousousin-Request: %s\r\nContent-Length: 0\r\n\r\n", identifier);
+        send(socket, request, length, 0);
+    }
+    closesocket(socket);
+}
+
 static HRESULT fetch_wav(struct piper_engine *engine, const char *json,
                          ISpTTSEngineSite *site, BYTE **data, DWORD *size)
 {
@@ -181,16 +242,25 @@ static HRESULT fetch_wav(struct piper_engine *engine, const char *json,
     WSADATA winsock;
     struct sockaddr_in address = {0};
     ULONGLONG deadline = GetTickCount64() + 65000, send_deadline;
-    char headers[16385], request[256], *line, *end, *value;
+    char headers[16385], request[512], identifier[64], *line, *end, *value;
+    GUID request_id;
+    WCHAR wide_id[40];
     DWORD length = 0, used = 0, header_size = 0;
     BOOL have_length = FALSE;
     BYTE *buffer = NULL;
     int count, offset, total;
+    BOOL woke = FALSE;
+    ULONGLONG startup_deadline = 0;
     HRESULT hr = HRESULT_FROM_WIN32(ERROR_WINHTTP_CONNECTION_ERROR);
 
     *data = NULL;
     *size = 0;
+    if (FAILED(CoCreateGuid(&request_id))) return E_FAIL;
+    StringFromGUID2(&request_id, wide_id, 40);
+    WideCharToMultiByte(CP_UTF8, 0, wide_id, -1, identifier, sizeof(identifier), NULL, NULL);
     if (WSAStartup(MAKEWORD(2, 2), &winsock)) return hr;
+retry:
+    deadline = GetTickCount64() + 65000;
     if ((socket = WSASocketW(AF_INET, SOCK_STREAM, IPPROTO_TCP, NULL, 0, 0)) == INVALID_SOCKET) goto done;
     {
         u_long nonblocking = 1;
@@ -203,12 +273,30 @@ static HRESULT fetch_wav(struct piper_engine *engine, const char *json,
         WSAGetLastError() != WSAEWOULDBLOCK)
     {
         hr = HRESULT_FROM_WIN32(ERROR_WINHTTP_CANNOT_CONNECT);
-        goto done;
+        goto connect_failed;
     }
-    if ((hr = socket_ready(socket, TRUE, site, GetTickCount64() + 3000)) != S_OK) goto done;
+    if ((hr = socket_ready(socket, TRUE, site, GetTickCount64() + 3000)) != S_OK)
+    {
+connect_failed:
+        if (hr == S_FALSE || !engine->launcher[0]) goto done;
+        closesocket(socket);
+        socket = INVALID_SOCKET;
+        if (!woke)
+        {
+            if ((hr = wake_backend(engine, site)) != S_OK) goto done;
+            woke = TRUE;
+            startup_deadline = GetTickCount64() + 65000;
+        }
+        else if (GetTickCount64() >= startup_deadline)
+        { hr = HRESULT_FROM_WIN32(ERROR_WINHTTP_TIMEOUT); goto done; }
+        if (ISpTTSEngineSite_GetActions(site) & SPVES_ABORT) { hr = S_FALSE; goto done; }
+        Sleep(50);
+        goto retry;
+    }
     total = sprintf(request, "POST /synthesize HTTP/1.0\r\nHost: 127.0.0.1:%lu\r\n"
-                    "Content-Type: application/json\r\nContent-Length: %u\r\nConnection: close\r\n\r\n",
-                    engine->port, (unsigned int)strlen(json));
+                    "Content-Type: application/json\r\nContent-Length: %u\r\n"
+                    "X-Akousousin-Request: %s\r\nConnection: close\r\n\r\n",
+                    engine->port, (unsigned int)strlen(json), identifier);
     send_deadline = GetTickCount64() + 5000;
     for (offset = 0; offset < total; offset += count)
     {
@@ -274,6 +362,7 @@ static HRESULT fetch_wav(struct piper_engine *engine, const char *json,
     hr = S_OK;
 done:
     if (socket != INVALID_SOCKET) closesocket(socket);
+    if (hr == S_FALSE) cancel_request(engine->port, identifier);
     WSACleanup();
     free(buffer);
     return hr;
@@ -390,15 +479,51 @@ static HRESULT WINAPI engine_Speak(ISpTTSEngine *iface, DWORD flags, REFGUID fmt
         if (!frag->ulTextLen) continue;
         if (!frag->pTextStart) return E_POINTER;
         if (frag->ulTextLen > MAX_TEXT_LENGTH) return E_INVALIDARG;
-        if (FAILED(hr = ISpTTSEngineSite_GetRate(site, &rate))) return hr;
-        if (!(json = make_request(frag, rate, engine))) return E_INVALIDARG;
-        hr = fetch_wav(engine, json, site, &wav, &size);
-        free(json);
-        if (hr != S_OK) return hr == S_FALSE ? S_OK : hr;
-        hr = parse_wav(wav, size, engine->rate, &pcm, &pcm_size);
-        if (SUCCEEDED(hr)) hr = write_pcm(site, pcm, pcm_size, frag->State.Volume);
-        free(wav);
-        if (hr != S_OK) return hr == S_FALSE ? S_OK : hr;
+        {
+            ULONG offset = 0;
+            while (offset < frag->ulTextLen)
+            {
+                SPVTEXTFRAG part = *frag;
+                ULONG length = min(240, frag->ulTextLen - offset), split;
+                /* Prefer sentence/word boundaries. Never split a surrogate pair.
+                 * This bounds first-audio latency without inventing word timings. */
+                if (length < frag->ulTextLen - offset)
+                {
+                    ULONG sentence = 0;
+                    for (split = 40; split < length; split++)
+                        if ((frag->pTextStart[offset + split - 1] == '.' ||
+                             frag->pTextStart[offset + split - 1] == '!' ||
+                             frag->pTextStart[offset + split - 1] == '?') &&
+                            (frag->pTextStart[offset + split] == ' ' || frag->pTextStart[offset + split] == '\n'))
+                        { sentence = split + 1; break; }
+                    if (sentence) length = sentence;
+                    else
+                    {
+                        for (split = length; split > 40; split--)
+                            if (frag->pTextStart[offset + split - 1] == ' ' ||
+                                frag->pTextStart[offset + split - 1] == '\n') break;
+                        if (split > 40) length = split;
+                    }
+                    if (frag->pTextStart[offset + length - 1] >= 0xd800 &&
+                        frag->pTextStart[offset + length - 1] <= 0xdbff) length--;
+                }
+                part.pTextStart += offset;
+                part.ulTextLen = length;
+                part.ulTextSrcOffset += offset;
+                part.pNext = NULL;
+                if (ISpTTSEngineSite_GetActions(site) & SPVES_ABORT) return S_OK;
+                if (FAILED(hr = ISpTTSEngineSite_GetRate(site, &rate))) return hr;
+                if (!(json = make_request(&part, rate, engine))) return E_INVALIDARG;
+                hr = fetch_wav(engine, json, site, &wav, &size);
+                free(json);
+                if (hr != S_OK) return hr == S_FALSE ? S_OK : hr;
+                hr = parse_wav(wav, size, engine->rate, &pcm, &pcm_size);
+                if (SUCCEEDED(hr)) hr = write_pcm(site, pcm, pcm_size, frag->State.Volume);
+                free(wav);
+                if (hr != S_OK) return hr == S_FALSE ? S_OK : hr;
+                offset += length;
+            }
+        }
     }
     return S_OK;
 }
@@ -469,6 +594,9 @@ static HRESULT WINAPI token_SetObjectToken(ISpObjectWithToken *iface, ISpObjectT
                 !(engine->voice[i] >= '0' && engine->voice[i] <= '9') &&
                 engine->voice[i] != '_' && engine->voice[i] != '-')
             { RegCloseKey(key); return E_INVALIDARG; }
+        size = sizeof(engine->launcher);
+        if (RegGetValueW(key,NULL,L"Launcher",RRF_RT_REG_SZ,NULL,engine->launcher,&size))
+            engine->launcher[0] = 0;
         size = sizeof(engine->language);
         RegGetValueW(key,NULL,L"LanguageID",RRF_RT_REG_DWORD,NULL,&engine->language,&size);
         size = sizeof(engine->route);

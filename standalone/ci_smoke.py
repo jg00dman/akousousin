@@ -100,6 +100,36 @@ try:
     assert public('--release-session', 'logos-ci')['running'], 'Independent service was stopped by Logos release'
 finally:
     public('--quit')
+# Exercise actual SAPI-triggered startup, without an OD session or manual Start.
+# Keep the assertion on generated neural audio; a healthy HTTP listener alone is insufficient.
+import time
+time.sleep(2)
+config['idle_timeout'] = 2
+settings.save(settings_path, config)
+try:
+    cold_wav = WORK / 'on-demand-sapi.wav'
+    subprocess.run([str(executable), '--settings', str(settings_path), '--sapi-wav', str(cold_wav),
+                    'Speech started directly from the SAPI call.'], env=env, check=True, timeout=100)
+    with wave.open(str(cold_wav), 'rb') as audio:
+        assert audio.getnframes() > 2205
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        health = service.health(config['port'])
+        if health and health.get('model_loaded') is False:
+            break
+        time.sleep(.2)
+    else:
+        raise AssertionError('Idle model did not unload')
+    # Same resident listener must reload the model on its next speech request.
+    subprocess.run([str(executable), '--settings', str(settings_path), '--sapi-wav', str(WORK / 'idle-restart.wav'),
+                    'The idle model has restarted.'], env=env, check=True, timeout=100)
+    print('PASS: SAPI cold startup and reload after idle unload', flush=True)
+finally:
+    public('--quit')
+    config['idle_timeout'] = 300
+    settings.save(settings_path, config)
+    time.sleep(2)
+
 assert not (WORK / 'data/Akousousin/runtimes').exists(), 'An extracted runtime was retained'
 subprocess.run([str(executable), '--settings', str(settings_path), '--smoke-test'], env=env, check=True, timeout=30)
 if not native:

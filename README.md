@@ -3,8 +3,10 @@
 **akousousin:** *The unified neural speech engine for Linux, implementing Microsoft SAPI and Speech Dispatcher, based on Piper and Whisper.*
 
 This is the project vision. The current beta implements SAPI text-to-speech with
-Piper. Speech Dispatcher is the next implementation milestone; Whisper recognition
-and wider desktop integration are planned, not currently available.
+Piper. This development branch adds experimental Speech Dispatcher output,
+on-demand startup and idle model unloading. Whisper recognition remains planned.
+See [branch testing instructions](standalone/SPEECH-DISPATCHER.md); the published
+0.5 beta does not include these additions.
 
 The name comes from Greek **ἀκούσουσιν**, “they will hear” (John 5:25).
 
@@ -16,7 +18,7 @@ The name comes from Greek **ἀκούσουσιν**, “they will hear” (John 
 | Shared per-user service, tray, voice library and session lifecycle | Working beta |
 | Manual voice/book-language selection | Working beta; German reading tested |
 | Automatic application-language hints | Partial; Logos language selection needs further investigation |
-| Speech Dispatcher output module | Planned next |
+| Speech Dispatcher output module | Experimental on this branch; desktop validation pending |
 | Streaming TTS, complete pause/resume and stream/word events | Not complete; future work |
 | Whisper, SAPI recognition and Linux dictation | Planned |
 | macOS deployment, 32-bit callers and full UI localisation | Not currently supported |
@@ -59,6 +61,7 @@ not the cloud development environment. Matching sources and licence notices
 accompany downloadable packages. Engine code is LGPL-2.1-or-later; panel/service
 and Piper are GPL-3.0-or-later; dependency and voice notices are included.
 
-The next functional milestone is a Speech Dispatcher output module, followed by
-streaming/event improvements and separately scoped recognition work. This rebrand
-changes names and presentation; it does not claim those interfaces are implemented.
+This branch develops Speech Dispatcher output, lower first-audio latency and
+service reliability. Complete streaming and accurate word events remain future
+work; word offsets must be mapped to real model alignment data. Recognition is
+separately scoped.

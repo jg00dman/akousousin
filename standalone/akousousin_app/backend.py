@@ -6,6 +6,7 @@ import math
 import hmac
 from pathlib import Path
 import threading
+import time
 import wave
 
 from akousousin_backend.server import Synthesizer, MAX_AUDIO, MAX_BODY
@@ -62,6 +63,31 @@ class Router:
         self.synth = None
         self.voice = None
         self.lock = threading.RLock()
+        self.last_activity = time.monotonic()
+        self.active_request = None
+        self.cancelled = threading.Event()
+        self.control_lock = threading.Lock()
+        self.waiters = {}
+        self.slots = threading.BoundedSemaphore(3)
+
+    def expire(self, now=None):
+        # Do not take the synthesis lock on every event-loop tick: dispatching
+        # a new HTTP request and idle maintenance happen together, and that can
+        # otherwise report a ready backend as busy. Recheck after taking it.
+        timeout = settings.load(self.path)['idle_timeout']
+        current = time.monotonic() if now is None else now
+        if not self.synth or not timeout or current - self.last_activity < timeout:
+            return False
+        if not self.lock.acquire(False):
+            return False
+        try:
+            timeout = settings.load(self.path)['idle_timeout']
+            if self.synth and timeout and current - self.last_activity >= timeout:
+                self.close()
+                return True
+            return False
+        finally:
+            self.lock.release()
 
     def choose(self, request, config):
         language = config['book_language'] or settings.language_for_lcid(request.get('language', 0))
@@ -71,8 +97,9 @@ class Router:
     def start(self):
         config = settings.load(self.path)
         self.select(config['voice'], config)
+        self.last_activity = time.monotonic()
 
-    def select(self, selected, config):
+    def select(self, selected, config, cancelled=None):
         if selected not in config['voices']:
             raise RuntimeError('Selected voice is not installed')
         model = Path(config['voices'][selected]['path'])
@@ -81,7 +108,7 @@ class Router:
         if self.synth is None or self.voice != selected:
             self.close()
             self.synth = Synthesizer(model, target=self.target)
-            self.synth.start()
+            self.synth.start(cancelled)
             self.voice = selected
 
     def close(self):
@@ -104,20 +131,64 @@ class Router:
         finally:
             self.lock.release()
 
-    def synthesize(self, request):
-        if not self.lock.acquire(False):
-            raise BlockingIOError('Piper is busy')
+    def cancel(self, identifier):
+        # Request ids are unguessable and only cancel that caller's current work.
+        with self.control_lock:
+            if not identifier:
+                return False
+            if identifier in self.waiters:
+                self.waiters[identifier].set()
+                return True
+            if identifier == self.active_request:
+                self.cancelled.set()
+                return True
+            return False
+
+    def synthesize(self, request, identifier=None):
+        # Three synthesis callers maximum leave a WSGI thread for cancellation
+        # and health. One worker/model is shared; waiting is bounded and cancellable.
+        if not self.slots.acquire(False):
+            raise BlockingIOError('Piper queue is full')
+        cancelled = threading.Event()
+        acquired = False
         try:
+            with self.control_lock:
+                if identifier and (identifier in self.waiters or identifier == self.active_request):
+                    raise ValueError('Duplicate active request id')
+                if identifier:
+                    self.waiters[identifier] = cancelled
+            deadline = time.monotonic() + 10
+            while not acquired:
+                if cancelled.is_set():
+                    raise InterruptedError('Queued speech cancelled')
+                acquired = self.lock.acquire(timeout=.05)
+                if not acquired and time.monotonic() >= deadline:
+                    raise BlockingIOError('Piper queue timed out')
+            with self.control_lock:
+                if identifier:
+                    self.waiters.pop(identifier, None)
+                self.active_request = identifier
+                self.cancelled = cancelled
+            if cancelled.is_set():
+                raise InterruptedError('Speech cancelled')
             config = settings.load(self.path)
-            self.select(self.choose(request, config), config)
+            self.select(self.choose(request, config), config, self.cancelled)
             options = {'text': request['text'], 'length_scale': request.get('length_scale', 1) / config['speed'],
-                       'volume': config['volume'], 'noise_scale': config['noise_scale'],
+                       'volume': config['volume'] * request.get('volume', 1), 'noise_scale': config['noise_scale'],
                        'noise_w_scale': config['noise_w_scale']}
-            audio = self.synth.synthesize(options)
+            audio = self.synth.synthesize(options, self.cancelled)
             rate = request.get('sample_rate', self.synth.rate)
             return resample(audio, rate)
         finally:
-            self.lock.release()
+            with self.control_lock:
+                if identifier and self.waiters.get(identifier) is cancelled:
+                    self.waiters.pop(identifier)
+                if acquired:
+                    self.active_request = None
+            if acquired:
+                self.last_activity = time.monotonic()
+                self.lock.release()
+            self.slots.release()
 
 
 def application(router, instance, control="", stopping=None):
@@ -126,10 +197,8 @@ def application(router, instance, control="", stopping=None):
         try:
             if env['PATH_INFO'] == '/health' and env['REQUEST_METHOD'] == 'GET':
                 ready = router.synth is not None and router.synth.process is not None and router.synth.process.is_alive()
-                body = json.dumps({'service': 'akousousin-piper', 'instance': instance, 'ready': ready,
+                body = json.dumps({'service': 'akousousin-piper', 'instance': instance, 'ready': True, 'model_loaded': ready,
                                    'settings': str(router.path), 'voice': router.voice}).encode()
-                if not ready:
-                    status = '503 Service Unavailable'
             elif env['PATH_INFO'] == '/shutdown' and env['REQUEST_METHOD'] == 'POST':
                 if not control or not hmac.compare_digest(env.get('HTTP_X_AKOUSOUSIN_CONTROL', ''), control):
                     status, body = '403 Forbidden', b'{"error":"Not owned by this panel"}'
@@ -138,6 +207,10 @@ def application(router, instance, control="", stopping=None):
                     timer.daemon = True
                     timer.start()
                     body = b'{"stopping":true}'
+            elif env['PATH_INFO'] == '/cancel' and env['REQUEST_METHOD'] == 'POST':
+                cancelled = router.cancel(env.get('HTTP_X_AKOUSOUSIN_REQUEST', ''))
+                status = '200 OK' if cancelled else '404 Not Found'
+                body = json.dumps({'cancelled': cancelled}).encode()
             elif env['PATH_INFO'] == '/synthesize'  and env['REQUEST_METHOD'] == 'POST':
                 size = int(env.get('CONTENT_LENGTH', '0'))
                 if not 0 < size <= MAX_BODY:
@@ -150,23 +223,31 @@ def application(router, instance, control="", stopping=None):
                     raise ValueError('Invalid speed')
                 if not .5 <= scale <= 2:
                     raise ValueError('Invalid speed')
+                volume = request.get('volume', 1)
+                if isinstance(volume, bool) or not isinstance(volume, (int, float)) or not 0 <= volume <= 2:
+                    raise ValueError('Invalid volume')
                 rate = request.get('sample_rate', 22050)
                 if not isinstance(rate, int) or not 8000 <= rate <= 192000:
                     raise ValueError('Invalid sample rate')
                 if 'language' in request and not isinstance(request['language'], int):
                     raise ValueError('Invalid language')
-                body, kind = router.synthesize(request), 'audio/wav'
+                body, kind = router.synthesize(request, env.get('HTTP_X_AKOUSOUSIN_REQUEST')), 'audio/wav'
             else:
                 status, body = '404 Not Found', b'{"error":"Not found"}'
-        except (ValueError, TypeError, AttributeError):
+        except (ValueError, TypeError, AttributeError) as error:
+            logging.getLogger(__name__).warning('Rejected synthesis request: %s', error)
             status, body = '400 Bad Request', b'{"error":"Invalid request"}'
         except BlockingIOError:
             status, body = '503 Service Unavailable', b'{"error":"Piper is busy"}'
+        except InterruptedError:
+            status, body = '409 Conflict', b'{"error":"Speech cancelled"}'
         except TimeoutError:
             status, body = '504 Gateway Timeout', b'{"error":"Synthesis timed out"}'
         except Exception:
             logging.exception('Speech request failed')
             status, body = '503 Service Unavailable', b'{"error":"Voice unavailable"}'
+        if not status.startswith('200') and env['PATH_INFO'] == '/synthesize':
+            logging.getLogger(__name__).warning('Synthesis HTTP status: %s', status)
         respond(status, [('Content-Type', kind), ('Content-Length', str(len(body)))])
         return [body]
     return app
@@ -186,6 +267,7 @@ def serve(path, instance, control_file):
                                channel_timeout=70, max_request_body_size=MAX_BODY)
         while not stopping.is_set():
             wasyncore.loop(timeout=.1, count=1, map=server._map)
+            router.expire()
     finally:
         router.close()
         if server:
