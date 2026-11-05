@@ -90,9 +90,16 @@ suppression needs audible desktop testing and does not cover unrelated sound.
   observations: 7.295 s cold, 4.889 s warm for 11 s audio, child peak 653604 KiB.
   This does not measure physical capture or the fifth-generation i5.
 
-Live KDE 26.04 portal dialogs, shortcuts, non-Latin insertion, focus changes,
-lock/unlock, physical audio, TTS feedback and target-hardware performance remain
-acceptance tests. The project has no SAPI recognition engine yet; native Windows
+On 5 November 2026, a user confirmed microphone discovery, the ten-second recording
+test, KDE permission setup and dictation into Kate on Kubuntu 26.04 Wayland. The
+installed desktop entry launched successfully through `gtk-launch`, while the
+already-running portal initially reported “App info not found”. Restarting
+`xdg-desktop-portal.service` resolved registration and enabled working dictation.
+This validates that desktop path on that system; it does not establish all acceptance cases.
+The ready tones were enabled but inaudible and remain under investigation.
+
+Non-Latin insertion, focus changes, push-to-talk, lock/unlock, TTS feedback,
+physical-device failures and target-hardware performance remain acceptance tests. The project has no SAPI recognition engine yet; native Windows
 recognition/audio adapters and application-specific proofing-language tagging are
 later work.
 
@@ -104,7 +111,12 @@ matching desktop entry is provided at the normal XDG applications location. A
 small hidden launcher descriptor is created automatically when needed; existing
 custom launchers are preserved. Qt's desktop name alone does not identify the
 separate dbus-next connection. This fixes the “An app id is required” setup error
-without resetting settings, model caches or portal permissions.
+without resetting settings, model caches or portal permissions. If a valid desktop
+entry opens through `gtk-launch org.akousousin.Akousousin` but the portal reports
+“App info not found”, refresh the running portal with
+`systemctl --user restart xdg-desktop-portal.service`, then enable shortcuts again.
+A portal restart closes existing portal sessions. The controller now prepares its
+entry at startup, preserves an unchanged entry and retries transient lookup errors.
 
 The microphone selector lists readable source names and an explicit System default
 choice, hides speaker monitors, and preserves an unavailable explicit selection.

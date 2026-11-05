@@ -44,7 +44,9 @@ a switch during insertion may leave a partial result. Cancel is available in the
 panel and tray. Closing the panel leaves the shared worker/controller running.
 See recognition/DICTATION.md in the corresponding source for implementation,
 limitations and acceptance checks. SAPI recognition remains unimplemented.
-The ready cue and live microphone behavior need testing on your KDE Wayland desktop.
+Microphone capture and dictation into Kate were confirmed on Kubuntu 26.04 Wayland
+on 5 November 2026. The ready cue was enabled but inaudible; use Test ready sound
+to check playback in the newer trial. Other desktop acceptance cases remain open.
 Existing SAPI support is text-to-speech only. Full dependency licences and matching
 sources accompany the build. No Whisper model weights occur in the AppImage;
 the small bundled VAD asset and existing approved Piper starter voice remain.
@@ -55,3 +57,8 @@ with a stable application identity before requesting shortcuts. The entry is now
 prepared at controller startup and unchanged entries are retained; registration
 retries briefly while the desktop cache catches up. Quit the old AKS
 from its tray and launch the new build; keep your models and preferences.
+
+If “App info not found” persists despite a valid launcher, quit active portal
+sessions and run `systemctl --user restart xdg-desktop-portal.service`, then enable
+shortcuts again. This resolved the failure in the confirmed Kubuntu/Kate test;
+no AKS configuration or model reset was needed.
