@@ -14,6 +14,9 @@ import urllib.error
 import urllib.request
 import uuid
 import wave
+import unicodedata
+import xml.etree.ElementTree as ET
+import shlex
 
 from . import runtime, settings
 from .transport import fetch
@@ -34,6 +37,57 @@ def chunks(text, limit=240):
 
 def escaped(pcm):
     return pcm.replace(b'}', b'}]').replace(b'\n', b'}*')
+
+
+def speech_parts(text):
+    """Keep real marks at bounded synthesis boundaries, never invent timings."""
+    if not text.lstrip().startswith('<speak'):
+        yield from ((None, part) for part in chunks(text))
+        return
+    if '<!DOCTYPE' in text.upper() or '<!ENTITY' in text.upper():
+        raise ValueError('XML declarations are unsupported')
+    root = ET.fromstring(text)
+    pending, marker = '', None
+    for node in root.iter():
+        if node.tag.split('}')[-1] == 'mark':
+            name = node.get('name', '')
+            if not name or len(name) > 256 or any(c in name for c in '\r\n\x00'):
+                raise ValueError('Invalid index mark')
+            if len(pending) >= 160 or name.startswith('__spd_'):
+                # Preserve dispatcher sentence marks for pause/resume context.
+                yield marker, pending
+                pending, marker = '', None
+            if not pending.strip():
+                if marker:
+                    yield marker, pending
+                    pending = ''
+                marker = name
+        elif node.text:
+            pending += node.text
+        if node is not root and node.tail:
+            pending += node.tail
+    if marker and not pending:
+        yield marker, ''
+    for part in chunks(pending):
+        yield marker, part
+        marker = None
+
+
+def accessible_text(text, options, character=False):
+    """English/Unicode fallback for symbols Piper would otherwise omit."""
+    names = {' ': 'space', '\t': 'tab', '\n': 'new line', '.': 'period', ',': 'comma',
+             '!': 'exclamation mark', '?': 'question mark', ':': 'colon', ';': 'semicolon',
+             '-': 'dash', '_': 'underscore', '/': 'slash', '\\': 'backslash', '@': 'at',
+             '#': 'number sign', '$': 'dollar', '%': 'percent', '&': 'ampersand', '*': 'asterisk'}
+    level = options.get('punctuation_mode', 'none')
+    def name(c):
+        return names.get(c, unicodedata.name(c, c).lower())
+    if character or options.get('spelling_mode') == 'on':
+        return ' '.join(('capital ' if c.isupper() and options.get('cap_let_recogn') == 'spell' else '') +
+                        (name(c) if not c.isalnum() else c) for c in text)
+    return ''.join(' ' + name(c) + ' ' if unicodedata.category(c).startswith(('P', 'S')) and
+                   (level == 'all' or level == 'most' and c not in '.,;:!?' or
+                    level == 'some' and c in '@+_') else c for c in text)
 
 
 class Module:
@@ -79,6 +133,10 @@ class Module:
                 raise ValueError('Only Speech Dispatcher server audio is supported')
             self.audio_server = True
         elif command == 'SET':
+            for key, allowed in {'punctuation_mode': ('none', 'some', 'most', 'all'), 'spelling_mode': ('on', 'off'),
+                                 'cap_let_recogn': ('none', 'spell', 'icon')}.items():
+                if key in pending and pending[key] not in allowed:
+                    raise ValueError('Invalid speech setting')
             for key in ('rate', 'volume', 'pitch', 'pitch_range'):
                 if key in pending and not -100 <= int(pending[key]) <= 100:
                     raise ValueError('Invalid speech parameter')
@@ -90,10 +148,10 @@ class Module:
             if not self.busy or self.cancelled.is_set():
                 return
             self.cancelled.set()
+            request_id = self.request_id
             self.busy = False
             self.send('704 PAUSE\n' if paused else '703 STOP\n')
         # Never wait for an unresponsive backend in the command-reading thread.
-        request_id = self.request_id
         def cancel():
             try:
                 config = settings.load(self.path)
@@ -105,37 +163,52 @@ class Module:
                 pass
         threading.Thread(target=cancel, daemon=True).start()
 
-    def speak(self, text):
+    def speak(self, text, character=False):
         with self.lock:
-            if not text.strip() or not self.audio_server or self.busy:
+            if not text or not self.audio_server or self.busy:
                 self.send('301 ERROR CANT SPEAK\n')
                 return
             self.cancelled = threading.Event()
             self.request_id = uuid.uuid4().hex
             self.busy = True
             self.send('200 OK SPEAKING\n')
-            self.task = threading.Thread(target=self.render, args=(text, dict(self.options), self.cancelled, self.request_id), daemon=True)
+            self.task = threading.Thread(target=self.render, args=(text, dict(self.options, character=character), self.cancelled, self.request_id), daemon=True)
             self.task.start()
 
     def render(self, text, options, cancelled, request_id):
         try:
             runtime.call(self.path, {'command': 'wake'})
-            if cancelled.is_set():
-                return
-            self.send('701 BEGIN\n')
+            with self.lock:
+                if cancelled.is_set():
+                    return
+                self.send('701 BEGIN\n')
             config = settings.load(self.path)
             voice = options.get('synthesis_voice')
             if voice in (None, 'NULL'):
-                language = options.get('language', '').replace('-', '_')
-                voice = config['language_voices'].get(language)
+                language = options.get('language', '').replace('-', '_').casefold()
+                preferred = {key.replace('-', '_').casefold(): value
+                             for key, value in config['language_voices'].items()}
+                voice = preferred.get(language)
                 if not voice:
                     voice = next((key for key, entry in config['voices'].items()
-                                  if entry['language'].split('_')[0] == language), config['voice'])
+                                  if entry['language'].replace('-', '_').casefold() == language), None)
+                if not voice:
+                    voice = next((key for key, entry in config['voices'].items()
+                                  if entry['language'].split('_')[0].casefold() == language.split('_')[0]),
+                                 config['voice'])
             if voice not in config['voices']:
                 raise ValueError('Voice not installed')
             rate = int(options.get('rate', 0)) / 100
             scale = 1 / (1 + rate) if rate >= 0 else 1 - rate
-            for part in chunks(text):
+            for marker, part in speech_parts(text):
+                part = accessible_text(part, options, options.get("character", False))
+                with self.lock:
+                    if cancelled.is_set():
+                        return
+                    if marker:
+                        self.send(f"700-{marker}\n700 INDEX MARK\n")
+                if not part.strip():
+                    continue
                 if cancelled.is_set():
                     return
                 data = json.dumps({'text': part, 'voice': voice, 'length_scale': scale,
@@ -200,7 +273,7 @@ class Module:
                         if command == 'SOUND_ICON':
                             self.send('301 ERROR SOUND ICONS UNSUPPORTED\n')
                         else:
-                            self.speak(' ' if text == 'space' else text)
+                            self.speak(' ' if text == 'space' else text, command in ('CHAR', 'KEY'))
                     elif command.startswith('LIST VOICES'):
                         config = settings.load(self.path)
                         language = command.split()[2:3]
@@ -222,7 +295,7 @@ class Module:
                         self.send('200 OK DEBUGGING OFF\n')
                     else:
                         self.send('300 ERR UNKNOWN COMMAND\n')
-                except (ValueError, UnicodeError):
+                except (ValueError, UnicodeError, ET.ParseError):
                     self.send('303 ERROR INVALID PARAMETER OR VALUE\n')
         except EOFError:
             return
@@ -238,10 +311,6 @@ def install(path):
     if os.name == 'nt':
         raise ValueError('Speech Dispatcher integration is for Linux')
     launcher = settings.data_path() / 'speech-dispatcher-module'
-    launcher.parent.mkdir(parents=True, exist_ok=True)
-    command = runtime.command('--speech-dispatcher', '--settings', str(Path(path).resolve()))
-    launcher.write_text('#!/bin/sh\nexec ' + shlex.join(command) + '\n', encoding='utf-8')
-    launcher.chmod(0o700)
     directory = Path(os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config')) / 'speech-dispatcher'
     directory.mkdir(parents=True, exist_ok=True)
     config = directory / 'speechd.conf'
@@ -253,8 +322,63 @@ def install(path):
     matches = [line for line in lines if line.lstrip().startswith('AddModule "akousousin"')]
     if matches and matches != [registration]:
         raise ValueError('An akousousin module is already configured at a different path')
+    launcher.parent.mkdir(parents=True, exist_ok=True)
+    command = runtime.command('--speech-dispatcher', '--settings', str(Path(path).resolve()))
+    launcher.write_text('#!/bin/sh\nexec ' + shlex.join(command) + '\n', encoding='utf-8')
+    launcher.chmod(0o700)
     if not matches:
         temporary = config.with_suffix('.tmp')
         temporary.write_text(existing + '\n# Akousousin user speech module\n' + registration + '\n', encoding='utf-8')
         temporary.replace(config)
+    return config
+
+
+def uninstall(path):
+    """Remove only the registration pointing at our owned launcher."""
+    import os
+    from pathlib import Path
+    launcher = settings.data_path() / 'speech-dispatcher-module'
+    config = Path(os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config')) / 'speech-dispatcher/speechd.conf'
+    if config.exists():
+        lines = config.read_text().splitlines(keepends=True)
+        kept = []
+        for line in lines:
+            try:
+                fields = shlex.split(line, comments=True)
+            except ValueError:
+                fields = []
+            if len(fields) >= 3 and fields[:2] == ['AddModule', 'akousousin']:
+                if fields[2] != str(launcher):
+                    raise ValueError('Module points at another installation; left unchanged')
+                continue
+            kept.append(line)
+        temporary = config.with_suffix('.tmp')
+        temporary.write_text(''.join(kept))
+        temporary.replace(config)
+    launcher.unlink(missing_ok=True)
+    return config
+
+
+def configure(path, remove=False):
+    """Save registration first; restart only this user's systemd service last."""
+    import os
+    import subprocess
+    config = (uninstall if remove else install)(path)
+    # systemctl is a host binary: do not load the AppImage's bundled libraries.
+    environment = os.environ.copy()
+    if 'LD_LIBRARY_PATH_ORIG' in environment:
+        environment['LD_LIBRARY_PATH'] = environment['LD_LIBRARY_PATH_ORIG']
+    else:
+        environment.pop('LD_LIBRARY_PATH', None)
+    try:
+        subprocess.run(['systemctl', '--user', 'restart', 'speech-dispatcher.service'],
+                       check=True, capture_output=True, text=True, timeout=20, env=environment)
+        subprocess.run(['systemctl', '--user', 'is-active', '--quiet', 'speech-dispatcher.service'],
+                       check=True, capture_output=True, text=True, timeout=5, env=environment)
+    except (OSError, subprocess.SubprocessError) as error:
+        detail = getattr(error, 'stderr', '') or str(error)
+        if isinstance(detail, bytes):
+            detail = detail.decode(errors='replace')
+        raise RuntimeError('Registration saved; Speech Dispatcher could not be restarted. '
+                           'Restart your user Speech Dispatcher manually. ' + detail.strip()) from error
     return config

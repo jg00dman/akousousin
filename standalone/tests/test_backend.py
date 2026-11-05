@@ -102,6 +102,8 @@ class RoutingTests(unittest.TestCase):
     def test_idle_unloads_and_next_request_reloads(self):
         self.router.synthesize({'text': 'Hello'})
         previous = self.router.synth
+        # Keep exact boundary checks independent of host uptime/float rounding.
+        self.router.last_activity = 100.0
         self.assertFalse(self.router.expire(self.router.last_activity + 299))
         self.assertTrue(self.router.expire(self.router.last_activity + 300))
         self.assertTrue(previous.closed)
@@ -169,3 +171,43 @@ class RoutingTests(unittest.TestCase):
         self.assertFalse(task.is_alive())
         self.assertEqual(responses, ['409 Conflict'])
         self.assertEqual(call('/synthesize', 'next-owner', 'again'), '200 OK')
+
+    def test_waiting_caller_cancel_leaves_active_caller_running(self):
+        import time
+        entered, release = threading.Event(), threading.Event()
+        original = FakeSynth.synthesize
+        results = []
+        def blocked(synth, request, cancelled=None):
+            if request['text'] == 'active':
+                entered.set()
+                if not release.wait(3):
+                    raise AssertionError('Active caller was not released')
+                self.assertFalse(cancelled.is_set())
+            return original(synth, request, cancelled)
+        def call(text, identifier):
+            try:
+                self.router.synthesize({'text': text}, identifier)
+                results.append((identifier, 'ok'))
+            except InterruptedError:
+                results.append((identifier, 'cancelled'))
+        with patch.object(FakeSynth, 'synthesize', blocked):
+            active = threading.Thread(target=call, args=('active', 'sapi'))
+            waiting = threading.Thread(target=call, args=('waiting', 'dispatcher'))
+            active.start()
+            self.assertTrue(entered.wait(1))
+            waiting.start()
+            deadline = time.monotonic() + 1
+            queued = False
+            while time.monotonic() < deadline:
+                with self.router.control_lock:
+                    queued = 'dispatcher' in self.router.waiters
+                if queued:
+                    break
+                time.sleep(.01)
+            self.assertTrue(queued)
+            self.assertTrue(self.router.cancel('dispatcher'))
+            waiting.join(1)
+            release.set()
+            active.join(1)
+        self.assertCountEqual(results, [('dispatcher', 'cancelled'), ('sapi', 'ok')])
+        self.router.synthesize({'text': 'recovered'}, 'next')

@@ -42,7 +42,8 @@ its permanent location, then run:
 This creates a user-owned launcher in `$XDG_DATA_HOME/Akousousin` (normally
 `~/.local/share/Akousousin`) and adds an `AddModule` entry to your user
 `$XDG_CONFIG_HOME/speech-dispatcher/speechd.conf`. Existing settings and the default
-output module are preserved. Restart your user Speech Dispatcher service, then:
+output module are preserved. Installation restarts your systemd user Speech
+Dispatcher service as its final step and verifies it is active, then:
 
 ```sh
 spd-say -o akousousin -w 'Testing Akousousin through Speech Dispatcher.'
@@ -52,8 +53,8 @@ spd-say -o akousousin -L
 Select the module in your screen reader's speech settings when ready. Synthesis
 uses the same voice library/defaults as SAPI. Explicit synthesis voice and language
 selection, rate and volume are supported. Piper has no general pitch control;
-pitch, punctuation and spelling transformations are not implemented by this module.
-Sound icons and SSML/index marks are not implemented. Plain text, character and
+pitch is unsupported; punctuation and spelling use the fallback described below.
+Sound icons and general SSML prosody are not implemented; Orca text and marks are handled as described below. Plain text, character and
 key requests are accepted. Do not enable this as your sole accessibility voice
 until you have tested stop, priorities and recovery on your desktop.
 
@@ -62,12 +63,12 @@ to own playback and priority handling. Direct ALSA/PulseAudio output from the
 module is intentionally unsupported. STOP/PAUSE cancel the current request;
 Speech Dispatcher is responsible for resubmitting remaining text on resume.
 Model inference is cancelled only for the matching random request id; cancelling
-one caller must not stop another caller's synthesis. Busy requests return an
-error instead of creating an unbounded queue.
+one caller must not stop another caller's synthesis. Synthesis sharing is bounded as described below.
 
 To remove module registration, remove the `AddModule "akousousin"` line from your
 user speechd.conf and delete `~/.local/share/Akousousin/speech-dispatcher-module`.
-Restart Speech Dispatcher. This leaves other modules and Akousousin settings intact.
+Use the Remove button or `--uninstall-speech-dispatcher` to restart the user
+service after removal. Other modules and Akousousin settings are retained.
 
 ## Validation
 
@@ -77,3 +78,52 @@ idle reload tests. Unit checks cover module framing/escaping, voices, cancellati
 idle expiry, backend recovery and preserving the user's dispatcher configuration.
 Real Piper WAV generation is distinct from audible playback. Desktop screen-reader
 and Logos listening checks are still required before promoting this branch.
+
+## Kubuntu / Orca candidate
+
+Target: Kubuntu 26.04, KDE Wayland, Orca 50.3, Speech Dispatcher 0.12.1,
+AT-SPI2 2.60.4. Upstream source reviewed at Orca tag `50.3` and Speech
+Dispatcher tag `0.12.1`.
+
+Settings provides Install/Remove Speech Dispatcher support. Removal is also
+available with `--uninstall-speech-dispatcher`. Other modules and the default
+module are preserved. Install/remove restarts the systemd user dispatcher as the final step. Current
+speech is interrupted. If the user service is unavailable or fails, the app reports
+that registration was saved and a manual restart is needed.
+
+Voice library, default voice, language override, speed and volume are shared
+across SAPI and native clients. The stored `book_language` key remains for
+compatibility; the panel presents it as a language override for all applications.
+Application rate/volume requests modify these shared defaults per utterance.
+
+Orca SSML is decoded before synthesis. Real index marks are returned at bounded
+synthesis boundaries. Intermediate word marks are omitted rather than inventing
+word timings. Dispatcher sentence marks are retained for resume context.
+Exact word highlighting remains unsupported. Symbol, punctuation and spelling
+fallback names use English/Unicode names; localized symbol dictionaries,
+capitalization sound icons and general SSML prosody remain incomplete.
+
+At most three synthesis calls share one inference worker and loaded voice.
+Waiting is limited to ten seconds and cancellable by request id. A fourth HTTP
+worker remains available for control. This avoids parallel model memory overhead.
+Each interface owns its playback; no cross-interface ducking is introduced.
+
+### Desktop acceptance checklist
+
+Keep the working AppImage and eSpeak configuration available for rollback.
+
+1. Place the candidate AppImage at its permanent path. Install Speech Dispatcher
+   support in Settings, wait for the automatic restart, and run the `spd-say` tests
+   above. Choose akousousin in Orca's speech settings.
+2. Navigate a document and menus. Check characters, keys, capitals, spaces,
+   punctuation and Unicode. Start Say All, interrupt by navigating, and verify
+   no stale audio returns. Check pause/resume context and continuous reading.
+3. Change shared voice/language, speed and volume. Verify native and Wine
+   speech use the changes on subsequent requests.
+4. Exercise native and Wine speech together. Cancel either and confirm the
+   other completes or recovers. Check startup and voice-switching delays.
+5. Close the panel, test idle reload, explicitly Quit, then test cold startup.
+6. Remove support and verify the former default module works; reinstall and
+   repeat a short utterance.
+
+Automated protocol and PCM checks do not establish audible or Orca acceptance.

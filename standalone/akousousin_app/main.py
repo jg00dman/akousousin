@@ -26,6 +26,7 @@ def main():
     parser.add_argument('--owner-pid', type=int, help='Process owning the acquired session')
     parser.add_argument('--api-start', action='store_true', help='Wake speech on demand without pinning a model in memory')
     parser.add_argument('--install-speech-dispatcher', action='store_true', help='Register the output module in your user Speech Dispatcher configuration')
+    parser.add_argument('--uninstall-speech-dispatcher', action='store_true', help='Remove your user output-module registration')
     parser.add_argument('--speech-dispatcher', action='store_true', help='Run a Speech Dispatcher output module on stdin/stdout')
     parser.add_argument('--status', action='store_true')
     parser.add_argument('--quit', action='store_true', help='Stop Piper and quit Akousousin')
@@ -55,9 +56,13 @@ def main():
         Module(args.settings).run()
         return
     config = resources.bootstrap(args.settings)
+    if args.uninstall_speech_dispatcher:
+        from .speech_dispatcher import configure
+        print(f'Module removed from {configure(args.settings, remove=True)}. Speech Dispatcher restarted.')
+        return
     if args.install_speech_dispatcher:
-        from .speech_dispatcher import install
-        print(f'Module registered in {install(args.settings)}. Restart Speech Dispatcher, then select akousousin.')
+        from .speech_dispatcher import configure
+        print(f'Module registered in {configure(args.settings)}. Speech Dispatcher restarted; select akousousin.')
         return
     if args.wine_prefix:
         config['wine_prefix'] = str(args.wine_prefix.expanduser().resolve())

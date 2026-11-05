@@ -7,7 +7,7 @@ on:
         type: boolean
         default: false
   push:
-    branches: [codex/standalone-control-panel, codex/speech-dispatcher-on-demand]
+    branches: [codex/standalone-control-panel, codex/speech-dispatcher-on-demand, codex/linux-speech-dispatcher]
     paths: [engine/**, standalone/**, backend/**, tests/**, .github/workflows/standalone.yml]
 permissions:
   contents: read

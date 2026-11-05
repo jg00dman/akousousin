@@ -67,6 +67,8 @@ class Router:
         self.active_request = None
         self.cancelled = threading.Event()
         self.control_lock = threading.Lock()
+        self.waiters = {}
+        self.slots = threading.BoundedSemaphore(3)
 
     def expire(self, now=None):
         # Do not take the synthesis lock on every event-loop tick: dispatching
@@ -132,18 +134,43 @@ class Router:
     def cancel(self, identifier):
         # Request ids are unguessable and only cancel that caller's current work.
         with self.control_lock:
-            if not identifier or identifier != self.active_request:
+            if not identifier:
                 return False
-            self.cancelled.set()
-            return True
+            if identifier in self.waiters:
+                self.waiters[identifier].set()
+                return True
+            if identifier == self.active_request:
+                self.cancelled.set()
+                return True
+            return False
 
     def synthesize(self, request, identifier=None):
-        if not self.lock.acquire(False):
-            raise BlockingIOError('Piper is busy')
+        # Three synthesis callers maximum leave a WSGI thread for cancellation
+        # and health. One worker/model is shared; waiting is bounded and cancellable.
+        if not self.slots.acquire(False):
+            raise BlockingIOError('Piper queue is full')
+        cancelled = threading.Event()
+        acquired = False
         try:
             with self.control_lock:
+                if identifier and (identifier in self.waiters or identifier == self.active_request):
+                    raise ValueError('Duplicate active request id')
+                if identifier:
+                    self.waiters[identifier] = cancelled
+            deadline = time.monotonic() + 10
+            while not acquired:
+                if cancelled.is_set():
+                    raise InterruptedError('Queued speech cancelled')
+                acquired = self.lock.acquire(timeout=.05)
+                if not acquired and time.monotonic() >= deadline:
+                    raise BlockingIOError('Piper queue timed out')
+            with self.control_lock:
+                if identifier:
+                    self.waiters.pop(identifier, None)
                 self.active_request = identifier
-                self.cancelled = threading.Event()
+                self.cancelled = cancelled
+            if cancelled.is_set():
+                raise InterruptedError('Speech cancelled')
             config = settings.load(self.path)
             self.select(self.choose(request, config), config, self.cancelled)
             options = {'text': request['text'], 'length_scale': request.get('length_scale', 1) / config['speed'],
@@ -154,9 +181,14 @@ class Router:
             return resample(audio, rate)
         finally:
             with self.control_lock:
-                self.active_request = None
-            self.last_activity = time.monotonic()
-            self.lock.release()
+                if identifier and self.waiters.get(identifier) is cancelled:
+                    self.waiters.pop(identifier)
+                if acquired:
+                    self.active_request = None
+            if acquired:
+                self.last_activity = time.monotonic()
+                self.lock.release()
+            self.slots.release()
 
 
 def application(router, instance, control="", stopping=None):
