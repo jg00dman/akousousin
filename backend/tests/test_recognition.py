@@ -75,32 +75,41 @@ class RecognitionTests(unittest.TestCase):
                 self.assertEqual(model_root(), Path('/example/Akousousin/models/whisper'))
 
     @unittest.skipIf(__import__('os').name == 'nt', 'Linux capture adapter')
-    def test_capture_timeout_preserves_pcm_and_stops_process(self):
+    def test_capture_ready_discards_startup_and_cue(self):
+        events = []
         process = Mock()
-        process.communicate.side_effect = [subprocess.TimeoutExpired('parec', 1), (b'\x01\x00' * 16000, b'')]
-        process.poll.return_value = 0
-        with patch('akousousin_backend.recognition.subprocess.Popen', return_value=process) as launch:
-            data = capture(1, 'test microphone')
-        self.assertEqual(len(read_wav(data)), 32000)
-        self.assertIn('--device=test microphone', launch.call_args.args[0])
-        self.assertIn('--rate=16000', launch.call_args.args[0])
+        process.poll.return_value = None
+        def launch(args, stdout, stderr):
+            stdout.write(b'\x02\x00' * 100)
+            stdout.flush()
+            def wait(timeout):
+                if timeout == 1:
+                    stdout.write(b'\x01\x00' * 16000)
+                    stdout.flush()
+                    raise subprocess.TimeoutExpired('parec', 1)
+                return 0
+            process.wait.side_effect = wait
+            return process
+        with patch('akousousin_backend.recognition.subprocess.Popen', side_effect=launch) as command:
+            data = capture(1, 'test microphone', cue=lambda: events.append('cue'),
+                           on_ready=lambda: events.append('ready'))
+        self.assertEqual(events, ['cue', 'ready'])
+        self.assertEqual(read_wav(data), b'\x01\x00' * 16000)
+        self.assertIn('--device=test microphone', command.call_args.args[0])
         process.terminate.assert_called_once()
 
     @unittest.skipIf(__import__('os').name == 'nt', 'Linux capture adapter')
-    def test_capture_failure_and_forced_cleanup(self):
+    def test_capture_failure_does_not_signal_ready(self):
         process = Mock()
-        process.communicate.return_value = (b'', b'connection refused')
         process.poll.return_value = 1
-        with patch('akousousin_backend.recognition.subprocess.Popen', return_value=process):
+        def launch(args, stdout, stderr):
+            stderr.write(b'connection refused'); stderr.flush()
+            return process
+        ready = Mock()
+        with patch('akousousin_backend.recognition.subprocess.Popen', side_effect=launch):
             with self.assertRaisesRegex(RuntimeError, 'connection refused'):
-                capture(1)
-        process.communicate.side_effect = [subprocess.TimeoutExpired('parec', 1),
-                                           subprocess.TimeoutExpired('parec', 3), (b'', b'')]
-        process.poll.return_value = None
-        with patch('akousousin_backend.recognition.subprocess.Popen', return_value=process):
-            with self.assertRaises(subprocess.TimeoutExpired):
-                capture(1)
-        process.kill.assert_called_once()
+                capture(1, on_ready=ready)
+        ready.assert_not_called()
 
     def test_timeout_death_and_recovery(self):
         recognizer = Recognizer(timeout=.1, target=fake_worker)

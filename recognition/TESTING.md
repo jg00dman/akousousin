@@ -2,8 +2,9 @@
 
 This snapshot contains command-line recognition, not SAPI recognition or hotkey
 text insertion. It does not install or modify your existing Akousousin, Wine
-prefixes, desktop configuration or keyboard layout. The full multilingual Small
-model is included. Inference is local and does not need network access.
+prefixes, desktop configuration or keyboard layout. Speech models are stored separately in
+`~/.local/share/Akousousin/models/whisper/` (respecting `XDG_DATA_HOME`).
+They survive upgrades. Inference is local and does not need network access.
 
 Target: x86-64 Kubuntu 26.04. Built on Debian glibc 2.41; requires glibc 2.41 or
 newer. Keep the extracted directory together. No Python installation is required.
@@ -12,6 +13,9 @@ Extract the archive, open a terminal inside its directory, then run:
 
 ```sh
 ./akousousin-whisper --help
+# One-time setup, or import Small from the earlier test bundle:
+./akousousin-whisper --download-model
+# ./akousousin-whisper --import-model /path/to/old-bundle/models/small
 ./akousousin-whisper --capture-seconds 5
 ```
 
@@ -22,7 +26,9 @@ sudo apt install pulseaudio-utils
 ```
 
 PipeWire remains your audio server. The utility connects through pipewire-pulse.
-The recording starts immediately and lasts five seconds; speak during that time.
+Wait while the model loads and the microphone opens. Two short 250 Hz tones
+and “Listening — speak now” announce the start of the five-second recording.
+The cue is excluded from accepted audio. Use `--no-beep` for a visual prompt only.
 The command then prints JSON containing the transcript, language and model.
 Omit `--language` to detect language, or lock it explicitly:
 
@@ -61,5 +67,6 @@ language tagging, no AKS speech suppression. Linux only; no Windows build is
 claimed. Actual human-microphone accuracy and fifth-generation i5 performance
 remain to be measured. See VALIDATION.md for earlier backend test evidence.
 
-Uninstall by deleting this extracted directory. Build provenance is in build.json;
+Uninstall the program by deleting this extracted directory. Downloaded models
+remain in the shared data directory until you remove them yourself. Build provenance is in build.json;
 checksums and dependency licences are included.

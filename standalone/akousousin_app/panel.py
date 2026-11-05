@@ -63,7 +63,7 @@ class Panel:
         self.content = ttk.Frame(body)
         self.content.pack(side='left', fill='both', expand=True)
         self.pages = {}
-        for name in ('Overview', 'Voice library', 'Languages', 'Settings'):
+        for name in ('Overview', 'Voice library', 'Voice Input', 'Languages', 'Settings'):
             ttk.Button(nav, text=name, command=lambda name=name: self.show(name)).pack(fill='x', pady=4)
             self.pages[name] = ttk.Frame(self.content)
         self.status = tk.StringVar(value='Ready')
@@ -82,6 +82,8 @@ class Panel:
         self.build_library()
         self.build_languages()
         self.build_settings()
+        from .voice_input import VoiceInput
+        self.voice_input = VoiceInput(self, self.pages['Voice Input'])
         footer = ttk.Frame(self.root, padding=(22, 12))
         footer.pack(fill='x')
         ttk.Label(footer, textvariable=self.status, wraplength=760).pack(side='left')

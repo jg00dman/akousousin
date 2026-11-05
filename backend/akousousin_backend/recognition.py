@@ -3,6 +3,7 @@
 import argparse
 import io
 import json
+import math
 import locale
 import logging
 import multiprocessing as mp
@@ -10,6 +11,11 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import shutil
+import struct
+import sys
+import tempfile
+import time
 import wave
 
 from .server import Synthesizer
@@ -173,8 +179,34 @@ class Recognizer(Synthesizer):
             self.lock.release()
 
 
-def capture(seconds, source=None):
-    """Bounded developer capture through the host PulseAudio-compatible server."""
+def ready_cue():
+    """Two short 250 Hz tones, synchronously, before accepted speech audio."""
+    output = io.BytesIO()
+    samples = []
+    for duration, tone in ((.10, True), (.09, False), (.10, True)):
+        count = int(RATE * duration)
+        for index in range(count):
+            envelope = min(1, index / 160, (count - index) / 160)
+            sample = int(5000 * envelope * math.sin(2 * math.pi * 250 * index / RATE)) if tone else 0
+            samples.append(struct.pack('<h', sample))
+    with wave.open(output, 'wb') as audio:
+        audio.setparams((1, 2, RATE, 0, 'NONE', ''))
+        audio.writeframes(b''.join(samples))
+    if os.name == 'nt':
+        import winsound
+        winsound.PlaySound(output.getvalue(), winsound.SND_MEMORY)
+        return
+    player = shutil.which('paplay') or shutil.which('pw-play')
+    if player is None:
+        raise RuntimeError('Ready sound needs paplay or pw-play; disable the sound to continue')
+    with tempfile.NamedTemporaryFile(suffix='.wav') as file:
+        file.write(output.getvalue())
+        file.flush()
+        subprocess.run([player, file.name], check=True, timeout=5)
+
+
+def capture(seconds, source=None, on_ready=None, cue=None):
+    """Open the microphone before readiness; exclude startup and cue audio."""
     if os.name == 'nt':
         raise RuntimeError('This capture adapter requires Linux; use a WAV input on Windows')
     if isinstance(seconds, bool) or not isinstance(seconds, int) or not 1 <= seconds <= MAX_SECONDS:
@@ -183,20 +215,40 @@ def capture(seconds, source=None):
             '--client-name=Akousousin', '--stream-name=Dictation']
     if source:
         args.append('--device=' + source)
-    process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    try:
+    with tempfile.TemporaryFile() as recording, tempfile.TemporaryFile() as errors:
+        process = subprocess.Popen(args, stdout=recording, stderr=errors)
         try:
-            _, error = process.communicate(timeout=seconds)
-        except subprocess.TimeoutExpired:
-            process.terminate()
-            pcm, error = process.communicate(timeout=3)
-        else:
-            raise RuntimeError('Microphone capture stopped: ' + error.decode(errors='replace')[:500])
-    finally:
-        if process.poll() is None:
-            process.kill()
-            process.communicate()
-    pcm = pcm[:seconds * RATE * 2]
+            deadline = time.monotonic() + 5
+            while os.fstat(recording.fileno()).st_size == 0:
+                if process.poll() is not None:
+                    errors.seek(0)
+                    raise RuntimeError('Microphone capture stopped: ' + errors.read(500).decode(errors='replace'))
+                if time.monotonic() >= deadline:
+                    raise TimeoutError('Microphone did not become ready')
+                time.sleep(.02)
+            if cue:
+                cue()
+                time.sleep(.10)  # Discard buffered speaker output after the cue.
+            offset = os.fstat(recording.fileno()).st_size
+            offset -= offset % 2
+            if on_ready:
+                on_ready()
+            try:
+                process.wait(timeout=seconds)
+            except subprocess.TimeoutExpired:
+                pass
+            else:
+                raise RuntimeError('Microphone stopped during recording')
+        finally:
+            if process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=3)
+        recording.seek(offset)
+        pcm = recording.read(seconds * RATE * 2)
     pcm = pcm[:len(pcm) // 2 * 2]
     if not pcm:
         raise RuntimeError('No microphone audio captured')
@@ -213,18 +265,34 @@ def main():
     inputs = parser.add_mutually_exclusive_group(required=True)
     inputs.add_argument('--wav', type=Path)
     inputs.add_argument('--capture-seconds', type=int)
+    inputs.add_argument('--download-model', action='store_true')
+    inputs.add_argument('--import-model', type=Path)
+    parser.add_argument('--no-beep', action='store_true')
     parser.add_argument('--source', help='PulseAudio source name; omit to follow system default')
     parser.add_argument('--model', choices=['small', 'turbo'], default='small')
     parser.add_argument('--models', type=Path, default=model_root())
     parser.add_argument('--language', help='Fixed language tag; omit for automatic detection')
     args = parser.parse_args()
+    def status(text):
+        print(text, file=sys.stderr, flush=True)
+    if args.download_model or args.import_model:
+        from .models import install
+        install(args.model, args.models, source=args.import_model, progress=status)
+        status('Model installed in ' + str(args.models / args.model))
+        return
     recognizer = Recognizer(args.models, args.model)
     try:
         if args.wav:
             with args.wav.open('rb') as audio:
                 data = audio.read(MAX_PCM + 4097)
         else:
-            data = capture(args.capture_seconds, args.source)
+            status('Loading model…')
+            recognizer.start()
+            status('Opening microphone…')
+            data = capture(args.capture_seconds, args.source,
+                           on_ready=lambda: status('Listening — speak now'),
+                           cue=None if args.no_beep else ready_cue)
+            status('Transcribing…')
         print(json.dumps(recognizer.transcribe(data, args.language), ensure_ascii=False))
     finally:
         recognizer.close()

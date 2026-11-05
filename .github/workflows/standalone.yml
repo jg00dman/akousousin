@@ -162,7 +162,7 @@ jobs:
                             local_dir='build/test-models/small')
           PYTHON
       - name: Build Linux test bundle
-        run: python recognition/package.py --small-model build/test-models/small
+        run: python recognition/package.py
       - name: Smoke test the packaged executable and model
         run: |
           sudo apt-get update
@@ -175,7 +175,7 @@ jobs:
           from pathlib import Path
           executable = next(Path('build/recognition').glob('Akousousin-Whisper-*/akousousin-whisper')).resolve()
           env = dict(os.environ, HF_HUB_OFFLINE='1')
-          result = subprocess.run([str(executable), '--wav', str(Path('build/jfk.wav').resolve())],
+          result = subprocess.run([str(executable), '--wav', str(Path('build/jfk.wav').resolve()), '--models', str(Path('build/test-models').resolve())],
                                   env=env, text=True, capture_output=True, timeout=120, check=True)
           print(result.stdout)
           data = json.loads(result.stdout)

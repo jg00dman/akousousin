@@ -7,7 +7,8 @@ from pathlib import Path
 DEFAULTS = {'version': 1, 'voice': 'en_US-ljspeech-medium', 'speed': 1.0, 'volume': 0.8,
             'noise_scale': 0.667, 'noise_w_scale': 0.8, 'book_language': '',
             'language_voices': {}, 'voices': {}, 'wine_prefix': '', 'wine': '', 'port': 5000,
-            'idle_timeout': 300}
+            'idle_timeout': 300, 'stt_model': 'small', 'stt_language': '',
+            'stt_source': '', 'stt_beep': True}
 
 
 def config_path():
@@ -32,6 +33,13 @@ def load(path):
 
 
 def validate(value):
+    if value.get('stt_model', 'small') not in ('small', 'turbo'):
+        raise ValueError('Invalid recognition model')
+    if not isinstance(value.get('stt_beep', True), bool):
+        raise ValueError('Invalid ready sound preference')
+    for key in ('stt_language', 'stt_source'):
+        if not isinstance(value.get(key, ''), str):
+            raise ValueError('Invalid voice input preference')
     for key, low, high in [('speed', .5, 2), ('volume', 0, 1), ('noise_scale', 0, 2), ('noise_w_scale', 0, 2)]:
         number = value[key]
         if isinstance(number, bool) or not isinstance(number, (int, float)) or not low <= number <= high:

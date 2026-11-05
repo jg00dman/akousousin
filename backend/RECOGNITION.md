@@ -99,3 +99,21 @@ when supplied, its expected phrases are `Guten Morgen` and `deutschen Text`.
 See [validation evidence](WHISPER-VALIDATION.md) for the actual fixtures, versions,
 results and deployment gaps. Mock capture tests verify invocation, PCM formatting,
 timeout handling and forced cleanup; they do not validate a live audio server.
+
+## Voice Input development UI
+
+Install `./backend[recognition]` and `./standalone[recognition]` to enable the
+Voice Input page. Small downloads on the first prepare/record action; alternatively
+import the `models/small` directory from the original test bundle. Assets live at
+the approved XDG-aware `Akousousin/models/whisper` location, separately from builds.
+Downloads/imports stage complete files and record SHA256 hashes before publishing.
+Turbo currently supports local import only; a pinned download is pending.
+
+The page loads the worker before opening the microphone. Recording readiness is
+announced only after audio arrives; the optional double 250 Hz tone plays before
+accepted speech. Transcripts are displayed in the panel. The panel owns this
+diagnostic worker for now: integration into the shared controller, global hotkeys,
+text insertion, cancellation and SAPI recognition remain subsequent work. The
+control panel requires desktop validation; headless tests do not establish KDE
+Wayland compatibility. CLI test bundles no longer include speech model weights by
+default; use `--download-model` or `--import-model` once.

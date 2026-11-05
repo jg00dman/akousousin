@@ -15,12 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--small-model', type=Path, required=True)
-    args = parser.parse_args()
-    for name in ('model.bin', 'config.json', 'tokenizer.json', 'vocabulary.txt'):
-        if not (args.small_model / name).is_file():
-            parser.error('Small model directory is incomplete: ' + name)
+    argparse.ArgumentParser(description=__doc__).parse_args()
     out = ROOT / 'recognition-dist'
     build = ROOT / 'build/recognition'
     out.mkdir(exist_ok=True)
@@ -39,15 +34,10 @@ def main():
                     '--collect-all', 'tokenizers', '--collect-all', 'av',
                     str(ROOT / 'recognition/entrypoint.py')], check=True)
     shutil.copytree(build / 'frozen/whisper-engine', package / 'engine')
-    models = package / 'models/small'
-    models.mkdir(parents=True)
-    for file in args.small_model.iterdir():
-        if file.is_file():
-            shutil.copy2(file, models / file.name)
     launcher = package / 'akousousin-whisper'
     launcher.write_text('#!/bin/sh\nset -eu\n'
                         'base=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\n'
-                        'exec "$base/engine/whisper-engine" --models "$base/models" "$@"\n')
+                        'exec "$base/engine/whisper-engine" "$@"\n')
     launcher.chmod(0o755)
     shutil.copy2(ROOT / 'recognition/TESTING.md', package / 'TESTING.md')
     shutil.copy2(ROOT / 'backend/WHISPER-VALIDATION.md', package / 'VALIDATION.md')

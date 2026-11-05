@@ -3,6 +3,7 @@
 import ast
 import hashlib
 import importlib.metadata
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -79,11 +80,15 @@ icon.save(RESOURCE / 'akousousin.png')
 commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
 (RESOURCE / 'build.json').write_text(json.dumps({'build': commit[:12] + '-' + sys.platform,
                                                'commit': commit, 'version': '0.6.0b1'}, indent=2))
+recognition_options = []
+if importlib.util.find_spec('faster_whisper') is not None:
+    for dependency in ('faster_whisper', 'ctranslate2', 'tokenizers', 'av'):
+        recognition_options += ['--collect-all', dependency]
 subprocess.run([sys.executable, '-m', 'PyInstaller', '--clean', '--noconfirm', '--onedir', '--name', 'akousousin',
                 '--distpath', str(BUILD / 'frozen'), '--workpath', str(BUILD / 'freeze'), '--specpath', str(BUILD),
                 '--paths', str(ROOT / 'standalone'), '--paths', str(ROOT / 'backend'),
                 '--exclude-module', 'readline', '--collect-all', 'piper', '--collect-all', 'numpy',
-                '--collect-all', 'onnxruntime', str(ROOT / 'standalone/entrypoint.py')], check=True)
+                '--collect-all', 'onnxruntime', *recognition_options, str(ROOT / 'standalone/entrypoint.py')], check=True)
 
 PACKAGE = BUILD / 'Akousousin'
 shutil.copytree(BUILD / 'frozen/akousousin', PACKAGE, dirs_exist_ok=True)
@@ -142,7 +147,8 @@ for sample in (PACKAGE / '_internal/onnxruntime/datasets').glob('*.onnx'):
 # weights external in this beta, including those auxiliary language resources.
 for optional in ('piper/tashkeel/model.onnx', 'piper/hebrew/nakdimon.onnx'):
     (PACKAGE / '_internal' / optional).unlink(missing_ok=True)
-models = [file.relative_to(PACKAGE).as_posix() for file in PACKAGE.rglob('*.onnx')]
+models = [file.relative_to(PACKAGE).as_posix() for file in PACKAGE.rglob('*.onnx')
+          if file.relative_to(PACKAGE).as_posix() != '_internal/faster_whisper/assets/silero_vad_v6.onnx']
 if models != ['resources/voices/en_US-ljspeech-medium.onnx']:
     raise RuntimeError('Only the explicitly approved LJSpeech starter voice may be bundled')
 if sys.platform == 'win32':
