@@ -1,6 +1,9 @@
 # Whisper Voice Input panel trial
 
-Download `Akousousin-x86_64.AppImage`, make it executable and launch it. Open
+Use the direct `Akousousin-x86_64.AppImage` link in the trial release, make it
+executable and launch it. The AppImage is the only download needed for testing;
+matching sources and checksums are separate release assets, and diagnostic
+artifacts remain on the GitHub Actions run. Open
 **Voice Input**. This trial includes the current main-branch panel and Updates page.
 It retains the existing TTS features; Whisper recognition is still experimental.
 

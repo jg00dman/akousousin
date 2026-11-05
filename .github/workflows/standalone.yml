@@ -188,7 +188,7 @@ jobs:
             --notes-file standalone/RELEASE-NOTES.md release-assets/*
 
   whisper-test-build:
-    if: ${{ !cancelled() && github.ref == 'refs/heads/whisper' && github.event_name == 'workflow_dispatch' && inputs.publish && (inputs.reuse_run_id != '' || needs.package.result == 'success') }}
+    if: ${{ !cancelled() && github.ref == 'refs/heads/whisper' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish)) && (inputs.reuse_run_id != '' || needs.package.result == 'success') }}
     needs: [engine, package]
     runs-on: ubuntu-22.04
     permissions:
@@ -243,9 +243,26 @@ jobs:
               if file.is_file():
                   shutil.copy2(file, target / file.name)
           shutil.copy2('recognition/PANEL-TESTING.md', target / 'TESTING.md')
-          tag = 'whisper-panel-' + os.environ['BUILT_SHA'][:8]
+          repository = os.environ['GITHUB_REPOSITORY']
+          tag = 'whisper-trial-' + os.environ['GITHUB_RUN_ID'] + '-' + os.environ['GITHUB_RUN_ATTEMPT']
+          base_url = 'https://github.com/' + repository
+          download = base_url + '/releases/download/' + tag + '/Akousousin-x86_64.AppImage'
+          evidence = base_url + '/actions/runs/' + os.environ['GITHUB_RUN_ID']
+          notes = Path('trial-release-notes.md')
+          notes.write_text('[Download the AppImage](' + download + ') — this is the only download needed to try AKS.\n\n'
+                           'Whisper models download separately and remain in '
+                           '`~/.local/share/Akousousin/models/whisper/` (respecting `XDG_DATA_HOME`).\n\n'
+                           'Matching sources and checksums are separate release assets. '
+                           '[Build logs and diagnostic artifacts](' + evidence + ') remain on GitHub.\n\n'
+                           + Path('recognition/PANEL-TESTING.md').read_text())
+          subprocess.run(['gh', 'api', 'repos/' + repository + '/git/refs',
+                          '-f', 'ref=refs/tags/' + tag, '-f', 'sha=' + os.environ['BUILT_SHA']], check=True)
           subprocess.run(['gh', 'release', 'create', tag, '--verify-tag',
+                          '--repo', repository, '--latest=false',
                           '--prerelease', '--title', 'Whisper control panel trial ' + os.environ['BUILT_SHA'][:8],
-                          '--notes-file', 'recognition/PANEL-TESTING.md',
+                          '--notes-file', str(notes),
                           *map(str, target.iterdir())], check=True)
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write('## Trial download\n\n[Akousousin-x86_64.AppImage](' + download + ')\n\n'
+                            'Download the AppImage alone; sources and diagnostics are optional separate downloads.\n')
           PYTHON
