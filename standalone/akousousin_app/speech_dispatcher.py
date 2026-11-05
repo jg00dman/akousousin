@@ -361,13 +361,20 @@ def uninstall(path):
 
 def configure(path, remove=False):
     """Save registration first; restart only this user's systemd service last."""
+    import os
     import subprocess
     config = (uninstall if remove else install)(path)
+    # systemctl is a host binary: do not load the AppImage's bundled libraries.
+    environment = os.environ.copy()
+    if 'LD_LIBRARY_PATH_ORIG' in environment:
+        environment['LD_LIBRARY_PATH'] = environment['LD_LIBRARY_PATH_ORIG']
+    else:
+        environment.pop('LD_LIBRARY_PATH', None)
     try:
         subprocess.run(['systemctl', '--user', 'restart', 'speech-dispatcher.service'],
-                       check=True, capture_output=True, text=True, timeout=20)
+                       check=True, capture_output=True, text=True, timeout=20, env=environment)
         subprocess.run(['systemctl', '--user', 'is-active', '--quiet', 'speech-dispatcher.service'],
-                       check=True, capture_output=True, text=True, timeout=5)
+                       check=True, capture_output=True, text=True, timeout=5, env=environment)
     except (OSError, subprocess.SubprocessError) as error:
         detail = getattr(error, 'stderr', '') or str(error)
         if isinstance(detail, bytes):

@@ -174,12 +174,15 @@ class DispatcherTests(unittest.TestCase):
     def test_configure_restarts_only_after_install_or_removal(self, run):
         from akousousin_app.speech_dispatcher import configure
         with patch.dict('os.environ', {'XDG_CONFIG_HOME': str(self.root / 'config'),
-                                      'XDG_DATA_HOME': str(self.root / 'data')}):
+                                      'XDG_DATA_HOME': str(self.root / 'data'),
+                                      'LD_LIBRARY_PATH': '/appimage/bundled',
+                                      'LD_LIBRARY_PATH_ORIG': '/host/libraries'}):
             launcher = self.root / 'data/Akousousin/speech-dispatcher-module'
             for remove in (False, True):
                 def restarted(command, **kwargs):
                     self.assertEqual(launcher.exists(), not remove)
                     self.assertIn('--user', command)
+                    self.assertEqual(kwargs['env']['LD_LIBRARY_PATH'], '/host/libraries')
                 run.side_effect = restarted
                 configure(self.path, remove=remove)
                 self.assertEqual(run.call_args_list[-2].args[0][2], 'restart')
