@@ -128,3 +128,35 @@ manual installation after quitting Akousousin. Automatic replacement is currentl
 available for Linux AppImages only. Release tags include the package version,
 for example `standalone-beta-0.6.0b2-<build>-1`; older run-number-only tags are not
 offered as updates. Each new release must increase the package version.
+
+## Read selected text with a global shortcut (0.6.0b3 candidate)
+
+On Linux, open **Read selection** in the control panel and choose **Install
+shortcut action**. In Plasma System Settings → Keyboard → Shortcuts, add the
+**Akousousin Read selected text / Stop** application and assign a free shortcut
+(such as Alt+Esc). Existing shortcut assignments are not changed automatically.
+The launcher also provides **Read clipboard / Stop** for explicitly copied text.
+
+Highlight text and trigger the shortcut to read it; trigger it again to stop only
+that reader. After completion or cancellation the action is ready for another
+selection. Speech Dispatcher support must be installed through Akousousin Settings.
+Wayland needs `wl-clipboard`; X11 needs `xclip`. Highlight-only reading requires the
+application to export a primary selection. If it does not, copy first and use the
+clipboard action. There is no silent fallback to possibly stale clipboard text.
+Native applications and Wine/Logos must be checked separately on your desktop.
+
+Commands for other desktop shortcut managers:
+
+```sh
+/path/to/Akousousin-x86_64.AppImage --install-selection-action
+/path/to/Akousousin-x86_64.AppImage --read-selection
+/path/to/Akousousin-x86_64.AppImage --read-clipboard
+```
+
+The desktop file is installed under `$XDG_DATA_HOME/applications/` (normally
+`~/.local/share/applications/akousousin-read-selection.desktop`). Keep the AppImage
+at its permanent location before installing the action. Remove that desktop file
+and its shortcut binding to remove the action. No selected text is put into a
+shell command, persistent history or log. The helper uses a dedicated speechd
+connection and `CANCEL SELF`; it does not use the all-client `spd-say` stop command.
+This is a new candidate feature, not part of the published 0.6.0b2 release.

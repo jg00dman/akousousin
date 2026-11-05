@@ -1,4 +1,10 @@
-# Akousousin 0.6.0b2 beta
+# Akousousin 0.6.0b3 beta candidate
+
+Linux selection reading adds a desktop action for a configurable global shortcut.
+Highlight text to read it; repeat to stop only that reading. An explicit clipboard
+action supports applications without a primary selection. Wayland uses wl-clipboard
+and X11 uses xclip. Shortcut binding and application selection support need desktop
+validation.
 
 Native Linux speech through Speech Dispatcher now shares Piper and the voice
 library with SAPI. Orca SSML text and progress marks, punctuation/spelling fallback,

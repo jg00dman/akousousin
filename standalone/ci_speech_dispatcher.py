@@ -112,6 +112,48 @@ with (work / 'daemon.log').open('wb') as log:
         assert any('0:5' in mark for mark in marks), marks
         command('SET SELF SSML_MODE off')
         print('PASS: real Speech Dispatcher voices, PCM, cancellation, recovery and Orca SSML marks', flush=True)
+        # The desktop selection is a fixture; speech, toggle IPC and packaged CLI
+        # are real. No compositor or clipboard from the runner is accessed.
+        from akousousin_app import runtime
+        import shlex
+        fixtures = work / 'selection-fixture'
+        fixtures.mkdir(exist_ok=True)
+        selected = fixtures / 'text.txt'
+        selected.write_text('Packaged selection reading works.')
+        paste = fixtures / 'wl-paste'
+        paste.write_text('#!/bin/sh\nexec /bin/cat ' + shlex.quote(str(selected)) + '\n')
+        paste.chmod(0o755)
+        reader_env = dict(os.environ, WAYLAND_DISPLAY='fixture-only', SPEECHD_ADDRESS='unix_socket:' + str(sockpath),
+                          PATH=str(fixtures) + os.pathsep + os.environ['PATH'], PYINSTALLER_RESET_ENVIRONMENT='1')
+        read_command = [str(executable), '--settings', str(settings_path), '--read-selection']
+        subprocess.run(read_command, env=reader_env, check=True, timeout=90)
+        command('SET SELF PRIORITY IMPORTANT')
+        command('SPEAK')
+        command(('Another application must finish uninterrupted. ' * 250) + '\r\n.')
+        event(701)
+        selected.write_text('This long reading will be stopped. ' * 1500)
+        with (work / 'selection-reader.log').open('wb') as output:
+            reader = subprocess.Popen(read_command, env=reader_env, stdout=output, stderr=output)
+            try:
+                control = Path(runtime.name(settings_path)).with_suffix('.reading.sock')
+                deadline = time.monotonic() + 20
+                while not control.exists():
+                    assert reader.poll() is None, 'Packaged reader exited before accepting a toggle'
+                    assert time.monotonic() < deadline, 'Packaged reader did not start'
+                    time.sleep(.05)
+                stopped = subprocess.run(read_command, env=reader_env, capture_output=True, text=True,
+                                         check=True, timeout=30)
+                assert 'Stopped reading.' in stopped.stdout, stopped
+                assert reader.wait(timeout=20) == 0
+            finally:
+                if reader.poll() is None:
+                    reader.terminate()
+                    reader.wait(timeout=10)
+        event(702)  # Cancelling the reader must not cancel the other client.
+        selected.write_text('The next selection works after stopping.')
+        subprocess.run(read_command, env=reader_env, check=True, timeout=90)
+        print('PASS: packaged selection read/stop/reset and another client remains unaffected', flush=True)
+
     finally:
         connection.close()
         daemon.terminate()

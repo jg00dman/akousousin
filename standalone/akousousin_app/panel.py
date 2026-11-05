@@ -64,7 +64,7 @@ class Panel:
         self.content = ttk.Frame(body)
         self.content.pack(side='left', fill='both', expand=True)
         self.pages = {}
-        for name in ('Overview', 'Voice library', 'Languages', 'Settings', 'Updates'):
+        for name in ('Overview', 'Voice library', 'Languages', 'Settings', 'Updates') + (('Read selection',) if os.name != 'nt' else ()):
             ttk.Button(nav, text=name, command=lambda name=name: self.show(name)).pack(fill='x', pady=4)
             self.pages[name] = ttk.Frame(self.content)
         self.status = tk.StringVar(value='Ready')
@@ -84,6 +84,8 @@ class Panel:
         self.build_languages()
         self.build_settings()
         self.build_updates()
+        if os.name != 'nt':
+            self.build_selection()
         footer = ttk.Frame(self.root, padding=(22, 12))
         footer.pack(fill='x')
         ttk.Label(footer, textvariable=self.status, wraplength=760).pack(side='left')
@@ -377,6 +379,34 @@ class Panel:
                   wraplength=780, style='Card.TLabel').pack(anchor='w', pady=12)
         ttk.Button(frame, text='Save settings', command=self.save).pack(anchor='e')
         ttk.Button(page, text='Open service log', command=lambda: webbrowser.open(self.service.log.as_uri())).pack(anchor='w')
+
+    def build_selection(self):
+        frame = self.card(self.pages['Read selection'], 'Read selected text / Stop')
+        ttk.Label(frame, text='Highlight text, then trigger the shortcut to read it. Trigger it again to stop only this reading. '
+                  'Your shared voice, language, speed and volume preferences apply.',
+                  wraplength=760, style='Card.TLabel').pack(anchor='w', pady=8)
+        ttk.Label(frame, text='First install Speech Dispatcher support in Settings. Wayland requires wl-clipboard; '
+                  'X11 requires xclip. Applications must expose their selection. If an app does not, copy text '
+                  'and use the separate Read clipboard / Stop action instead.',
+                  wraplength=760, style='Card.TLabel').pack(anchor='w', pady=8)
+        ttk.Label(frame, text='Install the action below, then open Plasma System Settings → Keyboard → Shortcuts. '
+                  'Add the Akousousin Read selected text / Stop application and choose a free shortcut, '
+                  'such as Alt+Esc. Other desktops can bind the same launcher command.',
+                  wraplength=760, style='Card.TLabel').pack(anchor='w', pady=8)
+        def install():
+            from .selection import install_action
+            self.worker(lambda: install_action(self.path),
+                        lambda _: self.status.set('Selection action installed. Assign its shortcut in desktop settings.'))
+        ttk.Button(frame, text='Install shortcut action', command=install).pack(anchor='w', pady=8)
+        ttk.Button(frame, text='Open Plasma shortcuts', command=self.open_shortcuts).pack(anchor='w', pady=8)
+
+    def open_shortcuts(self):
+        tool = shutil.which('systemsettings') or shutil.which('systemsettings6')
+        if not tool:
+            messagebox.showinfo('Desktop shortcuts', 'Open your desktop shortcut settings and add the Akousousin selection action.')
+            return
+        from .selection import host_environment
+        subprocess.Popen([tool, 'kcm_keys'], env=host_environment())
 
     def build_updates(self):
         frame = self.card(self.pages['Updates'], 'Application updates')

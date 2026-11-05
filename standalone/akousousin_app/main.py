@@ -29,6 +29,10 @@ def main():
     parser.add_argument('--install-speech-dispatcher', action='store_true', help='Register the output module in your user Speech Dispatcher configuration')
     parser.add_argument('--uninstall-speech-dispatcher', action='store_true', help='Remove your user output-module registration')
     parser.add_argument('--speech-dispatcher', action='store_true', help='Run a Speech Dispatcher output module on stdin/stdout')
+    selection_group = parser.add_mutually_exclusive_group()
+    selection_group.add_argument('--read-selection', action='store_true', help='Read highlighted Linux desktop text; repeat to stop')
+    selection_group.add_argument('--read-clipboard', action='store_true', help='Read copied text; repeat to stop')
+    parser.add_argument('--install-selection-action', action='store_true', help='Install a desktop action for global shortcut binding')
     parser.add_argument('--status', action='store_true')
     parser.add_argument('--quit', action='store_true', help='Stop Piper and quit Akousousin')
     parser.add_argument('--controller', action='store_true', help=argparse.SUPPRESS)
@@ -42,6 +46,18 @@ def main():
     args = parser.parse_args()
     if args.protocol_version:
         print('2')
+        return
+    if args.read_selection or args.read_clipboard:
+        from .selection import toggle, notify
+        try:
+            print(toggle(args.settings, clipboard=args.read_clipboard))
+        except Exception as error:
+            notify(str(error))
+            raise
+        return
+    if args.install_selection_action:
+        from .selection import install_action
+        print(f'Installed {install_action(args.settings)}. Bind it in Plasma System Settings → Keyboard → Shortcuts.')
         return
     if args.serve:
         from .backend import serve
