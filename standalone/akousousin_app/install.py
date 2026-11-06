@@ -136,7 +136,7 @@ class Installer:
         if result.returncode:
             return None
         # /ve returns exactly one value. Its display label can be localized.
-        match = re.search(r'^[ \t]+[^\r\n]*?[ \t]+(REG_SZ|REG_EXPAND_SZ)[ \t]+([^\r\n]*)$',
+        match = re.search(r'^[ \t]+[^\r\n]*?[ \t]+(REG_SZ|REG_EXPAND_SZ)[ \t]+([^\r\n]*)\r?$',
                           result.stdout, re.M)
         if not match:
             raise RuntimeError(f'Cannot safely preserve registry value {name or "(Default)"}')

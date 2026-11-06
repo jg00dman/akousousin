@@ -257,3 +257,10 @@ class InstallTests(unittest.TestCase):
         with patch.object(self.app, 'execute', return_value=subprocess.CompletedProcess([], 0, '    (Standard)    REG_EXPAND_SZ    %SystemRoot%\\system32\\sapi.dll\n', '')):
             self.assertEqual(self.app.read_value('HKLM\\Test', None),
                              {'type': 'REG_EXPAND_SZ', 'data': r'%SystemRoot%\system32\sapi.dll'})
+
+    def test_registry_values_preserve_data_without_windows_line_endings(self):
+        for name, display in ((None, '(Default)'), ('sapi', 'sapi')):
+            output = '\r\nHKEY_LOCAL_MACHINE\\Test\r\n    ' + display + '    REG_SZ    C:\\private\\sapi.dll\r\n\r\n'
+            with self.subTest(name=name), patch.object(self.app, 'execute', return_value=subprocess.CompletedProcess([], 0, output, '')):
+                self.assertEqual(self.app.read_value(r'HKLM\Test', name),
+                                 {'type': 'REG_SZ', 'data': r'C:\private\sapi.dll'})
