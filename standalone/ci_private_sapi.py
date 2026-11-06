@@ -24,8 +24,15 @@ RESULTS = {}
 
 
 def run(args, env, name, check=True, timeout=60):
-    result = subprocess.run([str(x) for x in args], env=env, capture_output=True,
-                            text=True, encoding='utf-8', errors='replace', timeout=timeout)
+    # Wine services may inherit stdout after the command exits. Files avoid
+    # waiting for a pipe EOF from a long-lived background service.
+    with tempfile.TemporaryFile() as output, tempfile.TemporaryFile() as errors:
+        completed = subprocess.run([str(x) for x in args], env=env, stdout=output,
+                                   stderr=errors, timeout=timeout)
+        output.seek(0); errors.seek(0)
+        result = subprocess.CompletedProcess(completed.args, completed.returncode,
+            output.read().decode('utf-8', errors='replace'),
+            errors.read().decode('utf-8', errors='replace'))
     with (WORK / (name + '.log')).open('a', encoding='utf-8') as log:
         log.write(str([str(x) for x in args]) + '\n' + result.stdout + result.stderr + '\n')
     if check and result.returncode:
@@ -203,9 +210,11 @@ def main():
             assert hashlib.sha256(source.read_bytes()).hexdigest() == RESULTS['runtime_sapi_sha256']
             assert com_ok, 'Private COM mapping did not route all tested COM clients'
         finally:
-            run([SERVER, '-k'], env, 'cleanup', check=False)
-            run([SERVER, '-w'], env, 'cleanup', check=False, timeout=30)
-            (WORK / 'results.json').write_text(json.dumps(RESULTS, indent=2), encoding='utf-8')
+            try:
+                run([SERVER, '-k'], env, 'cleanup', check=False)
+                run([SERVER, '-w'], env, 'cleanup', check=False, timeout=30)
+            finally:
+                (WORK / 'results.json').write_text(json.dumps(RESULTS, indent=2), encoding='utf-8')
     print('PASS: experiment completed in a disposable prefix; system SAPI files unchanged', flush=True)
 
 
