@@ -17,6 +17,7 @@ import webbrowser
 from . import __version__, catalogue, resources, runtime, settings, updates
 from .languages import label
 from .install import Installer
+from .dialogs import show_error
 from .service import Service
 
 
@@ -124,7 +125,7 @@ class Panel:
                 result = function()
                 self.events.put(('success', success, result))
             except Exception as error:
-                self.events.put(('error', None, str(error)))
+                self.events.put(('error', None, error))
         threading.Thread(target=run, daemon=True).start()
 
     def poll(self):
@@ -134,8 +135,8 @@ class Panel:
                 self.busy = max(0, self.busy - 1)
                 if kind == 'error':
                     self.updating = False
-                    self.status.set(result)
-                    messagebox.showerror('Akousousin', result, parent=self.root)
+                    self.status.set(getattr(result, 'message', str(result)))
+                    show_error(self.root, result)
                 elif callback:
                     callback(result)
         except queue.Empty:
@@ -345,7 +346,7 @@ class Panel:
                                          'language': {'code': language, 'name_english': language, 'name_native': language}})
             self.voice_downloaded(key, voice)
         except Exception as error:
-            messagebox.showerror('Import voice', str(error))
+            show_error(self.root, error, 'Import voice')
 
     def build_languages(self):
         page = self.pages['Languages']
@@ -460,7 +461,7 @@ class Panel:
             self.status.set('Preferences saved. They apply to new speech.')
             return True
         except (ValueError, tk.TclError) as error:
-            messagebox.showerror('Preferences', str(error))
+            show_error(self.root, error, 'Preferences')
             return False
 
     def dispatcher_install(self, remove):

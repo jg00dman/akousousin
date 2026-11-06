@@ -198,7 +198,7 @@ class Sessions:
 
 def run(path):
     from PySide6.QtCore import QCoreApplication, QLockFile, QObject, QTimer, Signal
-    from PySide6.QtGui import QColor, QCursor, QIcon, QPainter, QPen, QPixmap
+    from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
     from PySide6.QtNetwork import QLocalServer
     from PySide6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
     from shiboken6 import isValid
@@ -320,9 +320,7 @@ def run(path):
         tray.setContextMenu(menu)
         def activate_tray(reason):
             if reason == QSystemTrayIcon.Trigger:
-                menu.popup(QCursor.pos())
-            elif reason == QSystemTrayIcon.DoubleClick:
-                submit({'command': 'configure'})
+                submit({'command': 'stt-toggle'})
         tray.activated.connect(activate_tray)
         tray.show()
 

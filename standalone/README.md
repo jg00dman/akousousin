@@ -74,10 +74,15 @@ progress bar for each download across all pages. Known-size transfers use actual
 bytes received; connection, verification and unknown-size stages show activity
 without a guessed percentage. Its menu provides
 Start/Stop Speech, Start/Stop Dictation, Default Voice (grouped by readable
-language names), Configure, Quit. A single left-click opens the menu; double-click
-opens the control panel.
+language names), Configure, Quit. Left-click toggles desktop dictation; right-click
+opens the menu. Configure opens the control panel.
 Default changes apply to subsequent speech; applications caching a SAPI voice may
 need restarting. Newly downloaded voices need registration through Settings.
+
+If Speech Dispatcher registration is saved but restarting fails, the panel offers
+a selectable command with Copy command and separate technical details. Run the
+command in your normal terminal without sudo. Registration/restart uses the host
+system libraries rather than inheriting AppImage library overrides.
 
 Closing the configuration panel leaves Akousousin/Piper running. Tray Quit stops
 Piper, microphone capture, recognition/download workers and portal sessions, closes

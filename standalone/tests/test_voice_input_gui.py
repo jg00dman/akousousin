@@ -23,6 +23,35 @@ class VoiceInputGuiTests(unittest.TestCase):
         reporter.start(); self.addCleanup(reporter.stop)
         self.addCleanup(lambda: self.assertEqual(self.callback_errors, [], 'Tk callback errors'))
 
+    def test_restart_error_has_selectable_text_and_copy_command(self):
+        from akousousin_app.dialogs import show_error
+        from akousousin_app.speech_dispatcher import RestartError, RESTART_COMMAND
+        root = tk.Tk(); self.addCleanup(root.destroy)
+        error = RestartError("systemctl: /tmp/.mount_AKS/libcrypto.so.3: version OPENSSL_3.4.0 not found")
+        window = show_error(root, error); root.update()
+        def widgets(parent):
+            for child in parent.winfo_children():
+                yield child
+                yield from widgets(child)
+        children = list(widgets(window))
+        field = next(child for child in children if isinstance(child, ttk.Entry))
+        self.assertEqual(field.get(), RESTART_COMMAND)
+        self.assertEqual(str(field.cget('state')), 'readonly')
+        command = next(child for child in children if isinstance(child, ttk.Button) and child.cget('text') == 'Copy command')
+        command.invoke(); root.update()
+        self.assertEqual(root.clipboard_get(), RESTART_COMMAND)
+        summary = next(child for child in children if isinstance(child, tk.Text))
+        summary.tag_add('sel', '1.0', '1.12')
+        summary.event_generate('<<Copy>>'); root.update()
+        self.assertEqual(root.clipboard_get(), summary.get('1.0', '1.12'))
+        reveal = next(child for child in children if isinstance(child, ttk.Button) and child.cget('text') == 'Show technical details')
+        reveal.invoke(); root.update()
+        detail = next(child for child in children if isinstance(child, tk.Text) and 'OPENSSL_3.4.0' in child.get('1.0', 'end'))
+        self.assertTrue(detail.winfo_ismapped())
+        copy = next(child for child in children if isinstance(child, ttk.Button) and child.cget('text') == 'Copy details')
+        copy.invoke(); root.update()
+        self.assertIn(error.details, root.clipboard_get())
+
     def test_first_use_is_explicit_and_progress_uses_real_byte_counts(self):
         from akousousin_app.panel import Panel
         with tempfile.TemporaryDirectory() as folder, patch('akousousin_app.resources.bootstrap', return_value=copy.deepcopy(settings.DEFAULTS)), \

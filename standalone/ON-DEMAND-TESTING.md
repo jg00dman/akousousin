@@ -26,6 +26,13 @@ Wine, then test Logos Read Aloud and Preview. Check that existing desktop
 dictation still works. The private SAPI installation from the preceding trial is
 included and leaves Wine system DLLs and PATH untouched.
 
+Left-click the tray icon to toggle desktop dictation. Right-click opens its menu;
+choose Configure there to open the control panel. Speech Dispatcher registration
+clears AppImage library overrides before calling host systemctl. If a restart
+still fails, the error has a selectable recovery command, Copy command, and
+separately expandable/copyable technical details. Other panel errors are also
+selectable and copyable.
+
 For offline first use, build with `python standalone/package.py --bundle-starter-voice`,
 or tick **bundle_starter_voice** in the Standalone
 Akousousin workflow. This includes the approved LJSpeech voice and its upstream
