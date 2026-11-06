@@ -26,8 +26,8 @@ Wine, then test Logos Read Aloud and Preview. Check that existing desktop
 dictation still works. The private SAPI installation from the preceding trial is
 included and leaves Wine system DLLs and PATH untouched.
 
-For offline first use, build with `python standalone/package.py
---bundle-starter-voice`, or tick **bundle_starter_voice** in the Standalone
+For offline first use, build with `python standalone/package.py --bundle-starter-voice`,
+or tick **bundle_starter_voice** in the Standalone
 Akousousin workflow. This includes the approved LJSpeech voice and its upstream
 licence/provenance files. Unticked builds are model-free. The package still
 contains its Python, Piper, Qt and recognition runtimes, so removing the voice

@@ -108,10 +108,7 @@ jobs:
           APPIMAGE_EXTRACT_AND_RUN: '1'
         run: |
           sudo apt-get install -y --no-install-recommends ffmpeg
-          python - <<'PYTHON'
-          from akousousin_backend.models import install
-          install(root='build/test-models')
-          PYTHON
+          standalone-dist/Akousousin-x86_64.AppImage --whisper --download-model --models "$PWD/build/test-models"
           curl --fail --location --max-time 60 https://raw.githubusercontent.com/openai/whisper/main/tests/jfk.flac -o build/jfk.flac
           echo '63a4b1e4c1dc655ac70961ffbf518acd249df237e5a0152faae9a4a836949715  build/jfk.flac' | sha256sum --check
           ffmpeg -v error -i build/jfk.flac -ac 1 -ar 16000 -c:a pcm_s16le build/jfk.wav

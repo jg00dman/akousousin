@@ -25,7 +25,8 @@ def current():
             value = json.loads(file.read_text(encoding='utf-8'))
             if value['status'] == 'active':
                 process = psutil.Process(value['pid'])
-                valid = process.is_running() and process.create_time() <= value['started']
+                valid = (process.is_running() and process.status() != psutil.STATUS_ZOMBIE
+                         and process.create_time() <= value['started'])
             else:
                 valid = time.time() - value['updated'] < (15 if value['status'] == 'error' else 3)
             if not valid:
@@ -80,5 +81,6 @@ class DownloadView:
                 bar.stop(); bar.configure(mode=mode)
                 if not known:
                     bar.start(15)
-            bar.configure(value=100 if value['status'] == 'done' else min(100, value['completed'] * 100 / value['total']) if value['total'] else 0)
+            if known:
+                bar.configure(value=100 if value['status'] == 'done' else min(100, value['completed'] * 100 / value['total']) if value['total'] else 0)
         self.frame.after(150, self.poll)
