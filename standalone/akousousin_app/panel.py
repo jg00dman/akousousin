@@ -35,7 +35,7 @@ class Panel:
         self.busy = 0
         self.updating = False
         self.root = tk.Tk()
-        self.root.title('Akousousin — Neural Voice Engine')
+        self.root.title('Akousousin - The unified neural speech engine for Linux (beta)')
         icon = resources.root() / 'akousousin.png'
         if icon.exists():
             self.window_icon = tk.PhotoImage(file=str(icon))
@@ -60,7 +60,8 @@ class Panel:
         header = ttk.Frame(self.root, padding=(24, 18))
         header.pack(fill='x')
         ttk.Label(header, text='▥  Akousousin', style='Title.TLabel').pack(side='left')
-        ttk.Label(header, text='SAPI · Speech Dispatcher (experimental)', padding=(18, 8)).pack(side='left')
+        ttk.Label(header, text='The unified neural speech engine for Linux (beta)',
+                  font=('DejaVu Sans', 10, 'italic'), padding=(18, 8), wraplength=460).pack(side='left')
         ttk.Label(header, text=f'Beta {__version__}').pack(side='right')
         body = ttk.Frame(self.root)
         body.pack(fill='both', expand=True, padx=20)
