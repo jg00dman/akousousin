@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 set -eu
 app_dir=${APPDIR:-$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)}
 wine_bin="$app_dir/usr/bin/wine"

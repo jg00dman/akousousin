@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """Test packaged SAPI, the approved starter voice, shared sessions and controller lifecycle."""
 import hashlib
 import os
@@ -5,6 +7,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import tempfile
 import wave
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -43,7 +46,7 @@ else:
     subprocess.run(['tar', '-xJf', str(runtime), '-C', str(wine_dir)], check=True)
     wine = wine_dir / 'usr/bin/wine'
     env.update(WINE=str(wine), WINESERVER=str(wine_dir / 'usr/bin/wineserver'),
-               WINEDLLOVERRIDES='mscoree,mshtml=;sapi=n,b', WINEDEBUG='-all')
+               WINEDLLOVERRIDES='mscoree,mshtml=', WINEDEBUG='-all')
     subprocess.run([str(wine), 'wineboot.exe', '-u'], env=env | {'WINEDLLOVERRIDES': 'mscoree,mshtml='},
                    check=True, timeout=120)
     subprocess.run([env['WINESERVER'], '-w'], env=env, check=True, timeout=90)
@@ -55,15 +58,69 @@ else:
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     install = [str(executable), '--wine-prefix', str(prefix), '--wine', str(wine), '--wine-compat',
                '--install-only', '--settings', str(settings_path)]
-# Fresh settings must bootstrap the approved voice from the actual package.
+def wine_sapi_snapshot():
+    result = {}
+    for file in (prefix / 'drive_c/windows').rglob('*'):
+        if file.name.lower() == 'sapi.dll':
+            result[str(file.relative_to(prefix))] = (
+                os.readlink(file) if file.is_symlink() else None,
+                hashlib.sha256(file.read_bytes()).hexdigest() if file.is_file() else None)
+    return result
+
+
+def sapi_modules():
+    result = {}
+    for caller in (resource, WORK / 'independent-client'):
+        caller.mkdir(exist_ok=True)
+        probe = caller / 'sapi-location-probe.exe'
+        if not probe.exists():
+            shutil.copy2(resource / probe.name, probe)
+        for mode in ('datakey', 'voice'):
+            with tempfile.TemporaryFile() as output, tempfile.TemporaryFile() as errors:
+                completed = subprocess.run([str(wine), str(probe), mode], env=env,
+                                           stdout=output, stderr=errors, timeout=60)
+                output.seek(0); errors.seek(0)
+                text = output.read().decode('utf-8', errors='replace')
+                if completed.returncode:
+                    raise RuntimeError(text + errors.read().decode('utf-8', errors='replace'))
+            module = next(line.removeprefix('MODULE=') for line in text.splitlines() if line.startswith('MODULE='))
+            result[(str(caller), mode)] = module.casefold()
+    return result
+
+
+if not native:
+    original_wine_files = wine_sapi_snapshot()
+    original_sapi_modules = sapi_modules()
+
+# The lean package must start without a model; only explicit first use downloads it.
 subprocess.run([str(executable), '--settings', str(settings_path), '--status'], env=env, check=True, timeout=60)
 sys.path[:0] = [str(ROOT / 'standalone'), str(ROOT / 'backend')]
 from akousousin_app import settings
 from akousousin_app.service import Service
 config = settings.load(settings_path)
+import json
+bundled_starter = json.loads((resource / 'build.json').read_text())['starter_voice']
+assert bool(config['voices']) == bool(bundled_starter), 'Starter voice does not match the selected package variant'
+if not bundled_starter:
+    assert not (resource / 'voices').exists(), 'Lean build bundled voice weights'
+    subprocess.run([str(executable), '--settings', str(settings_path), '--download-starter-voice'],
+                   env=env, check=True, timeout=180)
+    config = settings.load(settings_path)
+    before = Path(config['voices'][config['voice']]['path']).stat().st_mtime_ns
+    subprocess.run([str(executable), '--settings', str(settings_path), '--download-starter-voice'],
+                   env=env, check=True, timeout=30)
+    assert Path(config['voices'][config['voice']]['path']).stat().st_mtime_ns == before
+    print('PASS: lean package starts model-free; explicit starter download is persistent and not repeated', flush=True)
 assert config['voice'] == 'en_US-ljspeech-medium'
 assert Path(config['voices'][config['voice']]['path']).is_file(), 'Bundled default voice was not installed'
 subprocess.run(install, env=env, check=True, timeout=180)
+if not native:
+    expected_private = r'C:\Program Files\Akousousin\compat\x64\sapi.dll'.casefold()
+    assert set(sapi_modules().values()) == {expected_private}, 'COM is not using the private SAPI DLL'
+    assert wine_sapi_snapshot() == original_wine_files, 'Install changed Wine SAPI files'
+    state = __import__('json').loads((prefix / 'drive_c/Program Files/Akousousin/install-state.json').read_text())
+    assert state['compatibility_mode'] == 'private-com'
+    assert all(name.startswith('drive_c/Program Files/Akousousin/') for name in state['files'])
 for name in ['sapi-probe.exe', 'engine-probe.exe']:
     shutil.copy(resource / name, ROOT / 'build' / name)
 for script, log in [('tests/test_integration.py', 'integration.log'), ('tests/test_failures.py', 'failure-recovery.log')]:
@@ -83,6 +140,17 @@ def public(*args):
     return __import__('json').loads(completed.stdout.splitlines()[-1])
 try:
     assert public('--acquire-session', 'logos-ci', '--owner-pid', str(os.getpid()))['running']
+    if not native:
+        identity = Path(env['XDG_DATA_HOME']) / 'applications/org.akousousin.Akousousin.desktop'
+        assert identity.is_file(), 'Packaged controller did not install desktop identity'
+        print(identity.read_text(), flush=True)
+        # The real portal uses GIO lookup by ID, not merely file existence.
+        subprocess.run([sys.executable, '-c',
+                        "import ctypes; lib=ctypes.CDLL('libgio-2.0.so.0'); "
+                        "lookup=lib.g_desktop_app_info_new; lookup.argtypes=[ctypes.c_char_p]; "
+                        "lookup.restype=ctypes.c_void_p; "
+                        "assert lookup(b'org.akousousin.Akousousin.desktop'), 'Packaged desktop identity cannot be resolved by host GIO'"],
+                       env=env, check=True, timeout=10)
     assert public('--acquire-session', 'second-ci', '--owner-pid', str(os.getpid()))['sessions'] == 2
     wav = WORK / 'real-sapi.wav'
     command = [str(executable), '--settings', str(settings_path), '--sapi-wav', str(wav), 'Standalone Open SAPI is speaking.']
@@ -130,6 +198,20 @@ finally:
     settings.save(settings_path, config)
     time.sleep(2)
 
+# Exercise Quit against a real panel process owned by the packaged controller.
+owned_panels = public('--configure')['panels']
+assert owned_panels, 'Configure did not register its panel with the controller'
+assert public('--configure')['panels'] == owned_panels, 'Configure opened a duplicate panel'
+time.sleep(2)
+public('--quit')
+import psutil
+for pid in owned_panels:
+    deadline = time.monotonic() + 10
+    while psutil.pid_exists(pid) and time.monotonic() < deadline:
+        time.sleep(.1)
+    assert not psutil.pid_exists(pid), 'Quit left a packaged control panel running'
+print('PASS: Quit closes owned packaged control panels', flush=True)
+
 assert not (WORK / 'data/Akousousin/runtimes').exists(), 'An extracted runtime was retained'
 subprocess.run([str(executable), '--settings', str(settings_path), '--smoke-test'], env=env, check=True, timeout=30)
 if not native:
@@ -144,11 +226,19 @@ if not native:
 # this against the initialized Wine/native Windows installation before rollback.
 subprocess.run([str(executable), '--settings', str(settings_path), '--refresh-registrations'],
                env=env, check=True, timeout=180)
+if not native:
+    assert set(sapi_modules().values()) == {expected_private}, 'Update lost the private COM registration'
+    assert wine_sapi_snapshot() == original_wine_files, 'Update changed Wine SAPI files'
 print('PASS: packaged refresh of saved active SAPI registrations', flush=True)
 command = [str(executable), '--uninstall', '--settings', str(settings_path)]
 if not native:
     command += ['--wine-prefix', str(prefix), '--wine', str(wine)]
 subprocess.run(command, env=env, check=True, timeout=90)
+if not native:
+    assert wine_sapi_snapshot() == original_wine_files, 'Uninstall changed Wine SAPI files'
+    assert sapi_modules() == original_sapi_modules, 'Uninstall did not restore original SAPI COM defaults'
+    assert not (prefix / 'drive_c/Program Files/Akousousin/compat/x64/sapi.dll').exists()
+    print('PASS: private SAPI install/update/uninstall; original DLL bytes/links and COM defaults preserved', flush=True)
 if not native:
     subprocess.run([env['WINESERVER'], '-k'], env=env, check=True, timeout=15)
     subprocess.run([env['WINESERVER'], '-w'], env=env, check=True, timeout=30)

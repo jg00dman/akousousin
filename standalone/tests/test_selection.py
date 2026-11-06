@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 import os
 from pathlib import Path
 import socket
@@ -112,8 +114,10 @@ class SelectionTests(unittest.TestCase):
 
     def test_host_tools_use_host_libraries_and_qt_plugins(self):
         with patch.dict(os.environ, {'LD_LIBRARY_PATH': '/bundled/lib', 'LD_LIBRARY_PATH_ORIG': '/host/lib',
+                                     'LD_PRELOAD': '/bundled/libcrypto.so.3',
                                      'QT_PLUGIN_PATH': '/bundled/qt', 'QT_QPA_PLATFORM_PLUGIN_PATH': '/bundled/platforms'}):
             env = selection.host_environment()
-        self.assertEqual(env['LD_LIBRARY_PATH'], '/host/lib')
+        for name in ('LD_LIBRARY_PATH', 'LD_LIBRARY_PATH_ORIG', 'LD_PRELOAD'):
+            self.assertNotIn(name, env)
         self.assertNotIn('QT_PLUGIN_PATH', env)
         self.assertNotIn('QT_QPA_PLATFORM_PLUGIN_PATH', env)

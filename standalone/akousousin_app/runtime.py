@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """Per-user controller IPC. Session ownership belongs to Akousousin, not launchers."""
 import hashlib
 import json
@@ -80,6 +82,14 @@ def environment():
     # A detached controller/panel is an independent frozen application, not a
     # multiprocessing child inheriting the caller's PyInstaller bootloader state.
     value['PYINSTALLER_RESET_ENVIRONMENT'] = '1'
+    return value
+
+
+def host_environment():
+    value = environment()
+    for name in ('LD_LIBRARY_PATH', 'LD_LIBRARY_PATH_ORIG', 'LD_PRELOAD',
+                 'QT_PLUGIN_PATH', 'QT_QPA_PLATFORM_PLUGIN_PATH'):
+        value.pop(name, None)
     return value
 
 

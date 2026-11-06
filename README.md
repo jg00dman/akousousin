@@ -1,12 +1,24 @@
+<!--
+SPDX-License-Identifier: GPL-3.0-or-later
+SPDX-FileCopyrightText: 2026 John Goodman
+-->
+
 # Akousousin — Neural Voice Engine
 
 **akousousin:** *The unified neural speech engine for Linux, implementing Microsoft SAPI and Speech Dispatcher, based on Piper and Whisper.*
 
-**Published beta: [0.6.0b2](https://github.com/jg00dman/akousousin/releases/tag/standalone-beta-0.6.0b2-41949762674-1).**
+**Main version: 0.7.0b1 beta.** [Downloads and release notes](https://github.com/jg00dman/akousousin/releases).
 Core speech output works through 64-bit SAPI (Wine and native Windows) and the
 native Linux Speech Dispatcher output module. On-demand startup, idle model
-unloading and control-panel update checks are shipped. Neither interface has
-full API coverage; recognition is not included in this beta.
+unloading and control-panel update checks are included. Neither output interface
+has full API coverage.
+
+This beta adds **experimental local Whisper voice input on Linux**, a Voice Input
+panel and KDE Wayland shortcut dictation. Microphone discovery, recording and
+insertion into Kate and a chat text field were desktop-tested on Kubuntu 26.04
+Wayland. SAPI recognition and native Windows microphone capture are not implemented.
+See the [Voice Input guide](recognition/PANEL-TESTING.md) and
+[dictation implementation and acceptance checks](recognition/DICTATION.md).
 
 The name comes from Greek **ἀκούσουσιν**, “they will hear” (John 5:25).
 
@@ -17,11 +29,15 @@ The name comes from Greek **ἀκούσουσιν**, “they will hear” (John 
 | Speech Dispatcher output | Server audio, voice/language selection, rate/volume, text, characters/keys, cancellation and lifecycle events | Daemon owns queues/priorities; no separate speechd server |
 | Orca and reading feedback | SSML text/entities, coarse index marks, punctuation and spelling fallback | Exact word highlighting, full resume-position validation, localized symbols and sound icons remain |
 | Shared runtime and updates | Piper, voice library/preferences, on-demand loading, idle unloading, optional registration, update checks and Linux AppImage updates | Windows ZIP/source updates use manual downloads; speechd pitch and functional debug/log-level controls are absent |
-| Speech input | Not included in the published beta | SAPI recognition and a future native input API are separately scoped |
+| Speech input | Experimental multilingual Whisper recognition, microphone/language selectors and KDE Wayland dictation | Linux capture only; SAPI recognition, spoken punctuation commands and document proofing-language tagging are not implemented |
 
 See **[API coverage and implementation status](COMPATIBILITY.md)** for the
 command/interface matrix, unsupported operations and validation evidence.
 We report feature coverage rather than an invented percentage of the full APIs.
+
+Global selected-text reading is available on KDE Wayland through the Read selection
+page. It needs Speech Dispatcher and wl-clipboard; Wine applications may require
+the explicit copied-text fallback.
 
 ## Try the beta
 
@@ -30,10 +46,14 @@ Download the [Linux AppImage or Windows ZIP](https://github.com/jg00dman/akousou
 voices, Wine-prefix registration, launcher commands and rollback.
 
 The Linux package contains the voice engine, control panel, tray and Piper backend,
-plus the reviewed `en_US-ljspeech-medium` starter voice. It does not contain Wine.
+with voice models downloaded on demand. On first use, choose the reviewed
+`en_US-ljspeech-medium` starter voice (about 64 MB), another catalogue voice, or
+import a local model. Offline builds can include the starter voice. It does not contain Wine.
 Existing voice choices are preserved. Other models retain their own licence terms.
 The build target remains x86-64 Linux with glibc 2.35+ (Ubuntu 22.04), and existing
-working 64-bit Wine prefixes. Native Windows system SAPI is not replaced.
+working 64-bit Wine prefixes. Wine compatibility DLLs stay in the AKS directory;
+SAPI COM registrations select them without changing Wine system DLLs or PATH.
+Native Windows system SAPI is not replaced.
 
 Akousousin uses one configuration per user. On Linux, config is under
 `~/.config/Akousousin`, downloaded voices under `~/.local/share/Akousousin`,
@@ -49,10 +69,10 @@ The standalone [engine](engine/) implements public Windows COM/SAPI interfaces.
 Those standard API names and contracts are unchanged by the project rebrand.
 The [control panel and controller](standalone/) manage voices and backend sessions.
 [CI](.github/workflows/standalone.yml) cross-compiles the engine and tests packages
-on Wine and Windows without compiling Wine. The released build passed 60 standalone and 8 backend tests, plus packaged
-Wine/Windows checks covering 14 deterministic integration tests, seven failure
-tests, real Piper output, GUI/service lifecycle, registration refresh and rollback.
-Linux checks also exercise a real speechd daemon and verified AppImage updating.
+on Wine and Windows without compiling Wine. The CI suite checks controller and recognition lifecycle, cancellation, actual GUI
+scrolling and recording actions, portal protocol behavior, packaged panel shutdown,
+Wine/Windows integration and failures, real Piper output, registration refresh and rollback.
+Linux checks also exercise a real speechd daemon, packaged Whisper inference and verified AppImage updating.
 
 The [Wine patches](patches/) and [Wine build workflow](.github/workflows/appimage.yml)
 remain available for custom Wine builds. Wine compilation belongs in GitHub Actions,
@@ -62,6 +82,15 @@ and Piper are GPL-3.0-or-later; dependency and voice notices are included.
 
 The next output milestones are exact alignment-backed word events, more complete
 pause/resume behaviour and broader speech markup/accessibility support.
-Recognition is separately scoped. See the
+SAPI recognition and a future native input framework remain separately scoped. See the
 [Speech Dispatcher desktop checklist](standalone/SPEECH-DISPATCHER.md#desktop-acceptance-checklist)
 for ongoing Orca and application testing.
+
+## Licensing
+
+Original Akousousin project source is **GPL-3.0-or-later**, copyright 2026 John
+Goodman. The SAPI engine C implementation and API headers are **LGPL-2.1-or-later**;
+Wine copyright notices are retained. Dependencies, imported code, models and Wine
+patches retain their own licences. See [LICENSE](LICENSE), the
+[LGPL text](LICENSES/LGPL-2.1-or-later.txt), and [component licensing](LICENSING.md).
+Both application packages include the GPL/LGPL texts and upstream notices.

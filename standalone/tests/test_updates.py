@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 import hashlib
 import io
 import json
@@ -16,6 +18,9 @@ class UpdateTests(unittest.TestCase):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         self.root = Path(directory.name)
+        state = patch.dict(os.environ, {'XDG_STATE_HOME': str(self.root / 'state'),
+                                       'LOCALAPPDATA': str(self.root / 'state')})
+        state.start(); self.addCleanup(state.stop)
         self.image = self.root / 'Akousousin.AppImage'
         self.image.write_bytes(b'previous image')
         self.payload = b'verified replacement image'
@@ -78,7 +83,7 @@ class UpdateTests(unittest.TestCase):
             backup = updates.install(self.update, self.root / 'settings.json')
         self.assertEqual(self.image.read_bytes(), self.payload)
         self.assertEqual(backup.read_bytes(), b'previous image')
-        self.assertEqual(call.call_args_list[0].args[1], {'command': 'quit'})
+        self.assertEqual(call.call_args_list[0].args[1], {'command': 'quit', 'update_pid': os.getpid()})
         self.assertIn('--refresh-registrations', run.call_args.args[0])
         self.assertIn('--configure', launch.call_args.args[0])
         self.assertEqual(launch.call_args.kwargs['env']['PYINSTALLER_RESET_ENVIRONMENT'], '1')

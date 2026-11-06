@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """Desktop control panel. All downloads, Wine calls and synthesis run off the UI thread."""
 import json
 import os
@@ -15,6 +17,7 @@ import webbrowser
 from . import __version__, catalogue, resources, runtime, settings, updates
 from .languages import label
 from .install import Installer
+from .dialogs import show_error
 from .service import Service
 
 
@@ -31,14 +34,18 @@ class Panel:
         self.events = queue.Queue()
         self.busy = 0
         self.updating = False
+        self.panel_polling = False
+        self.last_panel_activation = 0
         self.root = tk.Tk()
-        self.root.title('Akousousin — Neural Voice Engine')
+        self.root.title('Akousousin - The unified neural speech engine for Linux (beta)')
         icon = resources.root() / 'akousousin.png'
         if icon.exists():
             self.window_icon = tk.PhotoImage(file=str(icon))
             self.root.iconphoto(True, self.window_icon)
-        self.root.geometry('1160x820')
-        self.root.minsize(940, 700)
+        width = min(1160, max(640, self.root.winfo_screenwidth() - 80))
+        height = min(820, max(400, self.root.winfo_screenheight() - 100))
+        self.root.geometry(f'{width}x{height}')
+        self.root.minsize(min(760, width), min(480, height))
         self.root.configure(bg='#f4f5f3')
         self.root.protocol('WM_DELETE_WINDOW', self.close)
         style = ttk.Style(self.root)
@@ -55,7 +62,8 @@ class Panel:
         header = ttk.Frame(self.root, padding=(24, 18))
         header.pack(fill='x')
         ttk.Label(header, text='▥  Akousousin', style='Title.TLabel').pack(side='left')
-        ttk.Label(header, text='SAPI · Speech Dispatcher (experimental)', padding=(18, 8)).pack(side='left')
+        ttk.Label(header, text='The unified neural speech engine for Linux (beta)',
+                  font=('DejaVu Sans', 10, 'italic'), padding=(18, 8), wraplength=460).pack(side='left')
         ttk.Label(header, text=f'Beta {__version__}').pack(side='right')
         body = ttk.Frame(self.root)
         body.pack(fill='both', expand=True, padx=20)
@@ -64,7 +72,7 @@ class Panel:
         self.content = ttk.Frame(body)
         self.content.pack(side='left', fill='both', expand=True)
         self.pages = {}
-        for name in ('Overview', 'Voice library', 'Languages', 'Settings', 'Updates') + (('Read selection',) if os.name != 'nt' else ()):
+        for name in ('Overview', 'Voice library', 'Voice Input', 'Languages', 'Settings', 'Updates') + (('Read selection',) if os.name != 'nt' else ()):
             ttk.Button(nav, text=name, command=lambda name=name: self.show(name)).pack(fill='x', pady=4)
             self.pages[name] = ttk.Frame(self.content)
         self.status = tk.StringVar(value='Ready')
@@ -83,9 +91,13 @@ class Panel:
         self.build_library()
         self.build_languages()
         self.build_settings()
+        from .voice_input import VoiceInput
+        self.voice_input = VoiceInput(self, self.pages['Voice Input'])
         self.build_updates()
         if os.name != 'nt':
             self.build_selection()
+        from .download_status import DownloadView
+        self.downloads = DownloadView(self.root)
         footer = ttk.Frame(self.root, padding=(22, 12))
         footer.pack(fill='x')
         ttk.Label(footer, textvariable=self.status, wraplength=760).pack(side='left')
@@ -95,6 +107,7 @@ class Panel:
         self.refresh_library()
         self.root.after(100, self.poll)
         self.root.after(200, self.check_server)
+        self.root.after(300, self.poll_panel)
 
     def show(self, name):
         for page in self.pages.values():
@@ -118,18 +131,28 @@ class Panel:
                 result = function()
                 self.events.put(('success', success, result))
             except Exception as error:
-                self.events.put(('error', None, str(error)))
+                self.events.put(('error', None, error))
         threading.Thread(target=run, daemon=True).start()
 
     def poll(self):
         try:
             while True:
                 kind, callback, result = self.events.get_nowait()
+                if kind == 'panel-status':
+                    if result:
+                        if result['activation'] != self.last_panel_activation:
+                            self.last_panel_activation = result['activation']
+                            self.root.deiconify(); self.root.lift(); self.root.focus_force()
+                        if hasattr(self, 'reading_state'):
+                            reading = result['reading']
+                            self.reading_state.set(reading['state'])
+                            self.reading_shortcuts.set(reading['shortcut_state'])
+                    continue
                 self.busy = max(0, self.busy - 1)
                 if kind == 'error':
                     self.updating = False
-                    self.status.set(result)
-                    messagebox.showerror('Akousousin', result, parent=self.root)
+                    self.status.set(getattr(result, 'message', str(result)))
+                    show_error(self.root, result)
                 elif callback:
                     callback(result)
         except queue.Empty:
@@ -137,6 +160,20 @@ class Panel:
         if not self.busy:
             self.progress.stop()
         self.root.after(100, self.poll)
+
+    def poll_panel(self):
+        if not self.panel_polling:
+            self.panel_polling = True
+            def task():
+                try:
+                    result = runtime.call(self.path, {'command': 'panel-status'}, launch=False)
+                    self.events.put(('panel-status', None, result))
+                except Exception:
+                    pass
+                finally:
+                    self.panel_polling = False
+            threading.Thread(target=task, daemon=True).start()
+        self.root.after(600, self.poll_panel)
 
     def check_server(self):
         port = self.config['port']
@@ -156,6 +193,14 @@ class Panel:
 
     def build_overview(self):
         page = self.pages['Overview']
+        if not self.config['voices']:
+            self.starter_card = self.card(page, 'Get started with speech')
+            ttk.Label(self.starter_card, text='Download the reviewed English LJSpeech starter voice once (about 64 MB), or choose another voice in Voice library. Downloads stay installed between upgrades. Voice input can be used independently.',
+                      style='Card.TLabel', wraplength=780).pack(anchor='w', pady=8)
+            ttk.Button(self.starter_card, text='Download starter voice (64 MB)', style='Accent.TButton',
+                       command=self.download_starter).pack(side='left', padx=3)
+            ttk.Button(self.starter_card, text='Choose another voice', command=lambda: self.show('Voice library')).pack(side='left', padx=3)
+            return
         frame = self.card(page, 'Speech service')
         ttk.Label(frame, textvariable=self.server_status, style='Card.TLabel').pack(side='left')
         ttk.Button(frame, text='Start server', style='Accent.TButton', command=self.start_server).pack(side='right', padx=4)
@@ -197,13 +242,20 @@ class Panel:
         self.installed_only = tk.BooleanVar()
         ttk.Checkbutton(row, text='Installed only', variable=self.installed_only,
                         command=self.refresh_library).pack(side='right')
-        self.tree = ttk.Treeview(page, columns=('language', 'quality', 'size', 'status'), show='tree headings', height=12)
+        table = ttk.Frame(page); table.pack(fill='both', expand=True, pady=8)
+        table.rowconfigure(0, weight=1); table.columnconfigure(0, weight=1)
+        self.tree = ttk.Treeview(table, columns=('language', 'quality', 'size', 'status'), show='tree headings', height=12)
         self.tree.heading('#0', text='Voice')
         self.tree.column('#0', width=160)
         for name, width in [('language', 190), ('quality', 80), ('size', 80), ('status', 230)]:
             self.tree.heading(name, text=name.title())
             self.tree.column(name, width=width)
-        self.tree.pack(fill='both', expand=True, pady=8)
+        self.tree.grid(row=0, column=0, sticky='nsew')
+        self.library_scrollbar = ttk.Scrollbar(table, orient='vertical', command=self.tree.yview)
+        self.library_scrollbar.grid(row=0, column=1, sticky='ns')
+        horizontal = ttk.Scrollbar(table, orient='horizontal', command=self.tree.xview)
+        horizontal.grid(row=1, column=0, sticky='ew')
+        self.tree.configure(yscrollcommand=self.library_scrollbar.set, xscrollcommand=horizontal.set)
         row = ttk.Frame(page)
         row.pack(fill='x', pady=8)
         ttk.Button(row, text='Review licence & download', command=self.download).pack(side='left', padx=3)
@@ -261,15 +313,29 @@ class Panel:
                     return
                 window.destroy()
                 self.status.set('Downloading voice…')
-                def downloaded(voice):
-                    self.config['voices'][key] = voice
-                    settings.save(self.path, self.config)
-                    self.refresh_library()
-                    self.refresh_languages()
-                    self.status.set('Voice installed. Select Make default to use it.')
-                self.worker(lambda: catalogue.install(self.library[key], settings.data_path() / 'voices', True), downloaded)
+                self.worker(lambda: catalogue.install(self.library[key], settings.data_path() / 'voices', True),
+                            lambda voice: self.voice_downloaded(key, voice))
             ttk.Button(window, text='Download voice', command=begin, style='Accent.TButton').pack(pady=12)
         self.worker(lambda: catalogue.card(self.library[key]), review)
+
+    def voice_downloaded(self, key, voice):
+        self.config = resources.register_voice(self.path, key, voice)
+        self.refresh_library()
+        self.refresh_languages()
+        if hasattr(self, 'starter_card'):
+            self.starter_card.destroy()
+            del self.starter_card
+            self.build_overview()
+        self.update_default()
+        self.status.set('Voice installed and retained for future upgrades. Apply voice registration in Settings when needed.')
+
+    def download_starter(self):
+        key = resources.STARTER
+        if self.busy:
+            return
+        self.status.set('Downloading starter voice…')
+        self.worker(lambda: resources.download_starter(self.path),
+                    lambda config: self.voice_downloaded(key, config['voices'][key]))
 
     def make_default(self):
         try:
@@ -303,16 +369,14 @@ class Panel:
                     return
             if language.split('_')[0] in catalogue.UNSUPPORTED_AUXILIARY:
                 raise ValueError('This language needs optional preprocessing resources not distributed in this beta')
-            self.config['voices'][key] = {'path': model, 'sample_rate': config['audio']['sample_rate'],
+            voice = {'path': model, 'sample_rate': config['audio']['sample_rate'],
                                           'language': language, 'name': key, 'quality': 'local'}
-            settings.save(self.path, self.config)
             # Imported models may not occur in the online catalogue; add a local row.
             self.library.setdefault(key, {'key': key, 'name': key, 'quality': 'local', 'files': {},
                                          'language': {'code': language, 'name_english': language, 'name_native': language}})
-            self.refresh_library()
-            self.refresh_languages()
+            self.voice_downloaded(key, voice)
         except Exception as error:
-            messagebox.showerror('Import voice', str(error))
+            show_error(self.root, error, 'Import voice')
 
     def build_languages(self):
         page = self.pages['Languages']
@@ -343,7 +407,10 @@ class Panel:
             self.language_rows.insert('', 'end', text=label(language), values=(voice,))
 
     def build_settings(self):
-        page = self.pages['Settings']
+        from .scrolling import ScrollArea
+        self.settings_scroll = ScrollArea(self.pages['Settings'])
+        self.settings_scroll.pack(fill='both', expand=True)
+        page = self.settings_scroll.inner
         frame = self.card(page, 'Install into a Wine prefix or Windows')
         if os.name != 'nt':
             ttk.Label(frame, text='Wine prefix', style='Card.TLabel').pack(anchor='w')
@@ -354,7 +421,7 @@ class Panel:
             row = ttk.Frame(frame, style='Card.TFrame'); row.pack(fill='x', pady=6)
             ttk.Entry(row, textvariable=self.wine).pack(side='left', fill='x', expand=True)
             ttk.Button(row, text='Choose…', command=lambda: self.wine.set(filedialog.askopenfilename())).pack(side='right')
-        ttk.Label(frame, text='Close applications before installation. Original speech registry settings and replaced DLLs are backed up. Native Windows SAPI is never replaced; Windows voice installation requires administrator rights.',
+        ttk.Label(frame, text='Close applications before installation. Original speech registry settings are backed up. Wine compatibility DLLs stay in the Akousousin folder; system SAPI DLLs are untouched. Windows voice installation requires administrator rights.',
                   wraplength=780, style='Card.TLabel').pack(anchor='w', pady=12)
         ttk.Button(frame, text='Install / apply voice registration', style='Accent.TButton', command=self.install).pack(side='left', padx=4)
         ttk.Button(frame, text='Uninstall & restore', command=self.uninstall).pack(side='left', padx=4)
@@ -380,40 +447,42 @@ class Panel:
         ttk.Button(frame, text='Save settings', command=self.save).pack(anchor='e')
         ttk.Button(page, text='Open service log', command=lambda: webbrowser.open(self.service.log.as_uri())).pack(anchor='w')
 
-    def build_selection(self):
-        frame = self.card(self.pages['Read selection'], 'Read selected text / Stop')
-        ttk.Label(frame, text='Highlight text, then trigger the shortcut to read it. Trigger it again to stop only this reading. '
-                  'Your shared voice, language, speed and volume preferences apply.',
-                  wraplength=760, style='Card.TLabel').pack(anchor='w', pady=8)
-        ttk.Label(frame, text='First install Speech Dispatcher support in Settings. Wayland requires wl-clipboard; '
-                  'X11 requires xclip. Applications must expose their selection. If an app does not, copy text '
-                  'and use the separate Read clipboard / Stop action instead.',
-                  wraplength=760, style='Card.TLabel').pack(anchor='w', pady=8)
-        ttk.Label(frame, text='Install the action below, then open Plasma System Settings → Keyboard → Shortcuts. '
-                  'Add the Akousousin Read selected text / Stop application and choose a free shortcut, '
-                  'such as Alt+Esc. Other desktops can bind the same launcher command.',
-                  wraplength=760, style='Card.TLabel').pack(anchor='w', pady=8)
-        def install():
-            from .selection import install_action
-            self.worker(lambda: install_action(self.path),
-                        lambda _: self.status.set('Selection action installed. Assign its shortcut in desktop settings.'))
-        ttk.Button(frame, text='Install shortcut action', command=install).pack(anchor='w', pady=8)
-        ttk.Button(frame, text='Open Plasma shortcuts', command=self.open_shortcuts).pack(anchor='w', pady=8)
-
-    def open_shortcuts(self):
-        tool = shutil.which('systemsettings') or shutil.which('systemsettings6')
-        if not tool:
-            messagebox.showinfo('Desktop shortcuts', 'Open your desktop shortcut settings and add the Akousousin selection action.')
-            return
-        from .selection import host_environment
-        subprocess.Popen([tool, 'kcm_keys'], env=host_environment())
-
     def build_updates(self):
         frame = self.card(self.pages['Updates'], 'Application updates')
         ttk.Label(frame, text=f'Installed version: {__version__}', style='Card.TLabel').pack(anchor='w')
         self.update_status = tk.StringVar(value='Check GitHub for a newer release, including betas.')
         ttk.Label(frame, textvariable=self.update_status, wraplength=760, style='Card.TLabel').pack(anchor='w', pady=12)
         ttk.Button(frame, text='Check for updates', command=self.check_updates).pack(anchor='w')
+
+    def build_selection(self):
+        from .scrolling import ScrollArea
+        self.reading_scroll = ScrollArea(self.pages['Read selection'])
+        self.reading_scroll.pack(fill='both', expand=True)
+        frame = self.card(self.reading_scroll.inner, 'Read selected text / Stop')
+        ttk.Label(frame, text='Highlight text in an application, then press the global shortcut to read it. Press it again to stop only this reading. Speech Dispatcher support must be installed in Settings.',
+                  style='Card.TLabel', wraplength=760).pack(anchor='w', pady=8)
+        ttk.Label(frame, text='Enable the reading shortcuts below and approve them in KDE. Suggested keys: Ctrl+Alt+R for selected text and Ctrl+Alt+Shift+R for copied text. KDE lets you change them or resolve conflicts. No microphone or keyboard-injection permission is needed.',
+                  style='Card.TLabel', wraplength=760).pack(anchor='w', pady=8)
+        self.reading_shortcuts = tk.StringVar(value='Reading shortcuts are disabled')
+        self.reading_state = tk.StringVar(value='Ready to read selected text')
+        def command(name, **options):
+            self.worker(lambda: runtime.call(self.path, {'command': name, **options}),
+                        lambda result: self.reading_state.set(result['state']))
+        row = ttk.Frame(frame, style='Card.TFrame'); row.pack(fill='x', pady=8)
+        ttk.Button(row, text='Enable global reading shortcuts', command=lambda: command('selection-shortcuts-enable')).pack(side='left', padx=3)
+        ttk.Button(row, text='Disable shortcuts', command=lambda: command('selection-shortcuts-disable')).pack(side='left', padx=3)
+        ttk.Label(frame, textvariable=self.reading_shortcuts, style='Card.TLabel', wraplength=760).pack(anchor='w', pady=8)
+        row = ttk.Frame(frame, style='Card.TFrame'); row.pack(fill='x', pady=8)
+        ttk.Button(row, text='Read selected text / Stop', command=lambda: command('selection-toggle')).pack(side='left', padx=3)
+        ttk.Button(row, text='Read copied text / Stop', command=lambda: command('selection-toggle', clipboard=True)).pack(side='left', padx=3)
+        ttk.Button(row, text='Stop reading', command=lambda: command('selection-stop')).pack(side='left', padx=3)
+        ttk.Label(frame, textvariable=self.reading_state, style='Card.TLabel', wraplength=760).pack(anchor='w', pady=8)
+        ttk.Label(frame, text='Wayland needs wl-clipboard; X11 needs xclip. Some Wine applications do not publish selected text: copy it and use Read copied text explicitly. AKS does not silently read a stale clipboard.',
+                  style='Card.TLabel', wraplength=760).pack(anchor='w', pady=8)
+        def install_action():
+            from .selection import install_action
+            self.worker(lambda: install_action(self.path), lambda _: self.status.set('Desktop action installed. Assign its shortcut in Plasma Keyboard settings.'))
+        ttk.Button(frame, text='Install optional desktop shortcut action', command=install_action).pack(anchor='w', pady=8)
 
     def check_updates(self):
         if self.busy:
@@ -452,7 +521,7 @@ class Panel:
             self.status.set('Preferences saved. They apply to new speech.')
             return True
         except (ValueError, tk.TclError) as error:
-            messagebox.showerror('Preferences', str(error))
+            show_error(self.root, error, 'Preferences')
             return False
 
     def dispatcher_install(self, remove):
@@ -472,7 +541,7 @@ class Panel:
         self.worker(lambda: Installer(resources.root(), prefix, wine).install(self.config, self.path), installed)
 
     def uninstall(self):
-        if not messagebox.askyesno('Uninstall Akousousin', 'Restore original DLLs and speech registration in this installation?'):
+        if not messagebox.askyesno('Uninstall Akousousin', 'Remove Akousousin’s private DLLs and restore speech registration in this installation?'):
             return
         prefix, wine = self.config['wine_prefix'] or None, self.config['wine'] or None
         self.worker(lambda: Installer(resources.root(), prefix, wine).uninstall(),

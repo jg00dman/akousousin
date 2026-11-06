@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """Akousousin control panel / installer entry point."""
 import argparse
 import multiprocessing
@@ -10,7 +12,12 @@ from .install import Installer
 
 def main():
     multiprocessing.freeze_support()
-    parser = argparse.ArgumentParser(description='Akousousin — Neural Voice Engine. SAPI TTS via Piper; experimental Speech Dispatcher; Whisper planned.')
+    if len(sys.argv) > 1 and sys.argv[1] == '--whisper':
+        from akousousin_backend.recognition import main as recognition_main
+        sys.argv = [sys.argv[0], *sys.argv[2:]]
+        recognition_main()
+        return
+    parser = argparse.ArgumentParser(description='Akousousin — Neural Voice Engine. SAPI TTS via Piper; experimental Speech Dispatcher and local Whisper dictation.')
     parser.add_argument('--wine-prefix', type=Path, help='Install into this initialized 64-bit Wine prefix')
     parser.add_argument('--wine', help='Wine executable or AppImage used by this prefix')
     parser.add_argument('--install', action='store_true', help='Install into native Windows')
@@ -29,11 +36,18 @@ def main():
     parser.add_argument('--install-speech-dispatcher', action='store_true', help='Register the output module in your user Speech Dispatcher configuration')
     parser.add_argument('--uninstall-speech-dispatcher', action='store_true', help='Remove your user output-module registration')
     parser.add_argument('--speech-dispatcher', action='store_true', help='Run a Speech Dispatcher output module on stdin/stdout')
-    selection_group = parser.add_mutually_exclusive_group()
-    selection_group.add_argument('--read-selection', action='store_true', help='Read highlighted Linux desktop text; repeat to stop')
-    selection_group.add_argument('--read-clipboard', action='store_true', help='Read copied text; repeat to stop')
-    parser.add_argument('--install-selection-action', action='store_true', help='Install a desktop action for global shortcut binding')
+    reading = parser.add_mutually_exclusive_group()
+    reading.add_argument('--read-selection', action='store_true', help='Read highlighted Linux desktop text; repeat to stop')
+    reading.add_argument('--read-clipboard', action='store_true', help='Read copied text; repeat to stop')
+    reading.add_argument('--stop-reading', action='store_true', help='Stop only Akousousin selection reading')
+    reading.add_argument('--selection-status', action='store_true', help='Show selection reading and shortcut status')
+    parser.add_argument('--install-selection-action', action='store_true', help='Install a desktop action for manual global-shortcut binding')
+    parser.add_argument('--dictation-toggle', action='store_true', help='Toggle enabled desktop dictation')
+    parser.add_argument('--dictation-cancel', action='store_true', help='Cancel capture, recognition and pending insertion')
+    parser.add_argument('--dictation-status', action='store_true', help='Show shared recognition state and latest transcripts')
     parser.add_argument('--status', action='store_true')
+    parser.add_argument('--download-starter-voice', action='store_true',
+                        help='Download the reviewed starter voice once into the persistent voice library')
     parser.add_argument('--quit', action='store_true', help='Stop Piper and quit Akousousin')
     parser.add_argument('--controller', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--panel', action='store_true', help=argparse.SUPPRESS)
@@ -47,17 +61,9 @@ def main():
     if args.protocol_version:
         print('2')
         return
-    if args.read_selection or args.read_clipboard:
-        from .selection import toggle, notify
-        try:
-            print(toggle(args.settings, clipboard=args.read_clipboard))
-        except Exception as error:
-            notify(str(error))
-            raise
-        return
     if args.install_selection_action:
         from .selection import install_action
-        print(f'Installed {install_action(args.settings)}. Bind it in Plasma System Settings → Keyboard → Shortcuts.')
+        print(install_action(args.settings))
         return
     if args.serve:
         from .backend import serve
@@ -73,6 +79,11 @@ def main():
         Module(args.settings).run()
         return
     config = resources.bootstrap(args.settings)
+    if args.download_starter_voice:
+        import json
+        config = resources.download_starter(args.settings)
+        print(json.dumps(config['voices'][resources.STARTER]))
+        return
     if args.refresh_registrations:
         from .updates import refresh_registrations
         refresh_registrations(args.settings)
@@ -114,7 +125,13 @@ def main():
     import json
     import os
     request = None
-    if args.api_start:
+    if args.read_selection or args.read_clipboard or args.stop_reading or args.selection_status:
+        request = {'command': 'selection-stop' if args.stop_reading else 'selection-status' if args.selection_status else 'selection-toggle'}
+        if args.read_selection or args.read_clipboard:
+            request['clipboard'] = args.read_clipboard
+    elif args.dictation_toggle or args.dictation_cancel or args.dictation_status:
+        request = {'command': 'stt-toggle' if args.dictation_toggle else 'stt-cancel' if args.dictation_cancel else 'stt-status'}
+    elif args.api_start:
         request = {'command': 'wake'}
     elif args.acquire_session:
         request = {'command': 'acquire', 'session': args.acquire_session, 'pid': args.owner_pid or os.getppid()}
@@ -126,13 +143,15 @@ def main():
     elif not args.panel and not args.smoke_test:
         request = {'command': 'configure', 'independent': not args.configure}
     if request:
-        response = runtime.call(args.settings, request, launch=request['command'] not in ('release', 'stop', 'quit', 'status'))
+        response = runtime.call(args.settings, request, launch=request['command'] not in ('release', 'stop', 'quit', 'status', 'stt-status', 'stt-cancel', 'selection-status', 'selection-stop'))
         print(json.dumps(response or {'running': False, 'sessions': 0}))
         return
     runtime.initialize()
     from .panel import Panel
     panel = Panel(args.settings)
     if args.smoke_test:
+        panel.show('Voice Input')
+        assert panel.voice_input.state.get()
         panel.root.after(1500, panel.root.destroy)
     panel.root.mainloop()
 

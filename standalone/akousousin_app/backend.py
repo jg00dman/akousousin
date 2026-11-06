@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """Multi-voice routing around the existing bounded Piper worker."""
 import io
 import json
@@ -69,6 +71,12 @@ class Router:
         self.control_lock = threading.Lock()
         self.waiters = {}
         self.slots = threading.BoundedSemaphore(3)
+        self.speaking_until = 0
+        self.processing = False
+
+    def speaking(self):
+        with self.control_lock:
+            return self.processing or time.monotonic() < self.speaking_until
 
     def expire(self, now=None):
         # Do not take the synthesis lock on every event-loop tick: dispatching
@@ -151,6 +159,7 @@ class Router:
             raise BlockingIOError('Piper queue is full')
         cancelled = threading.Event()
         acquired = False
+        audio_duration = 0
         try:
             with self.control_lock:
                 if identifier and (identifier in self.waiters or identifier == self.active_request):
@@ -169,6 +178,7 @@ class Router:
                     self.waiters.pop(identifier, None)
                 self.active_request = identifier
                 self.cancelled = cancelled
+                self.processing = True
             if cancelled.is_set():
                 raise InterruptedError('Speech cancelled')
             config = settings.load(self.path)
@@ -178,13 +188,19 @@ class Router:
                        'noise_w_scale': config['noise_w_scale']}
             audio = self.synth.synthesize(options, self.cancelled)
             rate = request.get('sample_rate', self.synth.rate)
-            return resample(audio, rate)
+            audio = resample(audio, rate)
+            with wave.open(io.BytesIO(audio), 'rb') as wav:
+                audio_duration = wav.getnframes() / wav.getframerate()
+            return audio
         finally:
             with self.control_lock:
                 if identifier and self.waiters.get(identifier) is cancelled:
                     self.waiters.pop(identifier)
                 if acquired:
                     self.active_request = None
+                    self.processing = False
+                    if audio_duration:
+                        self.speaking_until = max(self.speaking_until, time.monotonic()) + audio_duration + .5
             if acquired:
                 self.last_activity = time.monotonic()
                 self.lock.release()
@@ -198,7 +214,7 @@ def application(router, instance, control="", stopping=None):
             if env['PATH_INFO'] == '/health' and env['REQUEST_METHOD'] == 'GET':
                 ready = router.synth is not None and router.synth.process is not None and router.synth.process.is_alive()
                 body = json.dumps({'service': 'akousousin-piper', 'instance': instance, 'ready': True, 'model_loaded': ready,
-                                   'settings': str(router.path), 'voice': router.voice}).encode()
+                                   'settings': str(router.path), 'voice': router.voice, 'speaking': router.speaking()}).encode()
             elif env['PATH_INFO'] == '/shutdown' and env['REQUEST_METHOD'] == 'POST':
                 if not control or not hmac.compare_digest(env.get('HTTP_X_AKOUSOUSIN_CONTROL', ''), control):
                     status, body = '403 Forbidden', b'{"error":"Not owned by this panel"}'

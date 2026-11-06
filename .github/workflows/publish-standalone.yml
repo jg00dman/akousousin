@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 name: Publish tested standalone Akousousin
 on:
   push:
@@ -32,7 +34,7 @@ jobs:
           import json, os
           run = json.load(open('run.json'))
           jobs = json.load(open('jobs.json'))['jobs']
-          assert run['head_branch'] in ('main', 'codex/standalone-control-panel', 'codex/control-panel-updates', 'codex/read-selection')
+          assert run['head_branch'] in ('main', 'codex/standalone-control-panel', 'codex/control-panel-updates')
           assert run['path'] == '.github/workflows/standalone.yml'
           assert run['status'] == 'completed'
           for name in ('engine', 'package (ubuntu-22.04)', 'package (windows-2022)'):

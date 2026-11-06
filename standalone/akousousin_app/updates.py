@@ -1,5 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """User-requested release checks and verified Linux AppImage replacement."""
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -13,6 +14,7 @@ import urllib.request
 from packaging.version import InvalidVersion, Version
 
 from . import __version__, resources, runtime, settings
+from akousousin_backend.downloads import Transfer
 
 REPOSITORY = 'jg00dman/akousousin'
 API = f'https://api.github.com/repos/{REPOSITORY}/releases?per_page=100'
@@ -68,21 +70,17 @@ def download(update, directory):
     """Stage on the target filesystem; incomplete/bad downloads never replace it."""
     descriptor, filename = tempfile.mkstemp(prefix='.akousousin-update-', dir=directory)
     target = Path(filename)
-    digest, size = hashlib.sha256(), 0
     try:
-        with os.fdopen(descriptor, 'wb') as output:
+        os.close(descriptor)
+        with Transfer('Application update') as transfer:
             request = urllib.request.Request(update['url'], headers={'User-Agent': 'Akousousin-update'})
-            with urllib.request.urlopen(request, timeout=30) as response:
-                while block := response.read(1024 * 1024):
-                    size += len(block)
-                    if size > update['size'] or size > MAX_IMAGE:
-                        raise ValueError('Update download exceeds its expected size')
-                    digest.update(block)
-                    output.write(block)
-            output.flush()
-            os.fsync(output.fileno())
-        if size != update['size'] or digest.hexdigest() != update['sha256']:
-            raise ValueError('Update checksum or size does not match the published asset')
+            if not 0 < update['size'] <= MAX_IMAGE:
+                raise ValueError('Invalid update size')
+            transfer.phase('Downloading', total=update['size'])
+            transfer.fetch(request, target, size=update['size'], sha256=update['sha256'])
+            transfer.phase('Verifying update')
+            with target.open('rb') as output:
+                os.fsync(output.fileno())
         target.chmod(0o755)
         return target
     except BaseException:
@@ -122,7 +120,7 @@ def _install(update, path, target):
     env = environment()
     try:
         shutil.copy2(target, backup)
-        runtime.call(path, {'command': 'quit'}, launch=False)
+        runtime.call(path, {'command': 'quit', 'update_pid': os.getpid()}, launch=False)
         stopped = True
         deadline = time.monotonic() + 10
         while runtime.call(path, {'command': 'status'}, launch=False) is not None:
@@ -135,7 +133,7 @@ def _install(update, path, target):
                        env=env, capture_output=True, text=True, check=True, timeout=180)
         # A native client may have woken the old resident during replacement.
         # After the path swap, every subsequent cold start loads the new image.
-        runtime.call(path, {'command': 'quit'}, launch=False)
+        runtime.call(path, {'command': 'quit', 'update_pid': os.getpid()}, launch=False)
         deadline = time.monotonic() + 10
         while runtime.call(path, {'command': 'status'}, launch=False) is not None:
             if time.monotonic() >= deadline:

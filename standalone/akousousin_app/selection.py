@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """Selection reading with a private toggle socket and a dedicated SSIP client."""
 from collections import deque
 import os
@@ -17,14 +19,7 @@ MAX_TEXT = 1024 * 1024
 
 
 def host_environment():
-    env = runtime.environment()
-    if 'LD_LIBRARY_PATH_ORIG' in env:
-        env['LD_LIBRARY_PATH'] = env['LD_LIBRARY_PATH_ORIG']
-    else:
-        env.pop('LD_LIBRARY_PATH', None)
-    env.pop('QT_PLUGIN_PATH', None)
-    env.pop('QT_QPA_PLATFORM_PLUGIN_PATH', None)
-    return env
+    return runtime.host_environment()
 
 
 def selected_text(clipboard=False):
@@ -101,7 +96,7 @@ class SpeechClient:
             raise InterruptedError('Reading stopped')
         self.connection.sendall(text.encode('utf-8') + b'\r\n')
         while True:
-            code, lines = self.response()
+            code, lines = self.response(cancelled)
             if code >= 700:
                 self.events.append((code, lines))
             elif 200 <= code < 300:
@@ -159,6 +154,9 @@ def encode_text(text):
 
 
 def speak(text, cancelled, path):
+    config = settings.load(path)
+    if not config['voices']:
+        raise RuntimeError('Download or import a voice in Voice library before reading selected text.')
     address = dispatcher_socket()
     connection = socket.socket(socket.AF_UNIX)
     connection.settimeout(5)
@@ -172,12 +170,12 @@ def speak(text, cancelled, path):
             subprocess.run([tool, '--spawn', '--socket-path', address], env=host_environment(),
                            capture_output=True, check=True, timeout=10)
             connection.connect(address)
-        SpeechClient(connection).read(text, cancelled, settings.load(path)['voice'])
+        SpeechClient(connection).read(text, cancelled, config['voice'])
     finally:
         connection.close()
 
 
-def toggle(path, clipboard=False, reader=selected_text, speaker=speak):
+def toggle(path, clipboard=False, reader=selected_text, speaker=speak, cancelled=None):
     """One foreground reader per profile; repeat invocations request stop only."""
     if os.name == 'nt':
         raise RuntimeError('Selection reading is currently for Linux desktops.')
@@ -201,7 +199,8 @@ def toggle(path, clipboard=False, reader=selected_text, speaker=speak):
                     time.sleep(.05)
             raise RuntimeError('Selection reader is finishing; try the shortcut again.')
         control.unlink(missing_ok=True)
-        cancelled, errors = threading.Event(), []
+        cancelled = cancelled if cancelled is not None else threading.Event()
+        errors = []
         def read():
             try:
                 text = reader(clipboard)
@@ -229,7 +228,8 @@ def toggle(path, clipboard=False, reader=selected_text, speaker=speak):
                             cancelled.set()
                             connection.sendall(b'OK\n')
             finally:
-                cancelled.set()
+                if worker.is_alive():
+                    cancelled.set()
                 worker.join()
                 control.unlink(missing_ok=True)
         if errors:
@@ -243,13 +243,9 @@ def install_action(path):
     def command(flag):
         arguments = ['/usr/bin/env', 'APPIMAGE_EXTRACT_AND_RUN=1', 'PYINSTALLER_RESET_ENVIRONMENT=1',
                      *runtime.command(flag, '--settings', str(Path(path).resolve()))]
-        if any(any(c in arg for c in '\r\n\0') for arg in arguments):
-            raise ValueError('Unsupported newline or control character in the launcher path')
-        # Desktop Exec syntax is not shell syntax; quote every argument and
-        # escape desktop-entry field codes, rather than interpolating text.
-        return ' '.join('"' + arg.replace('\\', '\\\\\\\\').replace('"', '\\\\"').replace('`', '\\\\`')
-                        .replace('$', '\\\\$').replace('%', '%%') + '"'
-                        for arg in arguments)
+        from .desktop_identity import desktop_exec
+        return desktop_exec(arguments)
+
     directory = Path(os.environ.get('XDG_DATA_HOME', Path.home() / '.local/share')) / 'applications'
     directory.mkdir(parents=True, exist_ok=True)
     target = directory / 'akousousin-read-selection.desktop'

@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """Build the independent panel/service. Reuse a published Wine SAPI DLL, never compile Wine."""
 import ast
+import argparse
 import hashlib
 import importlib.metadata
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -15,12 +19,20 @@ import tempfile
 import urllib.request
 import zipfile
 
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--bundle-starter-voice', action='store_true',
+                    help='Include the reviewed LJSpeech voice for offline first use (default: download on demand)')
+options = parser.parse_args()
+
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / 'standalone-dist'
 BUILD = ROOT / 'build/standalone-package'
 RESOURCE = BUILD / 'resources'
 SOURCE = OUT / 'sources'
 CACHE = BUILD / 'downloads'
+for stage in (RESOURCE, BUILD / 'Akousousin', BUILD / 'AppDir'):
+    if stage.exists():
+        shutil.rmtree(stage)
 for directory in (OUT, RESOURCE, SOURCE, CACHE):
     directory.mkdir(parents=True, exist_ok=True)
 
@@ -45,10 +57,12 @@ shutil.copytree(ROOT / 'standalone/resources', RESOURCE, dirs_exist_ok=True)
 # The user explicitly approved this one reviewed starter voice for redistribution.
 # Catalogue downloads preserve its upstream model card and MIT/public-domain provenance.
 from akousousin_app import catalogue, __version__
-with tempfile.TemporaryDirectory(dir=BUILD) as temporary:
-    entry = catalogue.catalogue(ROOT / 'standalone/resources')['en_US-ljspeech-medium']
-    voice = catalogue.install(entry, Path(temporary), reviewed=True)
-    shutil.copytree(Path(voice['path']).parent, RESOURCE / 'voices', dirs_exist_ok=True)
+from akousousin_app.desktop_identity import APP_ID
+if options.bundle_starter_voice:
+    with tempfile.TemporaryDirectory(dir=BUILD) as temporary:
+        entry = catalogue.catalogue(ROOT / 'standalone/resources')['en_US-ljspeech-medium']
+        voice = catalogue.install(entry, Path(temporary), reviewed=True, publish=False)
+        shutil.copytree(Path(voice['path']).parent, RESOURCE / 'voices', dirs_exist_ok=True)
 
 if sys.platform != 'win32':
     repository = os.environ.get('GITHUB_REPOSITORY', 'jg00dman/akousousin')
@@ -78,12 +92,17 @@ icon.save(RESOURCE / 'akousousin.png')
 
 commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
 (RESOURCE / 'build.json').write_text(json.dumps({'build': commit[:12] + '-' + sys.platform,
-                                               'commit': commit, 'version': __version__}, indent=2))
+                                               'commit': commit, 'version': __version__,
+                                               'starter_voice': 'en_US-ljspeech-medium' if options.bundle_starter_voice else None}, indent=2))
+recognition_options = []
+if importlib.util.find_spec('faster_whisper') is not None:
+    for dependency in ('faster_whisper', 'ctranslate2', 'tokenizers', 'av'):
+        recognition_options += ['--collect-all', dependency]
 subprocess.run([sys.executable, '-m', 'PyInstaller', '--clean', '--noconfirm', '--onedir', '--name', 'akousousin',
                 '--distpath', str(BUILD / 'frozen'), '--workpath', str(BUILD / 'freeze'), '--specpath', str(BUILD),
                 '--paths', str(ROOT / 'standalone'), '--paths', str(ROOT / 'backend'),
                 '--exclude-module', 'readline', '--collect-all', 'piper', '--collect-all', 'numpy',
-                '--collect-all', 'onnxruntime', str(ROOT / 'standalone/entrypoint.py')], check=True)
+                '--collect-all', 'onnxruntime', *recognition_options, str(ROOT / 'standalone/entrypoint.py')], check=True)
 
 PACKAGE = BUILD / 'Akousousin'
 shutil.copytree(BUILD / 'frozen/akousousin', PACKAGE, dirs_exist_ok=True)
@@ -91,8 +110,9 @@ shutil.copytree(RESOURCE, PACKAGE / 'resources', dirs_exist_ok=True)
 shutil.copy(ROOT / 'standalone/SPEECH-DISPATCHER.md', PACKAGE / 'SPEECH-DISPATCHER.md')
 notices = PACKAGE / 'licenses'
 notices.mkdir(exist_ok=True)
-shutil.copy(ROOT / 'LICENSE', notices / 'Engine-LGPL-2.1.txt')
-shutil.copy(ROOT / 'backend/LICENSE', notices / 'Panel-and-service-GPL-3.0.txt')
+shutil.copy(ROOT / 'LICENSES/LGPL-2.1-or-later.txt', notices / 'Engine-LGPL-2.1.txt')
+shutil.copy(ROOT / 'LICENSE', notices / 'Akousousin-GPL-3.0.txt')
+shutil.copy(ROOT / 'LICENSING.md', notices / 'Akousousin-LICENSING.md')
 fetch(f'https://raw.githubusercontent.com/python/cpython/v{platform.python_version()}/LICENSE',
       notices / 'Python-LICENSE.txt')
 # Include all distribution licence/notice files; PyInstaller also collects package data notices.
@@ -142,9 +162,12 @@ for sample in (PACKAGE / '_internal/onnxruntime/datasets').glob('*.onnx'):
 # weights external in this beta, including those auxiliary language resources.
 for optional in ('piper/tashkeel/model.onnx', 'piper/hebrew/nakdimon.onnx'):
     (PACKAGE / '_internal' / optional).unlink(missing_ok=True)
-models = [file.relative_to(PACKAGE).as_posix() for file in PACKAGE.rglob('*.onnx')]
-if models != ['resources/voices/en_US-ljspeech-medium.onnx']:
-    raise RuntimeError('Only the explicitly approved LJSpeech starter voice may be bundled')
+models = [file.relative_to(PACKAGE).as_posix() for file in PACKAGE.rglob('*.onnx')
+          if file.relative_to(PACKAGE).as_posix() != '_internal/faster_whisper/assets/silero_vad_v6.onnx']
+expected_models = ['resources/voices/en_US-ljspeech-medium.onnx'] if options.bundle_starter_voice else []
+if sorted(models) != expected_models:
+    raise RuntimeError('Packaged voice weights differ from the selected build option')
+print('Starter voice: ' + ('included for offline use' if options.bundle_starter_voice else 'download on demand'), flush=True)
 if sys.platform == 'win32':
     with zipfile.ZipFile(OUT / 'Akousousin-Windows-x86_64.zip', 'w', zipfile.ZIP_DEFLATED) as archive:
         for file in PACKAGE.rglob('*'):
@@ -155,7 +178,8 @@ else:
     shutil.copytree(PACKAGE, app / 'usr/lib/akousousin', dirs_exist_ok=True)
     shutil.copy(ROOT / 'standalone/AppRun', app / 'AppRun')
     (app / 'AppRun').chmod(0o755)
-    (app / 'akousousin.desktop').write_text('[Desktop Entry]\nType=Application\nName=Akousousin — Neural Voice Engine\nComment=Microsoft SAPI voice engine; Speech Dispatcher and Whisper planned\nExec=AppRun\nIcon=akousousin\nCategories=AudioVideo;Accessibility;\nTerminal=false\n')
+    (app / 'akousousin.desktop').unlink(missing_ok=True)
+    (app / (APP_ID + '.desktop')).write_text('[Desktop Entry]\nType=Application\nName=Akousousin — Neural Voice Engine\nComment=Local neural speech and experimental Whisper dictation\nExec=AppRun\nIcon=akousousin\nCategories=AudioVideo;Accessibility;\nTerminal=false\n')
     (app / 'akousousin.svg').write_text('<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"><rect width="128" height="128" rx="24" fill="#087e82"/><path d="M30 52v24m17-40v56m17-66v76m17-62v48m17-32v16" stroke="white" stroke-width="7" stroke-linecap="round"/></svg>')
     runtime = CACHE / 'appimage-runtime'
     fetch('https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64', runtime,

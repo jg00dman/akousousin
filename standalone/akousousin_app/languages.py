@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """Readable names from the existing catalogue, retaining codes for unlisted models."""
 from functools import lru_cache
 from . import catalogue, resources

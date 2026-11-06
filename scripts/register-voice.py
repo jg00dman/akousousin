@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """Generate opt-in Wine voice registration. Does not modify a Wine prefix."""
 import argparse
 import json

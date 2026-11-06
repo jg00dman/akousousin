@@ -1,10 +1,16 @@
+<!--
+SPDX-License-Identifier: GPL-3.0-or-later
+SPDX-FileCopyrightText: 2026 John Goodman
+-->
+
 # API coverage and implementation status
 
-Applies to the published **0.6.0b2 beta**, assessed on 5 November 2026.
-[Release and downloads](https://github.com/jg00dman/akousousin/releases/tag/standalone-beta-0.6.0b2-41949762674-1).
+Applies to main's **0.6.0b3 beta**, assessed on 5 November 2026.
+[Releases and downloads](https://github.com/jg00dman/akousousin/releases).
 
 **Core speech output works through SAPI and Speech Dispatcher; neither is a
-complete implementation of its wider API. Recognition is outside this beta.**
+complete implementation of its wider API. Linux Whisper voice input is experimental.
+It does not implement SAPI recognition.**
 There is no defensible overall coverage percentage: SAPI includes recognition and
 many runtime interfaces, and our Speech Dispatcher component is an output module,
 not a replacement for the daemon or its client API. Feature coverage follows.
@@ -34,7 +40,7 @@ all speech fragment actions or the rest of SAPI.
 | Word/sentence/bookmark/phoneme/viseme events | Not implemented by the engine | No engine `AddEvents` output. Host-generated lifecycle notifications do not establish accurate word timing or highlighting. |
 | Pitch, pronunciation/phoneme input, spelling fragment actions, bookmarks and custom lexicons | Not implemented | Engine accepts speak/silence actions; other fragment actions return `E_NOTIMPL`. |
 | Sample-by-sample synthesis streaming | Not implemented | Short text requests lower first-audio latency; each backend response is a complete WAV. |
-| Recognition (`ISpRecognizer`, `ISpRecoContext`, grammars and recognition events) | Not implemented in this beta | Whisper and recognition integration are separately scoped. |
+| Recognition (`ISpRecognizer`, `ISpRecoContext`, grammars and recognition events) | Not implemented in this beta | Local Whisper dictation is separate from the unimplemented SAPI recognition interfaces. |
 
 Source: [engine/piper.c](engine/piper.c), [COM support](engine/com.c),
 [integration tests](tests/test_integration.py),
@@ -100,3 +106,45 @@ percentages. Generated WAV/PCM checks do not establish audible desktop playback.
 See the [desktop checklist](standalone/SPEECH-DISPATCHER.md#desktop-acceptance-checklist)
 for the remaining interaction/listening checks. Development branches may contain
 additional work; those features are not implied by this beta's coverage.
+
+## Experimental Linux voice input
+
+| Capability | Coverage and limits |
+| --- | --- |
+| Local recognition | faster-whisper, multilingual Small, CPU int8, two inference threads and neural VAD. Turbo can be imported; missing/broken Turbo falls back to Small when available. |
+| Persistent models | First activation can download pinned Small; imported/downloaded weights remain in the XDG-aware `~/.local/share/Akousousin/models/whisper/` cache. AppImage updates do not bundle or remove those weights. |
+| Language selection | Automatic detection with the last detected language displayed; searchable/scrollable explicit language selection locks recognition. Accuracy varies; no guarantee of reliable recognition for every supported language. |
+| Microphone capture | PulseAudio-compatible `parec` capture through PipeWire/PulseAudio, named input selector and system default. Native Windows microphone capture is not implemented. |
+| Model and recording controls | Enable/Disable voice input manages recognition and model memory. Recording and an already-approved shortcut can enable/load it again. Disable retains downloaded files; idle unloading retains enabled state. |
+| KDE Wayland dictation | GlobalShortcuts and keyboard-only RemoteDesktop portals, plus a temporary KWin focus observer. Tray Start Dictation can initiate consent. Other compositors are not supported by this adapter. |
+| Insertion and focus | Unicode key events without automatic Enter/Tab or clipboard paste. Focus changes retain transcripts; a scheduling race may leave partial insertion. Individual fields/cursor positions inside one window are not tracked. |
+| Cancellation and Quit | Bounded audio queue, cancellable recognition/download worker, and capture cleanup. Normal Quit closes owned control panels, speech/input workers and portal sessions. The updater temporarily preserves only its own panel to finish replacement. |
+| Ready cue and UI | Two 300 Hz tones, a separate sound test, wheel scrolling and scrollbars. Cue amplitude is about +10.3 dB over the earlier trial, limited below PCM clipping. |
+| Spoken punctuation and language tagging | Whisper may infer punctuation. Spoken phrases such as “question mark” can remain literal; command interpretation and word-processor proofing-language tags are not implemented. |
+
+The user confirmed microphone selection, the ten-second recording button and
+KDE Wayland insertion into Kate and a chat text box. A valid launcher was initially
+missing from the running portal's view; restarting `xdg-desktop-portal.service`
+resolved it. The controller now installs identity earlier and retries transient
+lookup failures. The ready cue was audible after the earlier volume adjustment;
+the latest 300 Hz/max-clean-level cue still needs a listening check.
+
+French was recognized in a reported test; Hebrew and Greek were not recognized
+in that test. These observations are not a language-conformance assessment.
+Push-to-talk, non-Latin insertion, focus changes, lock/unlock, speech feedback,
+physical device failures and fifth-generation i5 performance need broader desktop
+testing. See [dictation acceptance details](recognition/DICTATION.md).
+
+## Private Wine SAPI compatibility installation
+
+For supported Wine 11.21 prefixes requiring the enumeration workaround, the
+compatibility DLL lives at `C:\Program Files\Akousousin\compat\x64\sapi.dll`.
+Standard Wine SAPI COM registrations are directed to that private file with a
+prefix-level `native,builtin` override. The installer does not change prefix PATH
+or replace Wine's system SAPI files. Other SAPI-named COM servers outside the Wine
+system/AKS locations are left alone.
+
+Original COM default-value types/data and the override are recorded and restored
+on rollback/uninstall. Updates refresh an already-installed private compatibility
+DLL even when the probe succeeds. Installer file writes are restricted to the AKS
+directory. Existing system-DLL installations are outside this change's scope.

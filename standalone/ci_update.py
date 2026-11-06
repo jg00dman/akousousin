@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """Exercise verified replacement and the real packaged refresh command.
 
 The replacement payload is the just-built AppImage; no live release or user

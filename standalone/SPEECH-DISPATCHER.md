@@ -1,3 +1,8 @@
+<!--
+SPDX-License-Identifier: GPL-3.0-or-later
+SPDX-FileCopyrightText: 2026 John Goodman
+-->
+
 # Speech Dispatcher and on-demand speech: development branch
 
 This branch is experimental. Keep your working beta until its packaged CI and

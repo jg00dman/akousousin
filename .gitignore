@@ -1,6 +1,14 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 /build/
 __pycache__/
 *.wav
 *.reg
 
 /standalone-dist/
+
+/.venv-whisper/
+*.egg-info/
+/backend/build/
+
+/recognition-dist/

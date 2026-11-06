@@ -1,3 +1,8 @@
+<!--
+SPDX-License-Identifier: GPL-3.0-or-later
+SPDX-FileCopyrightText: 2026 John Goodman
+-->
+
 # Wine source for the Logos + Piper test build
 
 Repository: https://github.com/FaithLife-Community/wine

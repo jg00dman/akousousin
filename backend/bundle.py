@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """Fetch immutable voice and corresponding GPL sources; package outside Wine."""
 import ast
 import hashlib
@@ -38,6 +40,7 @@ fetch(base + '/' + model.name + '.json', Path(str(model) + '.json'))
 fetch(base + '/MODEL_CARD', modeldir / 'MODEL_CARD')
 fetch(f"{voice['repository']}/raw/{voice['revision']}/README.md", modeldir / 'UPSTREAM-README.md')
 shutil.copy(ROOT / 'voice.json', modeldir)
+shutil.copy(ROOT / 'voice.json.license', modeldir)
 shutil.copy(ROOT / 'README.md', BUNDLE)
 # Preserve dependency notices and licence texts shipped by wheel publishers.
 notices = BUNDLE / 'licenses'
@@ -51,6 +54,7 @@ for dist in importlib.metadata.distributions():
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy(source, target)
 shutil.copy(ROOT / 'LICENSE', notices / 'Akousousin-backend-GPL-3.0.txt')
+shutil.copy(ROOT.parent / 'LICENSING.md', notices / 'Akousousin-LICENSING.md')
 source = OUT / 'sources'
 source.mkdir(exist_ok=True)
 fetch('https://github.com/OHF-Voice/piper1-gpl/archive/refs/tags/v1.8.0.tar.gz', source / 'piper-1.8.0.tar.gz')
