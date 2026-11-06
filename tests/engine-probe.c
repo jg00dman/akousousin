@@ -2,7 +2,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  * SPDX-FileCopyrightText: 2026 John Goodman
  */
-/* SPDX-License-Identifier: LGPL-2.1-or-later
+/*
  * Direct engine host for error, partial-write and cancellation regression tests.
  */
 #define COBJMACROS

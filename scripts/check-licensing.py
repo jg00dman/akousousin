@@ -3,6 +3,7 @@
 # SPDX-FileCopyrightText: 2026 John Goodman
 """Audit original-source notices and the licence files in standalone packages."""
 import argparse
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -46,7 +47,8 @@ def audit_source():
         licence = 'LGPL-2.1-or-later' if file.parts[0] == 'engine' and file.suffix in ('.c', '.h') else 'GPL-3.0-or-later'
         notice = ROOT / (name + '.license') if file.suffix == '.json' else ROOT / name
         header = notice.read_text(encoding='utf-8')[:400]
-        assert 'SPDX-License-Identifier: ' + licence in header, name
+        identifiers = re.findall(r'SPDX-License-Identifier:\s*([A-Za-z0-9.+-]+)', header)
+        assert identifiers == [licence], (name, identifiers)
         assert 'SPDX-FileCopyrightText: 2026 John Goodman' in header, name
         if file.suffix == '.sh' or file.name == 'AppRun':
             assert (ROOT / name).read_bytes().startswith(b'#!'), name
