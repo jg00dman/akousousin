@@ -134,3 +134,17 @@ in that test. These observations are not a language-conformance assessment.
 Push-to-talk, non-Latin insertion, focus changes, lock/unlock, speech feedback,
 physical device failures and fifth-generation i5 performance need broader desktop
 testing. See [dictation acceptance details](recognition/DICTATION.md).
+
+## Private Wine SAPI compatibility installation
+
+For supported Wine 11.21 prefixes requiring the enumeration workaround, the
+compatibility DLL lives at `C:\Program Files\Akousousin\compat\x64\sapi.dll`.
+Standard Wine SAPI COM registrations are directed to that private file with a
+prefix-level `native,builtin` override. The installer does not change prefix PATH
+or replace Wine's system SAPI files. Other SAPI-named COM servers outside the Wine
+system/AKS locations are left alone.
+
+Original COM default-value types/data and the override are recorded and restored
+on rollback/uninstall. Updates refresh an already-installed private compatibility
+DLL even when the probe succeeds. Installer file writes are restricted to the AKS
+directory. Existing system-DLL installations are outside this change's scope.

@@ -45,7 +45,9 @@ The Linux package contains the voice engine, control panel, tray and Piper backe
 plus the reviewed `en_US-ljspeech-medium` starter voice. It does not contain Wine.
 Existing voice choices are preserved. Other models retain their own licence terms.
 The build target remains x86-64 Linux with glibc 2.35+ (Ubuntu 22.04), and existing
-working 64-bit Wine prefixes. Native Windows system SAPI is not replaced.
+working 64-bit Wine prefixes. Wine compatibility DLLs stay in the AKS directory;
+SAPI COM registrations select them without changing Wine system DLLs or PATH.
+Native Windows system SAPI is not replaced.
 
 Akousousin uses one configuration per user. On Linux, config is under
 `~/.config/Akousousin`, downloaded voices under `~/.local/share/Akousousin`,

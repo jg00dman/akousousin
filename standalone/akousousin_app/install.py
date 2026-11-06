@@ -1,7 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 John Goodman
-"""Transactional prefix-local installation. Windows system SAPI is never replaced."""
+"""Transactional private-DLL installation. Wine/Windows system DLLs stay untouched."""
+import copy
 import hashlib
+import ntpath
 import json
 import os
 from pathlib import Path
@@ -18,6 +20,15 @@ CLASS = 'HKCU\\Software\\Classes\\CLSID\\' + CLSID
 VOICES = r'HKLM\SOFTWARE\Microsoft\Speech\Voices'
 TOKEN_BASE = VOICES + r'\Tokens\Akousousin-Piper-'
 FULL_TOKEN = r'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Speech\Voices\Tokens\Akousousin-Piper-'
+SAPI_CLASSES = r'HKLM\Software\Classes\CLSID'
+PRIVATE_SAPI = r'C:\Program Files\Akousousin\compat\x64\sapi.dll'
+SAPI_REQUIRED = {'{D9F6EE60-58C9-458B-88E1-2F908FD7F87C}',
+                 '{96749377-3391-11D2-9EE3-00C04F797396}'}
+
+
+def value_selector(name):
+    return ['/ve'] if name is None else ['/v', name]
+
 
 
 def digest(path):
@@ -121,13 +132,48 @@ class Installer:
             self.current_keys[key] = destination
 
     def read_value(self, key, name):
-        result = self.execute('reg.exe', 'query', key, '/v', name, '/reg:64', check=False)
+        result = self.execute('reg.exe', 'query', key, *value_selector(name), '/reg:64', check=False)
         if result.returncode:
             return None
-        match = re.search(r'^\s*' + re.escape(name) + r'\s+(REG_SZ|REG_EXPAND_SZ)\s*(.*)$', result.stdout, re.M)
+        # /ve returns exactly one value. Its display label can be localized.
+        match = re.search(r'^[ \t]+[^\r\n]*?[ \t]+(REG_SZ|REG_EXPAND_SZ)[ \t]+([^\r\n]*)$',
+                          result.stdout, re.M)
         if not match:
-            raise RuntimeError(f'Cannot safely preserve registry value {name}')
+            raise RuntimeError(f'Cannot safely preserve registry value {name or "(Default)"}')
         return {'type': match[1], 'data': match[2]}
+
+    def write_value(self, key, name, value):
+        if value is None:
+            self.execute('reg.exe', 'delete', key, *value_selector(name), '/f', '/reg:64', check=False)
+        else:
+            self.execute('reg.exe', 'add', key, *value_selector(name), '/t', value['type'],
+                         '/d', value['data'], '/f', '/reg:64')
+
+    def sapi_registrations(self):
+        result = self.execute('reg.exe', 'query', SAPI_CLASSES, '/s', '/reg:64')
+        candidates, key = set(), None
+        for line in result.stdout.splitlines():
+            if line.upper().startswith('HKEY_LOCAL_MACHINE'):
+                key = line.strip()
+            if not key or not re.fullmatch(r'HKEY_LOCAL_MACHINE\\Software\\Classes\\CLSID\\\{[0-9a-f-]{36}\}\\InprocServer32', key, re.I):
+                continue
+            match = re.search(r'[ \t]+REG_(?:EXPAND_)?SZ[ \t]+(.+)$', line)
+            if match and ntpath.basename(match[1].strip().strip('"')).casefold() == 'sapi.dll':
+                candidates.add('HKLM' + key[len('HKEY_LOCAL_MACHINE'):])
+        allowed = {r'c:\windows\system32\sapi.dll',
+                   r'c:\windows\system32\speech\common\sapi.dll', PRIVATE_SAPI.casefold(), 'sapi.dll'}
+        registrations = []
+        for candidate in sorted(candidates):
+            original = self.read_value(candidate, None)
+            if original is None:
+                continue
+            path = ntpath.normpath(original['data'].strip().strip('"')).casefold()
+            path = path.replace('%systemroot%', r'c:\windows').replace('%windir%', r'c:\windows')
+            if path in allowed:
+                registrations.append(candidate)
+        if not all(any(identifier in key.upper() for key in registrations) for identifier in SAPI_REQUIRED):
+            raise RuntimeError('Could not identify the Wine SAPI COM registrations safely')
+        return registrations
 
     def remember_key(self, key):
         self.capture_key(key)
@@ -152,8 +198,9 @@ class Installer:
         target = Path(target)
         # Every file path in the manifest must remain within this prefix (or our Windows directory).
         allowed = self.prefix if self.prefix else self.directory
-        if not target.parent.resolve().is_relative_to(allowed.resolve()):
-            raise ValueError('Destination is outside the selected installation')
+        if (not target.parent.resolve().is_relative_to(allowed.resolve())
+                or not target.parent.resolve().is_relative_to(self.directory.resolve())):
+            raise ValueError('Destination is outside the Akousousin directory')
         if str(target) not in self.current_files:
             current = None
             if target.exists():
@@ -182,28 +229,33 @@ class Installer:
     def install(self, config, settings_path=None):
         if config['voices'] and config['voice'] not in config['voices']:
             raise ValueError('Select an installed voice first')
+        before_state = copy.deepcopy(self.state)
         self.backups.mkdir(parents=True, exist_ok=True)
         self.transaction = tempfile.TemporaryDirectory()
         self.current_keys, self.current_values, self.current_files = {}, {}, {}
         try:
             if self.prefix:
-                probe = self.execute(self.windows(self.resource / 'compat-probe.exe'), check=False)
-                if probe.returncode not in (0, 1):
-                    raise RuntimeError('Could not check SAPI compatibility: ' + probe.stdout + probe.stderr)
-                if probe.returncode == 1 or self.force_compat:
+                if self.state['compatibility']:
+                    needs_compat = True
+                else:
+                    probe = self.execute(self.windows(self.resource / 'compat-probe.exe'), check=False)
+                    if probe.returncode not in (0, 1):
+                        raise RuntimeError('Could not check SAPI compatibility: ' + probe.stdout + probe.stderr)
+                    needs_compat = probe.returncode == 1 or self.force_compat
+                if needs_compat:
                     version = self.execute('--version').stdout
                     if not re.search(r'\b11\.21\b', version):
                         raise RuntimeError('This Wine needs the SAPI compatibility fix; this beta supplies it for 11.21 only')
+                    registrations = self.sapi_registrations()
                     self.state['compatibility'] = True
-                    system = self.prefix / 'drive_c/windows/system32'
-                    self.put(self.resource / 'compat/sapi.dll', system / 'sapi.dll')
-                    # Respect existing case on the Linux filesystem.
-                    speech = next((p for p in system.iterdir() if p.name.lower() == 'speech'), system / 'speech')
-                    common = next((p for p in speech.iterdir() if p.name.lower() == 'common'), speech / 'common') if speech.exists() else speech / 'common'
-                    self.put(self.resource / 'compat/sapi.dll', common / 'sapi.dll')
-                    self.remember_value(r'HKCU\Software\Wine\DllOverrides', 'sapi')
-                    self.execute('reg.exe', 'add', r'HKCU\Software\Wine\DllOverrides', '/v', 'sapi',
-                                 '/t', 'REG_SZ', '/d', 'native,builtin', '/f', '/reg:64')
+                    self.state['compatibility_mode'] = 'private-com'
+                    self.put(self.resource / 'compat/sapi.dll', self.directory / 'compat/x64/sapi.dll')
+                    for key in registrations:
+                        self.remember_value(key, None)
+                        self.write_value(key, None, {'type': 'REG_SZ', 'data': PRIVATE_SAPI})
+                    key = r'HKCU\Software\Wine\DllOverrides'
+                    self.remember_value(key, 'sapi')
+                    self.write_value(key, 'sapi', {'type': 'REG_SZ', 'data': 'native,builtin'})
             engine = self.directory / 'akousousin-piper.dll'
             self.put(self.resource / 'akousousin-piper.dll', engine)
             self.remember_key(self.class_key)
@@ -255,7 +307,10 @@ class Installer:
             stage.write_text(json.dumps(self.state, indent=2))
             stage.replace(self.manifest)
         except BaseException:
-            self.rollback()
+            try:
+                self.rollback()
+            finally:
+                self.state = before_state
             raise
         finally:
             self.transaction.cleanup()
@@ -267,11 +322,7 @@ class Installer:
             if backup:
                 self.execute('regedit.exe', '/S', self.windows(backup))
         for (key, name), value in self.current_values.items():
-            if value is None:
-                self.execute('reg.exe', 'delete', key, '/v', name, '/f', '/reg:64', check=False)
-            else:
-                self.execute('reg.exe', 'add', key, '/v', name, '/t', value['type'],
-                             '/d', value['data'], '/f', '/reg:64')
+            self.write_value(key, name, value)
         for target, backup in self.current_files.items():
             if backup:
                 atomic_copy(backup, target)
@@ -283,8 +334,9 @@ class Installer:
         base = self.prefix if self.prefix else self.directory
         for relative, record in self.state['files'].items():
             path = base / relative
-            if not path.parent.resolve().is_relative_to(base.resolve()):
-                raise RuntimeError('Installation record contains a path outside this prefix')
+            if (not path.parent.resolve().is_relative_to(base.resolve())
+                    or not path.parent.resolve().is_relative_to(self.directory.resolve())):
+                raise RuntimeError('Installation record contains a file outside the Akousousin directory')
             if path.exists() and record['sha256'] and digest(path) != record['sha256']:
                 raise RuntimeError(f'{path} was modified after installation; manual recovery required')
         for key, backup in self.state['keys'].items():
@@ -292,11 +344,7 @@ class Installer:
             if backup:
                 self.execute('regedit.exe', '/S', self.windows(self.directory / backup))
         for item in self.state['values']:
-            if item['value'] is None:
-                self.execute('reg.exe', 'delete', item['key'], '/v', item['name'], '/f', '/reg:64', check=False)
-            else:
-                self.execute('reg.exe', 'add', item['key'], '/v', item['name'], '/t', item['value']['type'],
-                             '/d', item['value']['data'], '/f', '/reg:64')
+            self.write_value(item['key'], item['name'], item['value'])
         for relative, record in self.state['files'].items():
             path = base / relative
             if record['backup']:

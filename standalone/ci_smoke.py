@@ -7,6 +7,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import tempfile
 import wave
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -45,7 +46,7 @@ else:
     subprocess.run(['tar', '-xJf', str(runtime), '-C', str(wine_dir)], check=True)
     wine = wine_dir / 'usr/bin/wine'
     env.update(WINE=str(wine), WINESERVER=str(wine_dir / 'usr/bin/wineserver'),
-               WINEDLLOVERRIDES='mscoree,mshtml=;sapi=n,b', WINEDEBUG='-all')
+               WINEDLLOVERRIDES='mscoree,mshtml=', WINEDEBUG='-all')
     subprocess.run([str(wine), 'wineboot.exe', '-u'], env=env | {'WINEDLLOVERRIDES': 'mscoree,mshtml='},
                    check=True, timeout=120)
     subprocess.run([env['WINESERVER'], '-w'], env=env, check=True, timeout=90)
@@ -57,6 +58,40 @@ else:
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     install = [str(executable), '--wine-prefix', str(prefix), '--wine', str(wine), '--wine-compat',
                '--install-only', '--settings', str(settings_path)]
+def wine_sapi_snapshot():
+    result = {}
+    for file in (prefix / 'drive_c/windows').rglob('*'):
+        if file.name.lower() == 'sapi.dll':
+            result[str(file.relative_to(prefix))] = (
+                os.readlink(file) if file.is_symlink() else None,
+                hashlib.sha256(file.read_bytes()).hexdigest() if file.is_file() else None)
+    return result
+
+
+def sapi_modules():
+    result = {}
+    for caller in (resource, WORK / 'independent-client'):
+        caller.mkdir(exist_ok=True)
+        probe = caller / 'sapi-location-probe.exe'
+        if not probe.exists():
+            shutil.copy2(resource / probe.name, probe)
+        for mode in ('datakey', 'voice'):
+            with tempfile.TemporaryFile() as output, tempfile.TemporaryFile() as errors:
+                completed = subprocess.run([str(wine), str(probe), mode], env=env,
+                                           stdout=output, stderr=errors, timeout=60)
+                output.seek(0); errors.seek(0)
+                text = output.read().decode('utf-8', errors='replace')
+                if completed.returncode:
+                    raise RuntimeError(text + errors.read().decode('utf-8', errors='replace'))
+            module = next(line.removeprefix('MODULE=') for line in text.splitlines() if line.startswith('MODULE='))
+            result[(str(caller), mode)] = module.casefold()
+    return result
+
+
+if not native:
+    original_wine_files = wine_sapi_snapshot()
+    original_sapi_modules = sapi_modules()
+
 # Fresh settings must bootstrap the approved voice from the actual package.
 subprocess.run([str(executable), '--settings', str(settings_path), '--status'], env=env, check=True, timeout=60)
 sys.path[:0] = [str(ROOT / 'standalone'), str(ROOT / 'backend')]
@@ -66,6 +101,13 @@ config = settings.load(settings_path)
 assert config['voice'] == 'en_US-ljspeech-medium'
 assert Path(config['voices'][config['voice']]['path']).is_file(), 'Bundled default voice was not installed'
 subprocess.run(install, env=env, check=True, timeout=180)
+if not native:
+    expected_private = r'C:\Program Files\Akousousin\compat\x64\sapi.dll'.casefold()
+    assert set(sapi_modules().values()) == {expected_private}, 'COM is not using the private SAPI DLL'
+    assert wine_sapi_snapshot() == original_wine_files, 'Install changed Wine SAPI files'
+    state = __import__('json').loads((prefix / 'drive_c/Program Files/Akousousin/install-state.json').read_text())
+    assert state['compatibility_mode'] == 'private-com'
+    assert all(name.startswith('drive_c/Program Files/Akousousin/') for name in state['files'])
 for name in ['sapi-probe.exe', 'engine-probe.exe']:
     shutil.copy(resource / name, ROOT / 'build' / name)
 for script, log in [('tests/test_integration.py', 'integration.log'), ('tests/test_failures.py', 'failure-recovery.log')]:
@@ -170,11 +212,19 @@ if not native:
 # this against the initialized Wine/native Windows installation before rollback.
 subprocess.run([str(executable), '--settings', str(settings_path), '--refresh-registrations'],
                env=env, check=True, timeout=180)
+if not native:
+    assert set(sapi_modules().values()) == {expected_private}, 'Update lost the private COM registration'
+    assert wine_sapi_snapshot() == original_wine_files, 'Update changed Wine SAPI files'
 print('PASS: packaged refresh of saved active SAPI registrations', flush=True)
 command = [str(executable), '--uninstall', '--settings', str(settings_path)]
 if not native:
     command += ['--wine-prefix', str(prefix), '--wine', str(wine)]
 subprocess.run(command, env=env, check=True, timeout=90)
+if not native:
+    assert wine_sapi_snapshot() == original_wine_files, 'Uninstall changed Wine SAPI files'
+    assert sapi_modules() == original_sapi_modules, 'Uninstall did not restore original SAPI COM defaults'
+    assert not (prefix / 'drive_c/Program Files/Akousousin/compat/x64/sapi.dll').exists()
+    print('PASS: private SAPI install/update/uninstall; original DLL bytes/links and COM defaults preserved', flush=True)
 if not native:
     subprocess.run([env['WINESERVER'], '-k'], env=env, check=True, timeout=15)
     subprocess.run([env['WINESERVER'], '-w'], env=env, check=True, timeout=30)
