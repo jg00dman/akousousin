@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """Real neural synthesis through the separate frozen backend and packaged Wine.
 
 Run under Xvfb with the AppImage path as the argument. No model enters AppDir.

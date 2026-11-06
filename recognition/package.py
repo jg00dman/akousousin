@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """Build the current command-line recognition snapshot for Linux testing."""
 import argparse
 import hashlib
@@ -43,7 +45,8 @@ def main():
     shutil.copy2(ROOT / 'backend/WHISPER-VALIDATION.md', package / 'VALIDATION.md')
     licenses = package / 'licenses'
     licenses.mkdir()
-    shutil.copy2(ROOT / 'backend/LICENSE', licenses / 'Akousousin-GPL-3.0.txt')
+    shutil.copy2(ROOT / 'LICENSE', licenses / 'Akousousin-GPL-3.0.txt')
+    shutil.copy2(ROOT / 'LICENSING.md', licenses / 'Akousousin-LICENSING.md')
     shutil.copy2(ROOT / 'recognition/Whisper-LICENSE', licenses / 'Whisper-MIT.txt')
     shutil.copy2(ROOT / 'recognition/Python-LICENSE.txt', licenses / 'Python-LICENSE.txt')
     for dist in importlib.metadata.distributions():

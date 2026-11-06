@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """Voice Input model management and diagnostic recording, off the UI thread."""
 from pathlib import Path
 import queue

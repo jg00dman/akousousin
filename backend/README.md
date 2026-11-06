@@ -1,3 +1,8 @@
+<!--
+SPDX-License-Identifier: GPL-3.0-or-later
+SPDX-FileCopyrightText: 2026 John Goodman
+-->
+
 # Akousousin Piper backend beta
 
 This is a separate GPL-3.0-or-later package, not part of the Wine AppImage or

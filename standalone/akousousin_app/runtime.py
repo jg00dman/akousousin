@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """Per-user controller IPC. Session ownership belongs to Akousousin, not launchers."""
 import hashlib
 import json

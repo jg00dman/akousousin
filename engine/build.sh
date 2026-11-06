@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 set -eu
 mkdir -p build/standalone-engine
 cc=${CC_PE:-x86_64-w64-mingw32-gcc}

@@ -1,3 +1,8 @@
+<!--
+SPDX-License-Identifier: GPL-3.0-or-later
+SPDX-FileCopyrightText: 2026 John Goodman
+-->
+
 # Standalone beta publication
 
 Main pushes build Linux and native Windows packages and run their packaged tests.

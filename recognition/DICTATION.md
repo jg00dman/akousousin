@@ -1,3 +1,8 @@
+<!--
+SPDX-License-Identifier: GPL-3.0-or-later
+SPDX-FileCopyrightText: 2026 John Goodman
+-->
+
 # Desktop dictation development
 
 Recognition belongs to the per-user controller, with KDE Wayland shortcut

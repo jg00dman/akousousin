@@ -1,7 +1,11 @@
 /*
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * SPDX-FileCopyrightText: 2026 John Goodman
+ */
+/*
  * Wine Piper TTS engine, using a separately installed loopback HTTP service.
  *
- * Copyright 2026 Akousousin contributors
+ * Copyright 2026 John Goodman
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public

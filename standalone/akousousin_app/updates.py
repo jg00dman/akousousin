@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """User-requested release checks and verified Linux AppImage replacement."""
 import hashlib
 import json

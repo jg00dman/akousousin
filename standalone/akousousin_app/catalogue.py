@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """Pinned Piper catalogue; user-selected downloads preserve upstream licence cards."""
 import hashlib
 import json

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """Manage only a server started by this panel; never signal an unrelated PID."""
 import json
 import os

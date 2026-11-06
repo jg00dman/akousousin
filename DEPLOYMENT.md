@@ -1,3 +1,8 @@
+<!--
+SPDX-License-Identifier: GPL-3.0-or-later
+SPDX-FileCopyrightText: 2026 John Goodman
+-->
+
 # Deployment candidate status
 
 The previously released Beta 1 (a128f2f) was desktop-tested in Logos on Kubuntu

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """Bounded, cancellable HTTP for the local speech service; never uses a proxy."""
 import errno
 import select

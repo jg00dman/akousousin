@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """Exercise the real Wine DLL against a deterministic local Piper HTTP substitute.
 
 WINE points to a Wine loader; WINEPREFIX must be a disposable registered prefix.

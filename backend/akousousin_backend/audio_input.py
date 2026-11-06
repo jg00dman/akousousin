@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """Bounded PulseAudio capture and silence endpointing for desktop dictation."""
 import audioop
 from collections import deque

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """Locate read-only package data and copy runtime/model data needed after AppImage exit."""
 import os
 from pathlib import Path

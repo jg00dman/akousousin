@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """Transactional prefix-local installation. Windows system SAPI is never replaced."""
 import hashlib
 import json

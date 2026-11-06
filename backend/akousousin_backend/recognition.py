@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """Offline recognition foundation shared by future SAPI and desktop adapters."""
 import argparse
 import io

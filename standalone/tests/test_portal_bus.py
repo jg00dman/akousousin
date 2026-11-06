@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """Opt-in protocol tests on a private D-Bus; never opens desktop consent dialogs."""
 import asyncio
 import os

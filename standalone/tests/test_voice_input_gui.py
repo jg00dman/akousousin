@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """Actual Tk hit-testing: the Start button must not be hidden behind its row."""
 import copy
 import os

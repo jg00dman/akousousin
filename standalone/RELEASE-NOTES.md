@@ -1,3 +1,8 @@
+<!--
+SPDX-License-Identifier: GPL-3.0-or-later
+SPDX-FileCopyrightText: 2026 John Goodman
+-->
+
 # Akousousin 0.6.0b3 beta
 
 This beta adds experimental local Whisper voice input on Linux while retaining

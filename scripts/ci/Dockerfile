@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 # Increment this revision to refresh signed distribution packages in the cache.
 # Build dependencies only: no accounts, tokens, Piper, models, or Wine binaries.
 FROM ubuntu:22.04

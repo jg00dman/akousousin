@@ -1,3 +1,8 @@
+<!--
+SPDX-License-Identifier: GPL-3.0-or-later
+SPDX-FileCopyrightText: 2026 John Goodman
+-->
+
 # Experimental Logos-patched Wine/Piper test build
 
 This is a prebuilt Wine 11.21 runtime containing the complete

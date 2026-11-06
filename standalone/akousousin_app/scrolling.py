@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """Scrollable form with wheel routing confined to its own visible page."""
 import tkinter as tk
 from tkinter import ttk

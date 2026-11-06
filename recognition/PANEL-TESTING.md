@@ -1,3 +1,8 @@
+<!--
+SPDX-License-Identifier: GPL-3.0-or-later
+SPDX-FileCopyrightText: 2026 John Goodman
+-->
+
 # Voice Input — beta testing guide
 
 Use the direct `Akousousin-x86_64.AppImage` link in the beta or trial release, make it

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """Panel actions use the shared controller; closing the panel leaves it running."""
 import queue
 import threading

@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-FileCopyrightText: 2026 John Goodman
+ */
 /* SPDX-License-Identifier: LGPL-2.1-or-later
  * Minimal native SAPI client; no dependency on Piper or private Wine APIs.
  * Usage: sapi-probe.exe output.wav rate volume text [async|xml|default|play|automation]
