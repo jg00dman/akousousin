@@ -60,10 +60,15 @@ class ReadingShortcuts(PortalRequests):
         from dbus_next.aio import MessageBus
         from dbus_next import Variant
         self.bus = await MessageBus().connect()
-        await self.call('org.freedesktop.DBus', '/org/freedesktop/DBus',
-                        'org.freedesktop.DBus', 'StartServiceByName', 'su', ['org.freedesktop.portal.Desktop', 0])
-        self.portal_owner = (await self.call('org.freedesktop.DBus', '/org/freedesktop/DBus',
-            'org.freedesktop.DBus', 'GetNameOwner', 's', ['org.freedesktop.portal.Desktop']))[0]
+        try:
+            owner = await self.call('org.freedesktop.DBus', '/org/freedesktop/DBus',
+                                   'org.freedesktop.DBus', 'GetNameOwner', 's', ['org.freedesktop.portal.Desktop'])
+        except RuntimeError:
+            await self.call('org.freedesktop.DBus', '/org/freedesktop/DBus',
+                            'org.freedesktop.DBus', 'StartServiceByName', 'su', ['org.freedesktop.portal.Desktop', 0])
+            owner = await self.call('org.freedesktop.DBus', '/org/freedesktop/DBus',
+                                   'org.freedesktop.DBus', 'GetNameOwner', 's', ['org.freedesktop.portal.Desktop'])
+        self.portal_owner = owner[0]
         await self.register_identity()
         self.bus.add_message_handler(self.message)
         for rule in ("type='signal',sender='org.freedesktop.portal.Desktop'",
