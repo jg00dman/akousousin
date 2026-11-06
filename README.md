@@ -42,7 +42,9 @@ Download the [Linux AppImage or Windows ZIP](https://github.com/jg00dman/akousou
 voices, Wine-prefix registration, launcher commands and rollback.
 
 The Linux package contains the voice engine, control panel, tray and Piper backend,
-plus the reviewed `en_US-ljspeech-medium` starter voice. It does not contain Wine.
+with voice models downloaded on demand. On first use, choose the reviewed
+`en_US-ljspeech-medium` starter voice (about 64 MB), another catalogue voice, or
+import a local model. Offline builds can include the starter voice. It does not contain Wine.
 Existing voice choices are preserved. Other models retain their own licence terms.
 The build target remains x86-64 Linux with glibc 2.35+ (Ubuntu 22.04), and existing
 working 64-bit Wine prefixes. Wine compatibility DLLs stay in the AKS directory;

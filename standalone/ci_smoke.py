@@ -92,12 +92,25 @@ if not native:
     original_wine_files = wine_sapi_snapshot()
     original_sapi_modules = sapi_modules()
 
-# Fresh settings must bootstrap the approved voice from the actual package.
+# The lean package must start without a model; only explicit first use downloads it.
 subprocess.run([str(executable), '--settings', str(settings_path), '--status'], env=env, check=True, timeout=60)
 sys.path[:0] = [str(ROOT / 'standalone'), str(ROOT / 'backend')]
 from akousousin_app import settings
 from akousousin_app.service import Service
 config = settings.load(settings_path)
+import json
+bundled_starter = json.loads((resource / 'build.json').read_text())['starter_voice']
+assert bool(config['voices']) == bool(bundled_starter), 'Starter voice does not match the selected package variant'
+if not bundled_starter:
+    assert not (resource / 'voices').exists(), 'Lean build bundled voice weights'
+    subprocess.run([str(executable), '--settings', str(settings_path), '--download-starter-voice'],
+                   env=env, check=True, timeout=180)
+    config = settings.load(settings_path)
+    before = Path(config['voices'][config['voice']]['path']).stat().st_mtime_ns
+    subprocess.run([str(executable), '--settings', str(settings_path), '--download-starter-voice'],
+                   env=env, check=True, timeout=30)
+    assert Path(config['voices'][config['voice']]['path']).stat().st_mtime_ns == before
+    print('PASS: lean package starts model-free; explicit starter download is persistent and not repeated', flush=True)
 assert config['voice'] == 'en_US-ljspeech-medium'
 assert Path(config['voices'][config['voice']]['path']).is_file(), 'Bundled default voice was not installed'
 subprocess.run(install, env=env, check=True, timeout=180)

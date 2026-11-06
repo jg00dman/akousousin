@@ -178,13 +178,17 @@ class DispatcherTests(unittest.TestCase):
         with patch.dict('os.environ', {'XDG_CONFIG_HOME': str(self.root / 'config'),
                                       'XDG_DATA_HOME': str(self.root / 'data'),
                                       'LD_LIBRARY_PATH': '/appimage/bundled',
-                                      'LD_LIBRARY_PATH_ORIG': '/host/libraries'}):
+                                      'LD_LIBRARY_PATH_ORIG': '/tmp/.mount_Akousousin-parent/usr/lib/akousousin/_internal',
+                                      'LD_PRELOAD': '/appimage/bundled/libcrypto.so.3',
+                                      'DBUS_SESSION_BUS_ADDRESS': 'unix:path=/run/user/test/bus'}):
             launcher = self.root / 'data/Akousousin/speech-dispatcher-module'
             for remove in (False, True):
                 def restarted(command, **kwargs):
                     self.assertEqual(launcher.exists(), not remove)
                     self.assertIn('--user', command)
-                    self.assertEqual(kwargs['env']['LD_LIBRARY_PATH'], '/host/libraries')
+                    for name in ('LD_LIBRARY_PATH', 'LD_LIBRARY_PATH_ORIG', 'LD_PRELOAD'):
+                        self.assertNotIn(name, kwargs['env'])
+                    self.assertEqual(kwargs['env']['DBUS_SESSION_BUS_ADDRESS'], 'unix:path=/run/user/test/bus')
                 run.side_effect = restarted
                 configure(self.path, remove=remove)
                 self.assertEqual(run.call_args_list[-2].args[0][2], 'restart')
@@ -193,12 +197,16 @@ class DispatcherTests(unittest.TestCase):
     @patch('subprocess.run')
     def test_restart_failure_reports_saved_registration(self, run):
         import subprocess
-        from akousousin_app.speech_dispatcher import configure
+        from akousousin_app.speech_dispatcher import configure, RestartError, RESTART_COMMAND
         run.side_effect = subprocess.CalledProcessError(1, 'systemctl', stderr='No user bus')
         with patch.dict('os.environ', {'XDG_CONFIG_HOME': str(self.root / 'config'),
                                       'XDG_DATA_HOME': str(self.root / 'data')}):
-            with self.assertRaisesRegex(RuntimeError, 'Registration saved;.*No user bus'):
+            with self.assertRaises(RestartError) as failure:
                 configure(self.path)
+            self.assertIn('Registration saved;', failure.exception.message)
+            self.assertEqual(failure.exception.details, 'No user bus')
+            self.assertEqual(failure.exception.command, RESTART_COMMAND)
+            self.assertIn(RESTART_COMMAND, str(failure.exception))
             self.assertTrue((self.root / 'data/Akousousin/speech-dispatcher-module').exists())
 
     @patch('subprocess.run')

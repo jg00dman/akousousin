@@ -30,8 +30,9 @@ Voice input is not a SAPI recognition engine.
   +12 dB at its former amplitude would clip.
 
 Speech output, idle model unloading, the voice library and verified Linux AppImage
-updates remain available. The reviewed LJSpeech starter voice, licences, checksums
-and matching sources accompany the packages as separate assets. Native Windows
+updates remain available. The reviewed LJSpeech starter voice downloads on demand
+or can be included in an offline build. Licences, checksums and matching sources
+accompany the packages. Native Windows
 microphone capture and SAPI recognition are not implemented.
 
 Whisper may infer punctuation, but spoken commands such as “question mark” can
@@ -40,3 +41,12 @@ Recognition accuracy, non-Latin insertion and wider desktop interactions still
 need testing. User testing confirmed microphone capture and insertion into Kate
 and a chat text field on Kubuntu 26.04 Wayland. See COMPATIBILITY.md and TESTING.md,
 and the [Voice Input guide](https://github.com/jg00dman/akousousin/blob/main/recognition/PANEL-TESTING.md).
+
+## On-demand voice packaging
+
+Default builds download Piper voices on first use instead of bundling LJSpeech.
+Overview offers the reviewed starter voice or Voice library; existing downloads
+and voice choices survive upgrades. Optional offline builds can include LJSpeech.
+Voice, Whisper and AppImage downloads show byte-based progress in the panel and
+a download indicator with details in the tray. Unknown-size and verification
+stages show activity without a fabricated percentage.

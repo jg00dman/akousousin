@@ -3,6 +3,7 @@
 # SPDX-FileCopyrightText: 2026 John Goodman
 """Build the independent panel/service. Reuse a published Wine SAPI DLL, never compile Wine."""
 import ast
+import argparse
 import hashlib
 import importlib.metadata
 import importlib.util
@@ -18,12 +19,20 @@ import tempfile
 import urllib.request
 import zipfile
 
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--bundle-starter-voice', action='store_true',
+                    help='Include the reviewed LJSpeech voice for offline first use (default: download on demand)')
+options = parser.parse_args()
+
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / 'standalone-dist'
 BUILD = ROOT / 'build/standalone-package'
 RESOURCE = BUILD / 'resources'
 SOURCE = OUT / 'sources'
 CACHE = BUILD / 'downloads'
+for stage in (RESOURCE, BUILD / 'Akousousin', BUILD / 'AppDir'):
+    if stage.exists():
+        shutil.rmtree(stage)
 for directory in (OUT, RESOURCE, SOURCE, CACHE):
     directory.mkdir(parents=True, exist_ok=True)
 
@@ -49,10 +58,11 @@ shutil.copytree(ROOT / 'standalone/resources', RESOURCE, dirs_exist_ok=True)
 # Catalogue downloads preserve its upstream model card and MIT/public-domain provenance.
 from akousousin_app import catalogue, __version__
 from akousousin_app.desktop_identity import APP_ID
-with tempfile.TemporaryDirectory(dir=BUILD) as temporary:
-    entry = catalogue.catalogue(ROOT / 'standalone/resources')['en_US-ljspeech-medium']
-    voice = catalogue.install(entry, Path(temporary), reviewed=True)
-    shutil.copytree(Path(voice['path']).parent, RESOURCE / 'voices', dirs_exist_ok=True)
+if options.bundle_starter_voice:
+    with tempfile.TemporaryDirectory(dir=BUILD) as temporary:
+        entry = catalogue.catalogue(ROOT / 'standalone/resources')['en_US-ljspeech-medium']
+        voice = catalogue.install(entry, Path(temporary), reviewed=True, publish=False)
+        shutil.copytree(Path(voice['path']).parent, RESOURCE / 'voices', dirs_exist_ok=True)
 
 if sys.platform != 'win32':
     repository = os.environ.get('GITHUB_REPOSITORY', 'jg00dman/akousousin')
@@ -82,7 +92,8 @@ icon.save(RESOURCE / 'akousousin.png')
 
 commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
 (RESOURCE / 'build.json').write_text(json.dumps({'build': commit[:12] + '-' + sys.platform,
-                                               'commit': commit, 'version': __version__}, indent=2))
+                                               'commit': commit, 'version': __version__,
+                                               'starter_voice': 'en_US-ljspeech-medium' if options.bundle_starter_voice else None}, indent=2))
 recognition_options = []
 if importlib.util.find_spec('faster_whisper') is not None:
     for dependency in ('faster_whisper', 'ctranslate2', 'tokenizers', 'av'):
@@ -153,8 +164,10 @@ for optional in ('piper/tashkeel/model.onnx', 'piper/hebrew/nakdimon.onnx'):
     (PACKAGE / '_internal' / optional).unlink(missing_ok=True)
 models = [file.relative_to(PACKAGE).as_posix() for file in PACKAGE.rglob('*.onnx')
           if file.relative_to(PACKAGE).as_posix() != '_internal/faster_whisper/assets/silero_vad_v6.onnx']
-if models != ['resources/voices/en_US-ljspeech-medium.onnx']:
-    raise RuntimeError('Only the explicitly approved LJSpeech starter voice may be bundled')
+expected_models = ['resources/voices/en_US-ljspeech-medium.onnx'] if options.bundle_starter_voice else []
+if sorted(models) != expected_models:
+    raise RuntimeError('Packaged voice weights differ from the selected build option')
+print('Starter voice: ' + ('included for offline use' if options.bundle_starter_voice else 'download on demand'), flush=True)
 if sys.platform == 'win32':
     with zipfile.ZipFile(OUT / 'Akousousin-Windows-x86_64.zip', 'w', zipfile.ZIP_DEFLATED) as archive:
         for file in PACKAGE.rglob('*'):

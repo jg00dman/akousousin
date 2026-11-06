@@ -8,6 +8,7 @@ import shutil
 import tempfile
 
 from .recognition import model_root
+from .downloads import Transfer
 
 FILES = ('model.bin', 'config.json', 'tokenizer.json', 'vocabulary.txt')
 SMALL_REVISION = '536b0662742c02347bc0e980a01041f333bce120'
@@ -35,21 +36,34 @@ def install(model='small', root=None, source=None, progress=lambda text: None):
                 shutil.rmtree(orphan)
         if installed(model, root):
             return root / model
-        with tempfile.TemporaryDirectory(prefix='.install-', dir=root) as temporary:
+        with Transfer('Whisper · ' + model.title()) as transfer, tempfile.TemporaryDirectory(prefix='.install-', dir=root) as temporary:
             stage = Path(temporary) / model
             stage.mkdir()
             if source is None:
                 progress('Downloading Small (about 485 MB)…')
-                from huggingface_hub import snapshot_download
-                snapshot_download('Systran/faster-whisper-small', revision=SMALL_REVISION,
-                                  local_dir=stage, allow_patterns=[*FILES, 'README.md'])
+                from huggingface_hub import HfApi, hf_hub_url
+                info = HfApi().model_info('Systran/faster-whisper-small', revision=SMALL_REVISION,
+                                         files_metadata=True)
+                entries = {file.rfilename: file for file in info.siblings}
+                names = [*FILES, 'README.md']
+                if any(name not in entries or not entries[name].size for name in names):
+                    raise ValueError('Whisper download metadata is incomplete')
+                transfer.phase('Downloading', total=sum(entries[name].size for name in names))
+                for name in names:
+                    file = entries[name]
+                    transfer.fetch(hf_hub_url('Systran/faster-whisper-small', name, revision=SMALL_REVISION),
+                                   stage / name, size=file.size,
+                                   sha256=file.lfs.sha256 if file.lfs else None,
+                                   git_sha1=None if file.lfs else file.blob_id)
             else:
                 progress('Importing model…')
+                transfer.phase('Importing model')
                 for name in (*FILES, 'README.md'):
                     file = Path(source) / name
                     if file.is_file():
                         shutil.copy2(file, stage / name)
             progress('Verifying model files…')
+            transfer.phase('Verifying model files')
             hashes = {}
             for name in FILES:
                 file = stage / name

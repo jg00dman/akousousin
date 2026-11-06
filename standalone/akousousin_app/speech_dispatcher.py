@@ -361,17 +361,30 @@ def uninstall(path):
     return config
 
 
+RESTART_COMMAND = 'env -u LD_LIBRARY_PATH -u LD_PRELOAD systemctl --user restart speech-dispatcher.service'
+
+
+class RestartError(RuntimeError):
+    title = 'Restart Speech Dispatcher'
+    message = ('Registration saved; Speech Dispatcher could not be restarted. '
+               'Run this command in your normal terminal. No sudo is needed.')
+    command = RESTART_COMMAND
+
+    def __init__(self, details):
+        self.details = details
+        super().__init__(self.message + '\n\n' + self.command + '\n\n' + details)
+
+
 def configure(path, remove=False):
     """Save registration first; restart only this user's systemd service last."""
     import os
     import subprocess
     config = (uninstall if remove else install)(path)
-    # systemctl is a host binary: do not load the AppImage's bundled libraries.
+    # A nested AppImage launch can put a previous mount's libraries in ORIG.
+    # systemctl must use the host's libraries, including its own OpenSSL.
     environment = os.environ.copy()
-    if 'LD_LIBRARY_PATH_ORIG' in environment:
-        environment['LD_LIBRARY_PATH'] = environment['LD_LIBRARY_PATH_ORIG']
-    else:
-        environment.pop('LD_LIBRARY_PATH', None)
+    for name in ('LD_LIBRARY_PATH', 'LD_LIBRARY_PATH_ORIG', 'LD_PRELOAD'):
+        environment.pop(name, None)
     try:
         subprocess.run(['systemctl', '--user', 'restart', 'speech-dispatcher.service'],
                        check=True, capture_output=True, text=True, timeout=20, env=environment)
@@ -381,6 +394,5 @@ def configure(path, remove=False):
         detail = getattr(error, 'stderr', '') or str(error)
         if isinstance(detail, bytes):
             detail = detail.decode(errors='replace')
-        raise RuntimeError('Registration saved; Speech Dispatcher could not be restarted. '
-                           'Restart your user Speech Dispatcher manually. ' + detail.strip()) from error
+        raise RestartError(detail.strip()) from error
     return config

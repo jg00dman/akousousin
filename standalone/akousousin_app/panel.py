@@ -17,6 +17,7 @@ import webbrowser
 from . import __version__, catalogue, resources, runtime, settings, updates
 from .languages import label
 from .install import Installer
+from .dialogs import show_error
 from .service import Service
 
 
@@ -90,6 +91,8 @@ class Panel:
         from .voice_input import VoiceInput
         self.voice_input = VoiceInput(self, self.pages['Voice Input'])
         self.build_updates()
+        from .download_status import DownloadView
+        self.downloads = DownloadView(self.root)
         footer = ttk.Frame(self.root, padding=(22, 12))
         footer.pack(fill='x')
         ttk.Label(footer, textvariable=self.status, wraplength=760).pack(side='left')
@@ -122,7 +125,7 @@ class Panel:
                 result = function()
                 self.events.put(('success', success, result))
             except Exception as error:
-                self.events.put(('error', None, str(error)))
+                self.events.put(('error', None, error))
         threading.Thread(target=run, daemon=True).start()
 
     def poll(self):
@@ -132,8 +135,8 @@ class Panel:
                 self.busy = max(0, self.busy - 1)
                 if kind == 'error':
                     self.updating = False
-                    self.status.set(result)
-                    messagebox.showerror('Akousousin', result, parent=self.root)
+                    self.status.set(getattr(result, 'message', str(result)))
+                    show_error(self.root, result)
                 elif callback:
                     callback(result)
         except queue.Empty:
@@ -160,6 +163,14 @@ class Panel:
 
     def build_overview(self):
         page = self.pages['Overview']
+        if not self.config['voices']:
+            self.starter_card = self.card(page, 'Get started with speech')
+            ttk.Label(self.starter_card, text='Download the reviewed English LJSpeech starter voice once (about 64 MB), or choose another voice in Voice library. Downloads stay installed between upgrades. Voice input can be used independently.',
+                      style='Card.TLabel', wraplength=780).pack(anchor='w', pady=8)
+            ttk.Button(self.starter_card, text='Download starter voice (64 MB)', style='Accent.TButton',
+                       command=self.download_starter).pack(side='left', padx=3)
+            ttk.Button(self.starter_card, text='Choose another voice', command=lambda: self.show('Voice library')).pack(side='left', padx=3)
+            return
         frame = self.card(page, 'Speech service')
         ttk.Label(frame, textvariable=self.server_status, style='Card.TLabel').pack(side='left')
         ttk.Button(frame, text='Start server', style='Accent.TButton', command=self.start_server).pack(side='right', padx=4)
@@ -272,15 +283,29 @@ class Panel:
                     return
                 window.destroy()
                 self.status.set('Downloading voice…')
-                def downloaded(voice):
-                    self.config['voices'][key] = voice
-                    settings.save(self.path, self.config)
-                    self.refresh_library()
-                    self.refresh_languages()
-                    self.status.set('Voice installed. Select Make default to use it.')
-                self.worker(lambda: catalogue.install(self.library[key], settings.data_path() / 'voices', True), downloaded)
+                self.worker(lambda: catalogue.install(self.library[key], settings.data_path() / 'voices', True),
+                            lambda voice: self.voice_downloaded(key, voice))
             ttk.Button(window, text='Download voice', command=begin, style='Accent.TButton').pack(pady=12)
         self.worker(lambda: catalogue.card(self.library[key]), review)
+
+    def voice_downloaded(self, key, voice):
+        self.config = resources.register_voice(self.path, key, voice)
+        self.refresh_library()
+        self.refresh_languages()
+        if hasattr(self, 'starter_card'):
+            self.starter_card.destroy()
+            del self.starter_card
+            self.build_overview()
+        self.update_default()
+        self.status.set('Voice installed and retained for future upgrades. Apply voice registration in Settings when needed.')
+
+    def download_starter(self):
+        key = resources.STARTER
+        if self.busy:
+            return
+        self.status.set('Downloading starter voice…')
+        self.worker(lambda: resources.download_starter(self.path),
+                    lambda config: self.voice_downloaded(key, config['voices'][key]))
 
     def make_default(self):
         try:
@@ -314,16 +339,14 @@ class Panel:
                     return
             if language.split('_')[0] in catalogue.UNSUPPORTED_AUXILIARY:
                 raise ValueError('This language needs optional preprocessing resources not distributed in this beta')
-            self.config['voices'][key] = {'path': model, 'sample_rate': config['audio']['sample_rate'],
+            voice = {'path': model, 'sample_rate': config['audio']['sample_rate'],
                                           'language': language, 'name': key, 'quality': 'local'}
-            settings.save(self.path, self.config)
             # Imported models may not occur in the online catalogue; add a local row.
             self.library.setdefault(key, {'key': key, 'name': key, 'quality': 'local', 'files': {},
                                          'language': {'code': language, 'name_english': language, 'name_native': language}})
-            self.refresh_library()
-            self.refresh_languages()
+            self.voice_downloaded(key, voice)
         except Exception as error:
-            messagebox.showerror('Import voice', str(error))
+            show_error(self.root, error, 'Import voice')
 
     def build_languages(self):
         page = self.pages['Languages']
@@ -438,7 +461,7 @@ class Panel:
             self.status.set('Preferences saved. They apply to new speech.')
             return True
         except (ValueError, tk.TclError) as error:
-            messagebox.showerror('Preferences', str(error))
+            show_error(self.root, error, 'Preferences')
             return False
 
     def dispatcher_install(self, remove):

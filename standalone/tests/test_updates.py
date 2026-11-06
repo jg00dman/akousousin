@@ -18,6 +18,9 @@ class UpdateTests(unittest.TestCase):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         self.root = Path(directory.name)
+        state = patch.dict(os.environ, {'XDG_STATE_HOME': str(self.root / 'state'),
+                                       'LOCALAPPDATA': str(self.root / 'state')})
+        state.start(); self.addCleanup(state.stop)
         self.image = self.root / 'Akousousin.AppImage'
         self.image.write_bytes(b'previous image')
         self.payload = b'verified replacement image'
