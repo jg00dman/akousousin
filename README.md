@@ -1,3 +1,8 @@
+<!--
+SPDX-License-Identifier: GPL-3.0-or-later
+SPDX-FileCopyrightText: 2026 John Goodman
+-->
+
 # Akousousin — Neural Voice Engine
 
 **akousousin:** *The unified neural speech engine for Linux, implementing Microsoft SAPI and Speech Dispatcher, based on Piper and Whisper.*
@@ -72,3 +77,12 @@ pause/resume behaviour and broader speech markup/accessibility support.
 SAPI recognition and a future native input framework remain separately scoped. See the
 [Speech Dispatcher desktop checklist](standalone/SPEECH-DISPATCHER.md#desktop-acceptance-checklist)
 for ongoing Orca and application testing.
+
+## Licensing
+
+Original Akousousin project source is **GPL-3.0-or-later**, copyright 2026 John
+Goodman. The SAPI engine C implementation and API headers are **LGPL-2.1-or-later**;
+Wine copyright notices are retained. Dependencies, imported code, models and Wine
+patches retain their own licences. See [LICENSE](LICENSE), the
+[LGPL text](LICENSES/LGPL-2.1-or-later.txt), and [component licensing](LICENSING.md).
+Both application packages include the GPL/LGPL texts and upstream notices.

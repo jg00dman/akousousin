@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """Opt-in actual CPU inference. No model downloads occur during these tests."""
 import io
 import os

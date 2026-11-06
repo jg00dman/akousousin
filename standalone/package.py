@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """Build the independent panel/service. Reuse a published Wine SAPI DLL, never compile Wine."""
 import ast
 import hashlib
@@ -97,8 +99,9 @@ shutil.copytree(RESOURCE, PACKAGE / 'resources', dirs_exist_ok=True)
 shutil.copy(ROOT / 'standalone/SPEECH-DISPATCHER.md', PACKAGE / 'SPEECH-DISPATCHER.md')
 notices = PACKAGE / 'licenses'
 notices.mkdir(exist_ok=True)
-shutil.copy(ROOT / 'LICENSE', notices / 'Engine-LGPL-2.1.txt')
-shutil.copy(ROOT / 'backend/LICENSE', notices / 'Panel-and-service-GPL-3.0.txt')
+shutil.copy(ROOT / 'LICENSES/LGPL-2.1-or-later.txt', notices / 'Engine-LGPL-2.1.txt')
+shutil.copy(ROOT / 'LICENSE', notices / 'Akousousin-GPL-3.0.txt')
+shutil.copy(ROOT / 'LICENSING.md', notices / 'Akousousin-LICENSING.md')
 fetch(f'https://raw.githubusercontent.com/python/cpython/v{platform.python_version()}/LICENSE',
       notices / 'Python-LICENSE.txt')
 # Include all distribution licence/notice files; PyInstaller also collects package data notices.

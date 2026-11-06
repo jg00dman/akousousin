@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 # Run each visible workflow stage in the same immutable build environment.
 set -euo pipefail
 : "${CI_IMAGE_ID:?Set the verified build environment image ID}"

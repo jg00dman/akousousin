@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """Persistent user preferences. Written atomically; no Wine files are touched here."""
 import json
 import locale

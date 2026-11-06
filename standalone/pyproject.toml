@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
@@ -12,5 +14,8 @@ recognition = ["akousousin-backend[recognition]==0.3.0b1", "dbus-next==0.2.3; sy
 
 [project.scripts]
 akousousin = "akousousin_app.main:main"
+[tool.setuptools]
+license-files = ["LICENSE"]
+
 [tool.setuptools.packages.find]
 include = ["akousousin_app*"]

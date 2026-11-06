@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """KDE focus tracking and consent-based desktop portals. Loaded only on enable."""
 import asyncio
 import concurrent.futures

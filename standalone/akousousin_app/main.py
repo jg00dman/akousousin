@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """Akousousin control panel / installer entry point."""
 import argparse
 import multiprocessing

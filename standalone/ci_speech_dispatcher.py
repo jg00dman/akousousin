@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """Real Speech Dispatcher daemon + packaged module + Piper, using ALSA null.
 
 This verifies protocol/audio delivery, not audible playback or a screen reader.

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 # Launch Logos with SAPI traces. Save beside wine-bisect.sh.
 # Usage: ./sapi-test.sh [AppImage|Wine directory|bin|build]
 # Optional: SAPI_WINEDEBUG=... SAPI_DLLOVERRIDES=... ./sapi-test.sh

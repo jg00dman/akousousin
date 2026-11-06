@@ -1,3 +1,8 @@
+<!--
+SPDX-License-Identifier: GPL-3.0-or-later
+SPDX-FileCopyrightText: 2026 John Goodman
+-->
+
 # Whisper recognition development
 
 Status: experimental backend foundation on the `whisper` branch. This is not yet

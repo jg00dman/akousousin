@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """Shared controller, tray and application sessions; all resources remain in the package."""
 import json
 import os

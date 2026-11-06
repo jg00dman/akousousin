@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """Test packaged SAPI, the approved starter voice, shared sessions and controller lifecycle."""
 import hashlib
 import os

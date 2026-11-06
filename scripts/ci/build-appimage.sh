@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 set -Eeuo pipefail
 project_dir=$(pwd)
 wine_repository=${WINE_REPOSITORY:-https://github.com/FaithLife-Community/wine.git}
@@ -178,7 +180,9 @@ cp build/sapi-probe.exe "$share/"
 cp scripts/register-voice.py "$share/scripts/"
 cp scripts/ci/AppRun AppDir/AppRun
 chmod +x AppDir/AppRun
-cp LICENSE AppDir/usr/share/licenses/akousousin/LGPL-2.1.txt
+cp LICENSES/LGPL-2.1-or-later.txt AppDir/usr/share/licenses/akousousin/LGPL-2.1.txt
+cp LICENSE AppDir/usr/share/licenses/akousousin/Akousousin-GPL-3.0.txt
+cp LICENSING.md AppDir/usr/share/licenses/akousousin/Akousousin-LICENSING.md
 cp wine-src/COPYING.LIB AppDir/usr/share/licenses/akousousin/Wine-COPYING.LIB
 cp scripts/ci/type2-runtime.LICENSE AppDir/usr/share/licenses/akousousin/AppImage-runtime-MIT.txt
 cp scripts/ci/WINE-SOURCE.md "$share/"

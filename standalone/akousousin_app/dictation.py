@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """Controller-owned recognition. No GUI, keyboard or heavyweight inference on import."""
 import queue
 import threading

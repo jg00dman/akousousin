@@ -1,3 +1,8 @@
+<!--
+SPDX-License-Identifier: GPL-3.0-or-later
+SPDX-FileCopyrightText: 2026 John Goodman
+-->
+
 # API coverage and implementation status
 
 Applies to main's **0.6.0b3 beta**, assessed on 5 November 2026.

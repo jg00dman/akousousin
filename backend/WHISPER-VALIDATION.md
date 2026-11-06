@@ -1,3 +1,8 @@
+<!--
+SPDX-License-Identifier: GPL-3.0-or-later
+SPDX-FileCopyrightText: 2026 John Goodman
+-->
+
 # Whisper development validation — 2026-11-04
 
 This is backend validation, not SAPI compliance or a release acceptance report.

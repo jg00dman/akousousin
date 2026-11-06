@@ -1,3 +1,8 @@
+<!--
+SPDX-License-Identifier: GPL-3.0-or-later
+SPDX-FileCopyrightText: 2026 John Goodman
+-->
+
 > **Historical CLI-only snapshot, superseded by the main AppImage beta.** The
 > instructions and glibc requirement below describe that older standalone archive.
 > Use the [current Voice Input guide](PANEL-TESTING.md) for the AppImage, control

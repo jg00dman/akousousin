@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
 """Speech Dispatcher output-module protocol, with audio returned to its mixer.
 
 No shell commands, independent audio device or global preference changes. Speech
