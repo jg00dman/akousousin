@@ -17,6 +17,8 @@ work = settings_path.parent / 'speech-dispatcher'
 work.mkdir(parents=True, exist_ok=True)
 logs = work / 'logs'
 logs.mkdir(exist_ok=True)
+subprocess.run([str(executable), '--settings', str(settings_path), '--download-starter-voice'],
+               check=True, timeout=180)
 installed = subprocess.run([str(executable), '--settings', str(settings_path), '--install-speech-dispatcher'],
                            capture_output=True, text=True, timeout=45)
 # Hosted CI has no systemd user session. Registration must still be saved, and
