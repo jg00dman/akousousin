@@ -194,8 +194,14 @@ def main():
             com_ok = all(entry['exit'] == 0 and private(entry) for entry in com_entries if entry['mode'] != 'load')
             RESULTS['private_com_works'] = com_ok
             RESULTS['path_only_covers_all_modes'] = all(entry['exit'] == 0 and private(entry) for entry in path_entries)
-            if com_ok:
+            put_value(ENV_KEY, ['/v', 'Path'], original_path, env)
+            restart(env)
+            no_path_entries = measure('private_com_without_path', env)
+            no_path_ok = all(entry['exit'] == 0 and private(entry) for entry in no_path_entries if entry['mode'] != 'load')
+            RESULTS['private_com_without_path_works'] = no_path_ok
+            if no_path_ok:
                 functional_test(prefix, env)
+            assert no_path_ok, 'Private COM registration still requires the PATH change'
             for key, original in records.items():
                 put_value(key, ['/ve'], original, env)
             put_value(ENV_KEY, ['/v', 'Path'], original_path, env)
