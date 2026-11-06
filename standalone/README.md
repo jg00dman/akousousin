@@ -17,9 +17,12 @@ recognition and native Windows microphone capture are not implemented. See the
 
 One speech service and configuration per operating-system user. This beta contains
 the standalone 64-bit SAPI engine, control panel, tray and Piper/Waitress backend.
-It includes the reviewed en_US-ljspeech-medium starter voice, its model card,
-checksum provenance and licence declarations. No Wine runtime or other voice weights
-are bundled. Existing selected voices are preserved.
+The default package contains no Piper voice or Whisper model weights and no Wine
+runtime. On first use, Overview offers the reviewed en_US-ljspeech-medium voice
+(about 64 MB), or a choice from Voice library. Downloads retain upstream model
+cards, checksum provenance and licence declarations. Voices stay installed in the
+user data folder across upgrades. Existing selected voices are preserved. An
+optional build includes LJSpeech for offline first use.
 
 ## Linux installation and storage
 
@@ -47,21 +50,29 @@ Close Logos before registering an existing initialized 64-bit Wine prefix:
 export APPIMAGE_EXTRACT_AND_RUN=1
 IMAGE="$HOME/.local/share/Akousousin/Akousousin-x86_64.AppImage"
 chmod +x "$IMAGE"
+"$IMAGE" --download-starter-voice  # one-time download; omit if a voice is already installed
 "$IMAGE" --wine-prefix "$HOME/wine-bisect-prefix/data/wine64_bottle" \
   --wine "$HOME/akousousin/wine-akousousin-piper-11.21-logos-x86_64.AppImage" --install-only
 "$IMAGE"
 ```
 
-The bundled LJSpeech voice is ready on a fresh installation. To use another
-voice, import its `.onnx` file (matching `.onnx.json` alongside), or review and
-download one in Voice library. Select Make default, then Settings → Install /
+Startup itself never downloads weights. On a fresh installation choose Download
+starter voice in Overview, import an `.onnx` file (matching `.onnx.json` alongside),
+or review and download one in Voice library. The first installed voice becomes
+the default; subsequent downloads preserve your selection. Optional offline
+builds copy the bundled starter into the same persistent voice library. Select Make default, then Settings → Install /
 apply voice registration. Overview → Start server → Play sample tests real Piper and
 playback. Next test Logos Read Aloud using the same Wine package.
 
 ## Tray and lifecycle
 
 The original Akousousin waveform artwork is shared by the AppImage, window and tray.
-A tray badge reports stopped, starting, running or error. Its menu provides
+A tray badge reports stopped, starting, running or error. Downloads add a blue
+arrow/progress ring and their byte counts/percentages to the tooltip and menu;
+failed downloads briefly show a red indicator. The control panel shows a separate
+progress bar for each download across all pages. Known-size transfers use actual
+bytes received; connection, verification and unknown-size stages show activity
+without a guessed percentage. Its menu provides
 Start/Stop Speech, Start/Stop Dictation, Default Voice (grouped by readable
 language names), Configure, Quit. A single left-click opens the menu; double-click
 opens the control panel.
@@ -180,3 +191,12 @@ the available screen, and Settings remains accessible at smaller sizes.
 explains the experimental limits. SAPI recognition, other Wayland compositors and
 a general native input framework remain future work. No automatic word-processor
 proofing-language tagging is implemented.
+
+## Build with or without the starter voice
+
+`python standalone/package.py` builds a model-free package by default. Add
+`--bundle-starter-voice` for offline first use with the reviewed LJSpeech voice.
+The Standalone Akousousin workflow exposes the same `bundle_starter_voice`
+checkbox (off by default). Both variants retain their runtime dependencies and
+licence notices; only the optional voice weights differ. Packaging clears staged
+resources so an earlier offline build cannot leak weights into a lean build.

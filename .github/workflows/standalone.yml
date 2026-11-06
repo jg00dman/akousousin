@@ -4,6 +4,10 @@ name: Standalone Akousousin
 on:
   workflow_dispatch:
     inputs:
+      bundle_starter_voice:
+        description: Include the starter voice for offline first use
+        type: boolean
+        default: false
       reuse_run_id:
         description: Publish a previously tested Whisper run without rebuilding
         type: string
@@ -13,7 +17,7 @@ on:
         type: boolean
         default: false
   push:
-    branches: [main, whisper, codex/private-sapi-probe, codex/project-licensing, codex/standalone-control-panel, codex/speech-dispatcher-on-demand, codex/linux-speech-dispatcher, codex/control-panel-updates]
+    branches: [main, whisper, codex/on-demand-voices, codex/private-sapi-probe, codex/project-licensing, codex/standalone-control-panel, codex/speech-dispatcher-on-demand, codex/linux-speech-dispatcher, codex/control-panel-updates]
     paths: [engine/**, standalone/**, backend/**, tests/**, .github/workflows/standalone.yml]
 permissions:
   contents: read
@@ -87,9 +91,9 @@ jobs:
         if: runner.os == 'Linux'
         shell: bash
         run: PYTHONPATH=backend python -m unittest discover -s backend/tests -v
-      - name: Build package with reviewed LJSpeech starter voice, licences and sources
+      - name: Build selected package variant, licences and sources
         id: package
-        run: python standalone/package.py
+        run: python standalone/package.py ${{ inputs.bundle_starter_voice && '--bundle-starter-voice' || '' }}
       - name: Check packaged GPL and LGPL notices
         run: python scripts/check-licensing.py --package build/standalone-package/Akousousin
       - name: Packaged AppImage update and registration refresh
@@ -99,16 +103,14 @@ jobs:
         if: runner.os == 'Linux'
         run: xvfb-run -a python standalone/ci_smoke.py
       - name: Real Whisper inference from the packaged application
-        if: runner.os == 'Linux' && (github.ref == 'refs/heads/whisper' || github.ref == 'refs/heads/main')
+        if: runner.os == 'Linux' && (github.ref == 'refs/heads/whisper' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/codex/on-demand-voices')
         env:
           APPIMAGE_EXTRACT_AND_RUN: '1'
         run: |
           sudo apt-get install -y --no-install-recommends ffmpeg
           python - <<'PYTHON'
-          from huggingface_hub import snapshot_download
-          snapshot_download('Systran/faster-whisper-small',
-                            revision='536b0662742c02347bc0e980a01041f333bce120',
-                            local_dir='build/test-models/small')
+          from akousousin_backend.models import install
+          install(root='build/test-models')
           PYTHON
           curl --fail --location --max-time 60 https://raw.githubusercontent.com/openai/whisper/main/tests/jfk.flac -o build/jfk.flac
           echo '63a4b1e4c1dc655ac70961ffbf518acd249df237e5a0152faae9a4a836949715  build/jfk.flac' | sha256sum --check
@@ -189,7 +191,7 @@ jobs:
           cp COMPATIBILITY.md release-assets/COMPATIBILITY.md
           cp patches/wine-piper.patch release-assets/wine-piper-original.patch
           (cd release-assets && sha256sum -- *.AppImage *.zip *.tar.gz TESTING.md COMPATIBILITY.md *.patch > SHA256SUMS)
-      - name: Publish standalone beta with the approved LJSpeech starter voice
+      - name: Publish standalone beta with the selected voice option
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -205,7 +207,7 @@ jobs:
             --notes-file standalone/RELEASE-NOTES.md release-assets/*
 
   whisper-test-build:
-    if: ${{ !cancelled() && (github.ref == 'refs/heads/whisper' || github.ref == 'refs/heads/codex/private-sapi-probe') && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish)) && (inputs.reuse_run_id != '' || needs.package.result == 'success') }}
+    if: ${{ !cancelled() && (github.ref == 'refs/heads/whisper' || github.ref == 'refs/heads/codex/private-sapi-probe' || github.ref == 'refs/heads/codex/on-demand-voices') && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish)) && (inputs.reuse_run_id != '' || needs.package.result == 'success') }}
     needs: [engine, package]
     runs-on: ubuntu-22.04
     permissions:
@@ -228,7 +230,7 @@ jobs:
           def get(path):
               return json.loads(subprocess.check_output(['gh', 'api', 'repos/' + repository + path], text=True))
           metadata = get('/actions/runs/' + run)
-          assert metadata['head_branch'] in ('whisper', 'codex/private-sapi-probe')
+          assert metadata['head_branch'] in ('whisper', 'codex/private-sapi-probe', 'codex/on-demand-voices')
           assert metadata['path'] == '.github/workflows/standalone.yml'
           jobs = get('/actions/runs/' + run + '/jobs')['jobs']
           for name in ('engine', 'package (ubuntu-22.04)'):
@@ -243,7 +245,7 @@ jobs:
           run-id: ${{ inputs.reuse_run_id || github.run_id }}
           pattern: akousousin-standalone-Linux-*
           path: release-input
-      - name: Publish checked Whisper panel trial
+      - name: Publish checked trial AppImage
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -261,10 +263,11 @@ jobs:
               if file.is_file():
                   shutil.copy2(file, target / file.name)
           private_sapi = os.environ['BUILT_BRANCH'] == 'codex/private-sapi-probe'
-          guide = 'standalone/PRIVATE-SAPI-TESTING.md' if private_sapi else 'recognition/PANEL-TESTING.md'
+          on_demand = os.environ['BUILT_BRANCH'] == 'codex/on-demand-voices'
+          guide = 'standalone/ON-DEMAND-TESTING.md' if on_demand else 'standalone/PRIVATE-SAPI-TESTING.md' if private_sapi else 'recognition/PANEL-TESTING.md'
           shutil.copy2(guide, target / 'TESTING.md')
           repository = os.environ['GITHUB_REPOSITORY']
-          tag = ('private-sapi-trial-' if private_sapi else 'whisper-trial-') + os.environ['GITHUB_RUN_ID'] + '-' + os.environ['GITHUB_RUN_ATTEMPT']
+          tag = ('on-demand-trial-' if on_demand else 'private-sapi-trial-' if private_sapi else 'whisper-trial-') + os.environ['GITHUB_RUN_ID'] + '-' + os.environ['GITHUB_RUN_ATTEMPT']
           base_url = 'https://github.com/' + repository
           download = base_url + '/releases/download/' + tag + '/Akousousin-x86_64.AppImage'
           evidence = base_url + '/actions/runs/' + os.environ['GITHUB_RUN_ID']
@@ -279,7 +282,7 @@ jobs:
                           '-f', 'ref=refs/tags/' + tag, '-f', 'sha=' + os.environ['BUILT_SHA']], check=True)
           subprocess.run(['gh', 'release', 'create', tag, '--verify-tag',
                           '--repo', repository, '--latest=false',
-                          '--prerelease', '--title', ('Private SAPI trial ' if private_sapi else 'Whisper control panel trial ') + os.environ['BUILT_SHA'][:8],
+                          '--prerelease', '--title', ('On-demand voice trial ' if on_demand else 'Private SAPI trial ' if private_sapi else 'Whisper control panel trial ') + os.environ['BUILT_SHA'][:8],
                           '--notes-file', str(notes),
                           *map(str, target.iterdir())], check=True)
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:

@@ -307,6 +307,9 @@ def run(path):
                 action.setChecked(identifier == config['voice'])
                 action.triggered.connect(lambda checked=False, key=identifier: submit({'command': 'voice', 'voice': key}))
         voices.aboutToShow.connect(populate)
+        downloads_action = menu.addAction('No downloads')
+        downloads_action.setEnabled(False)
+        downloads_action.setVisible(False)
         menu.addAction('Configure', lambda: submit({'command': 'configure'}))
         def quit_requested():
             if (state.owners or state.service.health(settings.load(path)['port'])) and QMessageBox.question(None, 'Quit Akousousin?',
@@ -347,6 +350,10 @@ def run(path):
             if state.error and not running:
                 status = 'Error'
             input_status = state.input.status()
+            from .download_status import current, caption
+            downloads = current()
+            active_downloads = [item for item in downloads if item['status'] == 'active']
+            failed_downloads = [item for item in downloads if item['status'] == 'error']
             color = {'Idle': '#737b80', 'Running': '#20a45b', 'Stopped': '#737b80', 'Starting': '#e3aa26', 'Error': '#bd3838'}[status]
             if input_status['busy']:
                 color = '#e3aa26' if input_status['phase'] in ('loading', 'opening') or input_status['state'].startswith('Paused') else '#d94747' if input_status['phase'] == 'listening' else '#327bd2'
@@ -355,9 +362,24 @@ def run(path):
             painter.setBrush(QColor(color))
             painter.setPen(QPen(QColor('white'), 3))
             painter.drawEllipse(44, 44, 18, 18)
+            if active_downloads:
+                item = active_downloads[0]
+                painter.setPen(QPen(QColor('#327bd2'), 6))
+                progress = item['completed'] / item['total'] if item['total'] else None
+                painter.drawArc(4, 4, 56, 56, 90 * 16,
+                                -max(1, int(min(1, progress) * 360 * 16)) if progress is not None else -100 * 16)
+                painter.drawLine(32, 22, 32, 42)
+                painter.drawLine(23, 33, 32, 42)
+                painter.drawLine(32, 42, 41, 33)
+            elif failed_downloads:
+                painter.setBrush(QColor('#bd3838'))
+                painter.drawEllipse(4, 4, 18, 18)
             painter.end()
             tray.setIcon(QIcon(pixmap))
-            tray.setToolTip('Akousousin · ' + status + '\nVoice input: ' + input_status['state'])
+            detail = '\n'.join(caption(item) for item in downloads)
+            tray.setToolTip('Akousousin · ' + status + '\nVoice input: ' + input_status['state'] + ('\n' + detail if detail else ''))
+            downloads_action.setVisible(bool(downloads))
+            downloads_action.setText(detail or 'No downloads')
             pending_input = bool(state.desktop and state.desktop.start_requested)
             dictation_toggle.setText('Stop Dictation' if input_status['busy'] or pending_input else 'Start Dictation')
             toggle.setText('Stop Speech' if running else 'Start Speech')

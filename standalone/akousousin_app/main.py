@@ -40,6 +40,8 @@ def main():
     parser.add_argument('--dictation-cancel', action='store_true', help='Cancel capture, recognition and pending insertion')
     parser.add_argument('--dictation-status', action='store_true', help='Show shared recognition state and latest transcripts')
     parser.add_argument('--status', action='store_true')
+    parser.add_argument('--download-starter-voice', action='store_true',
+                        help='Download the reviewed starter voice once into the persistent voice library')
     parser.add_argument('--quit', action='store_true', help='Stop Piper and quit Akousousin')
     parser.add_argument('--controller', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--panel', action='store_true', help=argparse.SUPPRESS)
@@ -67,6 +69,11 @@ def main():
         Module(args.settings).run()
         return
     config = resources.bootstrap(args.settings)
+    if args.download_starter_voice:
+        import json
+        config = resources.download_starter(args.settings)
+        print(json.dumps(config['voices'][resources.STARTER]))
+        return
     if args.refresh_registrations:
         from .updates import refresh_registrations
         refresh_registrations(args.settings)

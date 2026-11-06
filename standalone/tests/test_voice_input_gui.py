@@ -23,6 +23,42 @@ class VoiceInputGuiTests(unittest.TestCase):
         reporter.start(); self.addCleanup(reporter.stop)
         self.addCleanup(lambda: self.assertEqual(self.callback_errors, [], 'Tk callback errors'))
 
+    def test_first_use_is_explicit_and_progress_uses_real_byte_counts(self):
+        from akousousin_app.panel import Panel
+        with tempfile.TemporaryDirectory() as folder, patch('akousousin_app.resources.bootstrap', return_value=copy.deepcopy(settings.DEFAULTS)), \
+                patch('akousousin_app.catalogue.catalogue', return_value={}), \
+                patch('akousousin_app.voice_input.discover_microphones', return_value=[('', 'System default')]), \
+                patch('akousousin_app.runtime.call', return_value=None), \
+                patch('akousousin_app.resources.download_starter') as download:
+            panel = Panel(Path(folder) / 'settings.json'); self.addCleanup(panel.root.destroy)
+            panel.root.geometry('760x480'); panel.root.update()
+            download.assert_not_called()
+            self.assertTrue(panel.starter_card.winfo_ismapped())
+            start = next(child for child in panel.starter_card.winfo_children()
+                         if isinstance(child, ttk.Button) and 'Download starter voice' in child.cget('text'))
+            self.assertLess(start.winfo_rooty() + start.winfo_height(), panel.root.winfo_rooty() + panel.root.winfo_height())
+            voice = {'path': str(Path(folder) / 'voice.onnx'), 'sample_rate': 22050,
+                     'language': 'en_US', 'name': 'LJSpeech', 'quality': 'medium'}
+            download.return_value = dict(copy.deepcopy(settings.DEFAULTS), voices={settings.DEFAULTS['voice']: voice})
+            start.invoke()
+            deadline = time.monotonic() + 2
+            while panel.busy and time.monotonic() < deadline:
+                panel.root.update(); time.sleep(.01)
+            download.assert_called_once_with(panel.path)
+            self.assertFalse(hasattr(panel, 'starter_card'))
+            value = {'id': 'test', 'label': 'Voice', 'phase': 'Downloading', 'completed': 25,
+                     'total': 100, 'status': 'active'}
+            with patch('akousousin_app.download_status.current', return_value=[value]):
+                panel.downloads.poll()
+                _, label, bar = panel.downloads.rows['test']
+                self.assertIn('25%', label.cget('text'))
+                self.assertEqual(float(bar.cget('value')), 25)
+                self.assertEqual(str(bar.cget('mode')), 'determinate')
+                value['total'] = None
+                panel.downloads.poll()
+                self.assertNotIn('%', label.cget('text'))
+                self.assertEqual(str(bar.cget('mode')), 'indeterminate')
+
     def test_start_button_is_visible_and_starts_a_recording(self):
         with tempfile.TemporaryDirectory() as folder:
             root = tk.Tk(); self.addCleanup(root.destroy)
