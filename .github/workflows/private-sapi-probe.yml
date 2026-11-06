@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
+name: Probe private SAPI loading
+on:
+  push:
+    branches: [codex/private-sapi-probe]
+    paths: [tests/sapi-location-probe.c, standalone/ci_private_sapi.py, .github/workflows/private-sapi-probe.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with: {python-version: '3.12'}
+      - name: Install probe compiler and test display
+        run: |
+          if [ -f /etc/apt/apt-mirrors.txt ]; then
+            sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/apt-mirrors.txt
+          fi
+          sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=30 update
+          sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=30 install -y --no-install-recommends gcc-mingw-w64-x86-64 xvfb xauth libegl1 libgl1 libopengl0 fonts-dejavu-core
+      - name: Download verified Wine runtime without compiling Wine
+        run: |
+          mkdir -p build/private-sapi/runtime
+          curl --fail --location --max-time 180 'https://github.com/jg00dman/akousousin/releases/download/wine-compat-11.21-3b19eb0e45ac/wine-runtime-11.21-logos-x86_64.tar.xz' -o build/private-sapi/wine.tar.xz
+          echo 'e9e2559bbf34348d1cc9a5cf15530fd62b7075281959f3893fc8be897e783de1  build/private-sapi/wine.tar.xz' | sha256sum --check
+          tar -xJf build/private-sapi/wine.tar.xz -C build/private-sapi/runtime
+      - name: Build standalone DLL-location probes
+        run: |
+          x86_64-w64-mingw32-gcc -std=c11 -Wall -Wextra -municode tests/sapi-location-probe.c -o build/private-sapi/sapi-location.exe -lole32 -luuid
+          sh engine/build.sh
+      - name: Test PATH override and private COM registration in disposable prefixes
+        run: xvfb-run -a python standalone/ci_private_sapi.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: private-sapi-loading-evidence
+          path: |
+            build/private-sapi/results.json
+            build/private-sapi/*.log
