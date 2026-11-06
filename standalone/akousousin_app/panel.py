@@ -368,7 +368,7 @@ class Panel:
             row = ttk.Frame(frame, style='Card.TFrame'); row.pack(fill='x', pady=6)
             ttk.Entry(row, textvariable=self.wine).pack(side='left', fill='x', expand=True)
             ttk.Button(row, text='Choose…', command=lambda: self.wine.set(filedialog.askopenfilename())).pack(side='right')
-        ttk.Label(frame, text='Close applications before installation. Original speech registry settings and replaced DLLs are backed up. Native Windows SAPI is never replaced; Windows voice installation requires administrator rights.',
+        ttk.Label(frame, text='Close applications before installation. Original speech registry settings are backed up. Wine compatibility DLLs stay in the Akousousin folder; system SAPI DLLs are untouched. Windows voice installation requires administrator rights.',
                   wraplength=780, style='Card.TLabel').pack(anchor='w', pady=12)
         ttk.Button(frame, text='Install / apply voice registration', style='Accent.TButton', command=self.install).pack(side='left', padx=4)
         ttk.Button(frame, text='Uninstall & restore', command=self.uninstall).pack(side='left', padx=4)
@@ -458,7 +458,7 @@ class Panel:
         self.worker(lambda: Installer(resources.root(), prefix, wine).install(self.config, self.path), installed)
 
     def uninstall(self):
-        if not messagebox.askyesno('Uninstall Akousousin', 'Restore original DLLs and speech registration in this installation?'):
+        if not messagebox.askyesno('Uninstall Akousousin', 'Remove Akousousin’s private DLLs and restore speech registration in this installation?'):
             return
         prefix, wine = self.config['wine_prefix'] or None, self.config['wine'] or None
         self.worker(lambda: Installer(resources.root(), prefix, wine).uninstall(),

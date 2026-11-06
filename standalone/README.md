@@ -102,12 +102,16 @@ private controller files. `--settings` remains a diagnostic/test override.
 ## Compatibility and rollback
 
 This beta supports 64-bit callers only. Wine 11.21 prefixes missing the generic
-SAPI enumeration fix receive a prefix-local compatibility DLL, with originals
-backed up. Other Wine versions needing that fix are refused rather than guessed.
+SAPI enumeration fix use `C:\Program Files\Akousousin\compat\x64\sapi.dll`.
+The installer redirects Wine SAPI COM default values to that private DLL and sets
+`native,builtin`; Wine system DLL files and PATH remain unchanged. Original COM
+default values and the override are saved for rollback/uninstall. Other Wine
+versions needing that fix are refused rather than guessed.
 Remove launcher-forced `sapi=b` when the compatibility DLL is required.
 
 Settings → Uninstall & restore (or `--uninstall --wine-prefix ... --wine ...`)
-restores original registry settings/defaults and replaced DLLs. It keeps voices
+restores original registry settings/defaults and removes or restores AKS-owned
+private DLLs. It keeps voices
 and preferences. Native Windows system SAPI is never replaced: extract the
 Windows ZIP, use the same control panel/tray, and register with `--install` from
 an administrator terminal. Windows data/config are under LocalAppData/Akousousin.

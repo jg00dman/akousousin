@@ -13,7 +13,7 @@ on:
         type: boolean
         default: false
   push:
-    branches: [main, whisper, codex/project-licensing, codex/standalone-control-panel, codex/speech-dispatcher-on-demand, codex/linux-speech-dispatcher, codex/control-panel-updates]
+    branches: [main, whisper, codex/private-sapi-probe, codex/project-licensing, codex/standalone-control-panel, codex/speech-dispatcher-on-demand, codex/linux-speech-dispatcher, codex/control-panel-updates]
     paths: [engine/**, standalone/**, backend/**, tests/**, .github/workflows/standalone.yml]
 permissions:
   contents: read
@@ -205,7 +205,7 @@ jobs:
             --notes-file standalone/RELEASE-NOTES.md release-assets/*
 
   whisper-test-build:
-    if: ${{ !cancelled() && github.ref == 'refs/heads/whisper' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish)) && (inputs.reuse_run_id != '' || needs.package.result == 'success') }}
+    if: ${{ !cancelled() && (github.ref == 'refs/heads/whisper' || github.ref == 'refs/heads/codex/private-sapi-probe') && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish)) && (inputs.reuse_run_id != '' || needs.package.result == 'success') }}
     needs: [engine, package]
     runs-on: ubuntu-22.04
     permissions:
@@ -228,13 +228,14 @@ jobs:
           def get(path):
               return json.loads(subprocess.check_output(['gh', 'api', 'repos/' + repository + path], text=True))
           metadata = get('/actions/runs/' + run)
-          assert metadata['head_branch'] == 'whisper'
+          assert metadata['head_branch'] in ('whisper', 'codex/private-sapi-probe')
           assert metadata['path'] == '.github/workflows/standalone.yml'
           jobs = get('/actions/runs/' + run + '/jobs')['jobs']
           for name in ('engine', 'package (ubuntu-22.04)'):
               assert any(job['name'] == name and job['conclusion'] == 'success' for job in jobs), name
           with open(os.environ['GITHUB_ENV'], 'a') as env:
               env.write('BUILT_SHA=' + metadata['head_sha'] + '\n')
+              env.write('BUILT_BRANCH=' + metadata['head_branch'] + '\n')
           PYTHON
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
@@ -259,9 +260,11 @@ jobs:
           for file in directory.iterdir():
               if file.is_file():
                   shutil.copy2(file, target / file.name)
-          shutil.copy2('recognition/PANEL-TESTING.md', target / 'TESTING.md')
+          private_sapi = os.environ['BUILT_BRANCH'] == 'codex/private-sapi-probe'
+          guide = 'standalone/PRIVATE-SAPI-TESTING.md' if private_sapi else 'recognition/PANEL-TESTING.md'
+          shutil.copy2(guide, target / 'TESTING.md')
           repository = os.environ['GITHUB_REPOSITORY']
-          tag = 'whisper-trial-' + os.environ['GITHUB_RUN_ID'] + '-' + os.environ['GITHUB_RUN_ATTEMPT']
+          tag = ('private-sapi-trial-' if private_sapi else 'whisper-trial-') + os.environ['GITHUB_RUN_ID'] + '-' + os.environ['GITHUB_RUN_ATTEMPT']
           base_url = 'https://github.com/' + repository
           download = base_url + '/releases/download/' + tag + '/Akousousin-x86_64.AppImage'
           evidence = base_url + '/actions/runs/' + os.environ['GITHUB_RUN_ID']
@@ -271,12 +274,12 @@ jobs:
                            '`~/.local/share/Akousousin/models/whisper/` (respecting `XDG_DATA_HOME`).\n\n'
                            'Matching sources and checksums are separate release assets. '
                            '[Build logs and diagnostic artifacts](' + evidence + ') remain on GitHub.\n\n'
-                           + Path('recognition/PANEL-TESTING.md').read_text())
+                           + Path(guide).read_text())
           subprocess.run(['gh', 'api', 'repos/' + repository + '/git/refs',
                           '-f', 'ref=refs/tags/' + tag, '-f', 'sha=' + os.environ['BUILT_SHA']], check=True)
           subprocess.run(['gh', 'release', 'create', tag, '--verify-tag',
                           '--repo', repository, '--latest=false',
-                          '--prerelease', '--title', 'Whisper control panel trial ' + os.environ['BUILT_SHA'][:8],
+                          '--prerelease', '--title', ('Private SAPI trial ' if private_sapi else 'Whisper control panel trial ') + os.environ['BUILT_SHA'][:8],
                           '--notes-file', str(notes),
                           *map(str, target.iterdir())], check=True)
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:

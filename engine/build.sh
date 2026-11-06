@@ -13,3 +13,6 @@ cc=${CC_PE:-x86_64-w64-mingw32-gcc}
     tests/engine-probe.c -o build/standalone-engine/engine-probe.exe -lole32 -lsapi -luuid
 "$cc" -std=c11 -D_WIN32_WINNT=0x0601 -Wall engine/compat-probe.c \
     -o build/standalone-engine/compat-probe.exe -lole32 -ladvapi32 -lsapi -luuid
+
+"$cc" -std=c11 -D_WIN32_WINNT=0x0601 -Wall -Wextra -municode tests/sapi-location-probe.c \
+    -o build/standalone-engine/sapi-location-probe.exe -lole32 -luuid
