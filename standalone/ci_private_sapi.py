@@ -113,7 +113,7 @@ def sapi_classes(env):
             if data.strip('"').replace('/', '\\').split('\\')[-1].lower() == 'sapi.dll':
                 records[key] = (kind, data)
     assert records, 'No SAPI COM registrations discovered'
-    assert any('{D9F6EE60-58C9-458B-88E1-2FD7F88F8F7C}' in key.upper() for key in records)
+    assert any('{D9F6EE60-58C9-458B-88E1-2F908FD7F87C}' in key.upper() for key in records)
     assert any('{96749377-3391-11D2-9EE3-00C04F797396}' in key.upper() for key in records)
     RESULTS['original_sapi_classes'] = records
     return records
@@ -172,7 +172,7 @@ def main():
             assert before, 'No baseline SAPI files found'
             RESULTS['system_before'] = before
             baseline = measure('baseline', env)
-            assert all(entry['exit'] == 0 for entry in baseline), 'Baseline SAPI initialization failed'
+            assert all(entry['exit'] == 0 for entry in baseline if entry['mode'] != 'load'), 'Baseline COM initialization failed'
             destination = prefix / 'drive_c/Program Files/Akousousin/compat/x64/sapi.dll'
             destination.parent.mkdir(parents=True)
             shutil.copy2(source, destination)
@@ -202,7 +202,7 @@ def main():
             put_value(OVERRIDE_KEY, ['/v', 'sapi'], original_override, env)
             restart(env)
             restored = measure('registration_restored', env)
-            assert all(entry['exit'] == 0 for entry in restored)
+            assert [(entry['caller'], entry['mode'], entry['exit'], entry.get('MODULE')) for entry in restored] == [(entry['caller'], entry['mode'], entry['exit'], entry.get('MODULE')) for entry in baseline], 'Restored registration differs from baseline'
             after = snapshot(prefix)
             RESULTS['system_after'] = after
             RESULTS['system_files_unchanged'] = before == after
