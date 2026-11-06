@@ -3,9 +3,15 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
-# Akousousin 0.6.0b3 beta
+# Akousousin 0.6.0b4 beta
 
-This beta adds experimental local Whisper voice input on Linux while retaining
+This beta consolidates private Wine SAPI installation, on-demand voice downloads,
+byte-based download progress and the latest desktop control fixes. Left-click
+toggles dictation; right-click opens the tray menu. Speech Dispatcher restart uses
+host libraries, and panel errors provide selectable text, copyable recovery
+commands and separate diagnostics.
+
+It provides experimental local Whisper voice input on Linux while retaining
 SAPI speech output on Wine/native Windows and native Linux Speech Dispatcher.
 Voice input is not a SAPI recognition engine.
 

@@ -7,7 +7,7 @@ SPDX-FileCopyrightText: 2026 John Goodman
 
 **akousousin:** *The unified neural speech engine for Linux, implementing Microsoft SAPI and Speech Dispatcher, based on Piper and Whisper.*
 
-**Main version: 0.6.0b3 beta.** [Downloads and release notes](https://github.com/jg00dman/akousousin/releases).
+**Main version: 0.6.0b4 beta.** [Downloads and release notes](https://github.com/jg00dman/akousousin/releases).
 Core speech output works through 64-bit SAPI (Wine and native Windows) and the
 native Linux Speech Dispatcher output module. On-demand startup, idle model
 unloading and control-panel update checks are included. Neither output interface

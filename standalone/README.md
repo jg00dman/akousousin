@@ -7,7 +7,7 @@ SPDX-FileCopyrightText: 2026 John Goodman
 
 **akousousin:** *The unified neural speech engine for Linux, implementing Microsoft SAPI and Speech Dispatcher, based on Piper and Whisper.*
 
-The 0.6.0b3 beta implements SAPI text-to-speech using Piper, native Linux Speech
+The 0.6.0b4 beta implements SAPI text-to-speech using Piper, native Linux Speech
 Dispatcher output and experimental local Whisper voice input on Linux. SAPI
 recognition and native Windows microphone capture are not implemented. See the
 [compatibility table](../COMPATIBILITY.md) for the implemented capabilities.
@@ -164,7 +164,7 @@ update is refused. Restarted speech starts on demand as usual.
 Windows ZIP and source installations offer the matching release download for
 manual installation after quitting Akousousin. Automatic replacement is currently
 available for Linux AppImages only. Release tags include the package version,
-for example `standalone-beta-0.6.0b3-<build>-1`; older run-number-only tags are not
+for example `standalone-beta-0.6.0b4-<build>-1`; older run-number-only tags are not
 offered as updates. Each new release must increase the package version.
 
 ## Experimental Voice Input on Linux
