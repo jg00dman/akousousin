@@ -8,6 +8,7 @@ import tempfile
 import urllib.request
 
 from akousousin_backend.downloads import Transfer
+from akousousin_backend.tls import https_context
 
 REVISION = 'b4e358ffcb232591bf73a540e70f7de528e4174a'
 BASE = f'https://huggingface.co/rhasspy/piper-voices/resolve/{REVISION}'
@@ -49,7 +50,7 @@ def install(entry, directory, reviewed=False, publish=True):
     with Transfer('Voice · ' + entry['name'], publish=publish) as transfer, tempfile.TemporaryDirectory(dir=directory) as temporary:
         stage = Path(temporary)
         transfer.phase('Fetching voice information')
-        with urllib.request.urlopen(url, timeout=30) as response:
+        with urllib.request.urlopen(url, timeout=30, context=https_context()) as response:
             listing = json.load(response)
         sha = next(x['lfs']['oid'] for x in listing if x['path'] == model)
         model_card = next(p for p in entry['files'] if p.endswith('/MODEL_CARD'))

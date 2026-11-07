@@ -196,6 +196,26 @@ registrations. A second simultaneous update is refused. Speech starts on demand
 as usual. Release tags include a package version; older run-number-only tags are
 not offered as updates. Each new release must increase the package version.
 
+## HTTPS certificates on SteamOS and other Linux distributions
+
+Downloads verify both the certificate chain and hostname. The application loads
+standard host CA bundles, including SteamOS/Arch's `/etc/ssl/cert.pem` and
+`/etc/ca-certificates/extracted/tls-ca-bundle.pem`, rather than depending only on
+Ubuntu's compiled OpenSSL paths. Explicit `SSL_CERT_FILE` / `SSL_CERT_DIR` settings
+are honoured. A missing or invalid custom trust store is not bypassed.
+
+For an older AppImage reporting `CERTIFICATE_VERIFY_FAILED: unable to get local
+issuer certificate` on SteamOS, quit AKS fully and launch it with the host bundle:
+
+```sh
+SSL_CERT_FILE=/etc/ssl/cert.pem "$HOME/.local/share/Akousousin/Akousousin-x86_64.AppImage"
+```
+
+Use the actual AppImage path if running it from Downloads. This keeps certificate
+verification enabled and requires no root access or system changes. If a network
+uses a custom certificate authority, use its administrator-provided trust bundle
+instead of disabling verification.
+
 ## Experimental Voice Input on Linux
 
 ![Voice Input model and dictation setup](../docs/images/voice-input.png)

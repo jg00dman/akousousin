@@ -47,6 +47,13 @@ Readers explicitly select AKS and verify it before speaking; they do not silentl
 continue with eSpeak. Existing Orca profiles may require their engine selection
 changed once in Orca preferences.
 
+## HTTPS trust-store fix on main after 0.7.0b3
+
+Licence reviews, voice/Whisper file downloads and update checks load the host's
+standard CA bundle on SteamOS/Arch and other Linux distributions. Certificate and
+hostname verification remain enabled; explicit custom trust stores are honoured.
+This addresses frozen Ubuntu OpenSSL paths missing SteamOS's certificate store.
+
 See the [installation guide](https://github.com/jg00dman/akousousin/blob/main/standalone/README.md)
 and [beta checklist](https://github.com/jg00dman/akousousin/blob/main/standalone/BETA-TESTING.md).
 Licences, matching sources and checksums accompany the packages.

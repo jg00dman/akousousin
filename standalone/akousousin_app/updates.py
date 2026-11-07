@@ -16,6 +16,7 @@ from packaging.version import InvalidVersion, Version
 
 from . import __version__, resources, runtime, settings
 from akousousin_backend.downloads import Transfer
+from akousousin_backend.tls import https_context
 
 REPOSITORY = 'jg00dman/akousousin'
 API = f'https://api.github.com/repos/{REPOSITORY}/releases?per_page=100'
@@ -41,7 +42,7 @@ def check(current=__version__, windows=None, include_beta=None):
     filename = 'Akousousin-Windows-x86_64.zip' if windows else 'Akousousin-x86_64.AppImage'
     request = urllib.request.Request(API, headers={'Accept': 'application/vnd.github+json',
                                                  'User-Agent': 'Akousousin-update-check'})
-    with urllib.request.urlopen(request, timeout=15) as response:
+    with urllib.request.urlopen(request, timeout=15, context=https_context()) as response:
         data = response.read(2 * 1024 * 1024 + 1)
     if len(data) > 2 * 1024 * 1024:
         raise ValueError('Release response is too large')

@@ -9,6 +9,8 @@ import time
 import urllib.request
 import uuid
 
+from .tls import https_context
+
 
 def directory():
     base = Path(os.environ.get('LOCALAPPDATA', Path.home() / 'AppData/Local')) if os.name == 'nt' else Path(
@@ -46,7 +48,7 @@ class Transfer:
         digest = hashlib.sha256()
         git = hashlib.sha1(b'blob ' + str(size).encode() + b'\0') if git_sha1 else None
         received = 0
-        with urllib.request.urlopen(url, timeout=30) as response, Path(destination).open('wb') as output:
+        with urllib.request.urlopen(url, timeout=30, context=https_context()) as response, Path(destination).open('wb') as output:
             header = getattr(response, 'headers', {}).get('Content-Length')
             expected = size if size is not None else int(header) if header else None
             if self.value['total'] is None and expected is not None:
