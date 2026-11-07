@@ -6,8 +6,10 @@ SPDX-FileCopyrightText: 2026 John Goodman
 # Akousousin screenshots
 
 These images show the actual Linux control panel. The overview was captured
-during the latest release checks; the input and reading pages show 0.7.0b1
-(their controls are unchanged in 0.7.0b2), captured from source in an isolated profile on a virtual X display. They show
+during the latest release checks. The input and reading images show earlier
+0.7.0b1 setup screens, captured from source in an isolated profile on a virtual
+X display. Current releases use the actual AKS header icon and automatically
+prepare speech support when enabling reading shortcuts. The images show
 setup states, not completed desktop permission or microphone tests. The temporary
 model path in the input screenshots belongs to that isolated profile; the normal
 cache is `~/.local/share/Akousousin/models/whisper/`, respecting `XDG_DATA_HOME`.

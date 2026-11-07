@@ -9,7 +9,7 @@ Use the direct `Akousousin-x86_64.AppImage` link in the beta or trial release, m
 executable and launch it. The AppImage is the only download needed for testing;
 matching sources and checksums are separate release assets, and diagnostic
 artifacts remain on the GitHub Actions run. Open
-**Voice Input**. This guide covers the 0.7.0b3 beta panel and Updates page.
+**Voice Input**. This guide covers the 0.7.0b4 beta panel and Updates page.
 It retains the existing TTS features; Whisper recognition is still experimental.
 
 ![Voice Input model and desktop dictation setup](../docs/images/voice-input.png)
