@@ -142,6 +142,8 @@ class Panel:
                     if result:
                         if result['activation'] != self.last_panel_activation:
                             self.last_panel_activation = result['activation']
+                            if result.get('page') in self.pages:
+                                self.show(result['page'])
                             self.root.deiconify(); self.root.lift(); self.root.focus_force()
                         if hasattr(self, 'reading_state'):
                             reading = result['reading']
@@ -450,9 +452,48 @@ class Panel:
     def build_updates(self):
         frame = self.card(self.pages['Updates'], 'Application updates')
         ttk.Label(frame, text=f'Installed version: {__version__}', style='Card.TLabel').pack(anchor='w')
-        self.update_status = tk.StringVar(value='Check GitHub for a newer release, including betas.')
+        self.update_status = tk.StringVar(value='Check for a newer release.')
+        if not updates.is_appimage():
+            ttk.Label(frame, text='Updates are managed by your software manager or installation source.',
+                      style='Card.TLabel', wraplength=760).pack(anchor='w', pady=12)
+            return
+        self.weekly_updates = tk.BooleanVar(value=self.config['update_weekly'])
+        self.beta_updates = tk.BooleanVar(value=self.config['update_betas'])
+        ttk.Checkbutton(frame, text='Check for updates weekly', variable=self.weekly_updates,
+                        command=self.save_update_preferences).pack(anchor='w', pady=(12, 4))
+        ttk.Checkbutton(frame, text='Show beta testing updates', variable=self.beta_updates,
+                        command=self.save_update_preferences).pack(anchor='w', pady=4)
+        ttk.Label(frame, text='Checks notify you; updates are installed only when you choose. Turning off betas never downgrades your installation.',
+                  style='Card.TLabel', wraplength=760).pack(anchor='w', pady=8)
         ttk.Label(frame, textvariable=self.update_status, wraplength=760, style='Card.TLabel').pack(anchor='w', pady=12)
         ttk.Button(frame, text='Check for updates', command=self.check_updates).pack(anchor='w')
+        self.install_update_button = ttk.Button(frame, text='Install available update…', command=self.install_available_update, state='disabled')
+        self.install_update_button.pack(anchor='w', pady=8)
+        success = updates.completed_update(self.path)
+        if success:
+            self.status.set(success)
+            self.root.after(15000, lambda: self.status.set('Ready') if self.status.get() == success else None)
+        self.root.after(500, self.poll_updates)
+
+    def save_update_preferences(self):
+        config = settings.load(self.path)
+        config.update(update_weekly=self.weekly_updates.get(), update_betas=self.beta_updates.get())
+        settings.save(self.path, config)
+        self.config.update(update_weekly=config['update_weekly'], update_betas=config['update_betas'])
+        self.status.set('Update preferences saved.')
+
+    def poll_updates(self):
+        if not self.updating:
+            candidate = updates.available_update(self.path)
+            self.install_update_button.configure(state='normal' if candidate else 'disabled')
+            if candidate:
+                self.update_status.set('Update available: ' + candidate['version'])
+        self.root.after(1500, self.poll_updates)
+
+    def install_available_update(self):
+        candidate = updates.available_update(self.path)
+        if candidate:
+            self.confirm_update(candidate)
 
     def build_selection(self):
         from .scrolling import ScrollArea
@@ -485,30 +526,29 @@ class Panel:
         ttk.Button(frame, text='Install optional desktop shortcut action', command=install_action).pack(anchor='w', pady=8)
 
     def check_updates(self):
-        if self.busy:
+        if self.busy or not updates.is_appimage():
             return
         self.update_status.set('Checking for updates…')
         def checked(update):
             if update is None:
                 self.update_status.set('No newer compatible release is available.')
                 return
-            self.update_status.set(f'New version available: {update["version"]}')
-            automatic = os.name != 'nt' and bool(os.environ.get('APPIMAGE'))
-            text = (f'Update from {__version__} to {update["version"]}?\n\n'
-                    + ('Close Wine applications first. Speech will stop and the control panel will restart. '
-                       'Your voices and preferences will be kept.' if automatic else
-                       'Open the release download? Quit Akousousin before replacing your installed files.'))
-            if not messagebox.askyesno('Akousousin update', text, parent=self.root):
-                return
-            if not automatic:
-                webbrowser.open(update['url'])
-                return
-            if self.save():
-                self.updating = True
-                self.update_status.set('Downloading and installing update…')
-                self.worker(lambda: updates.install(update, self.path), lambda _: self.root.after_idle(self.root.destroy),
-                            parallel=True)
-        self.worker(updates.check, checked)
+            self.update_status.set(f'Update available: {update["version"]}')
+            self.confirm_update(update)
+        self.worker(lambda: updates.perform_check(self.path), checked)
+
+    def confirm_update(self, update):
+        if self.busy or self.updating or not updates.is_appimage():
+            return
+        text = (f'Update from {__version__} to {update["version"]}?\n\n'
+                'Close Wine applications first. Speech will stop and the control panel will restart. '
+                'Your voices and preferences will be kept.')
+        if not messagebox.askyesno('Akousousin update', text, parent=self.root):
+            return
+        if self.save():
+            self.updating = True
+            self.update_status.set('Updating… Progress is shown below. Please keep this window open.')
+            self.worker(lambda: updates.install(update, self.path), lambda _: self.root.after_idle(self.root.destroy), parallel=True)
 
     def save(self):
         try:

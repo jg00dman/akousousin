@@ -20,6 +20,7 @@ class Sessions:
         self.owners = {}
         self.panels = []
         self.panel_activation = 0
+        self.panel_page = None
         self.independent = False
         self.on_demand = False
         self.closed = False
@@ -124,7 +125,7 @@ class Sessions:
                     raise ValueError('Unknown reading command')
                 return self.selection.status()
             if operation == 'panel-status':
-                return {'activation': self.panel_activation, 'reading': self.selection.status()}
+                return {'activation': self.panel_activation, 'page': self.panel_page, 'reading': self.selection.status()}
             if operation in ('start', 'acquire', 'stop', 'wake'):
                 self.error = None
             port = settings.load(self.path)['port']
@@ -149,6 +150,7 @@ class Sessions:
             elif operation == 'configure':
                 self.independent |= request.get('independent', False)
                 self.panels = [panel for panel in self.panels if panel.poll() is None]
+                self.panel_page = 'Updates' if request.get('page') == 'Updates' else None
                 self.panel_activation += 1
                 if not self.panels:
                     self.panels.append(subprocess.Popen(runtime.command('--panel', '--settings', str(self.path)), env=runtime.environment()))
@@ -221,7 +223,7 @@ class Sessions:
 
 
 def run(path):
-    from PySide6.QtCore import QCoreApplication, QLockFile, QObject, QTimer, Signal
+    from PySide6.QtCore import QCoreApplication, QLockFile, QObject, QTimer, Signal, Qt
     from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
     from PySide6.QtNetwork import QLocalServer
     from PySide6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
@@ -255,6 +257,9 @@ def run(path):
     if not server.listen(runtime.name(path)):
         raise RuntimeError(server.errorString())
     state = Sessions(path)
+    from . import updates
+    update_monitor = updates.UpdateMonitor(path)
+    update_dialog = None
 
     class Events(QObject):
         result = Signal(object, object)
@@ -336,6 +341,8 @@ def run(path):
         downloads_action = menu.addAction('No downloads')
         downloads_action.setEnabled(False)
         downloads_action.setVisible(False)
+        update_action = menu.addAction('Update available…', lambda: submit({'command': 'configure', 'page': 'Updates'}))
+        update_action.setVisible(False)
         menu.addAction('Configure', lambda: submit({'command': 'configure'}))
         def quit_requested():
             if (state.owners or state.service.health(settings.load(path)['port'])) and QMessageBox.question(None, 'Quit Akousousin?',
@@ -349,6 +356,29 @@ def run(path):
                 submit({'command': 'stt-toggle'})
         tray.activated.connect(activate_tray)
         tray.show()
+
+    def notify_update(candidate):
+        nonlocal update_dialog
+        if update_dialog is not None:
+            return
+        box = QMessageBox()
+        box.setWindowModality(Qt.NonModal)
+        box.setAttribute(Qt.WA_ShowWithoutActivating)
+        box.setWindowTitle('Akousousin update available')
+        box.setText('Akousousin ' + candidate['version'] + ' is available.')
+        box.setInformativeText('Open Updates to review and install it when you are ready.')
+        now = box.addButton('Update now…', QMessageBox.AcceptRole)
+        later = box.addButton('Remind me later', QMessageBox.RejectRole)
+        box.setDefaultButton(later)
+        def finished(_):
+            nonlocal update_dialog
+            updates.remind_later(path)
+            if box.clickedButton() == now:
+                submit({'command': 'configure', 'page': 'Updates'})
+            update_dialog = None
+        box.finished.connect(finished)
+        update_dialog = box
+        box.show()  # Nonmodal: notifications must not block controller requests.
 
     def tick():
         # Reaping can stop inference, so never run it in Qt's GUI thread.
@@ -374,6 +404,13 @@ def run(path):
             if state.error and not running:
                 status = 'Error'
             input_status = state.input.status()
+            candidate = update_monitor.tick(quiet=bool(input_status['busy'] or (health and health.get('speaking')) or state.selection.status()['reading']))
+            if candidate:
+                notify_update(candidate)
+            available = updates.available_update(path)
+            update_action.setVisible(bool(available))
+            if available:
+                update_action.setText('Update available: ' + available['version'] + '…')
             from .download_status import current, caption
             downloads = current()
             active_downloads = [item for item in downloads if item['status'] == 'active']

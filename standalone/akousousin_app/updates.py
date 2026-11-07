@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+import threading
 import urllib.request
 
 from packaging.version import InvalidVersion, Version
@@ -33,8 +34,9 @@ def release_version(tag):
         return None
 
 
-def check(current=__version__, windows=None):
-    """Return the newest compatible published version, including betas."""
+def check(current=__version__, windows=None, include_beta=None):
+    """Return a strictly newer compatible release from the chosen channel."""
+    include_beta = Version(current).is_prerelease if include_beta is None else include_beta
     windows = os.name == 'nt' if windows is None else windows
     filename = 'Akousousin-Windows-x86_64.zip' if windows else 'Akousousin-x86_64.AppImage'
     request = urllib.request.Request(API, headers={'Accept': 'application/vnd.github+json',
@@ -51,6 +53,8 @@ def check(current=__version__, windows=None):
         version = release_version(release.get('tag_name', ''))
         if release.get('draft') or version is None or version <= Version(current):
             continue
+        if not include_beta and (release.get('prerelease') or version.is_prerelease or version.is_devrelease):
+            continue
         for asset in release.get('assets', []):
             if asset.get('name') != filename:
                 continue
@@ -66,21 +70,23 @@ def check(current=__version__, windows=None):
     return max(candidates, key=lambda item: Version(item['version']), default=None)
 
 
-def download(update, directory):
+def download(update, directory, transfer=None):
     """Stage on the target filesystem; incomplete/bad downloads never replace it."""
+    if transfer is None:
+        with Transfer('Application update') as progress:
+            return download(update, directory, progress)
     descriptor, filename = tempfile.mkstemp(prefix='.akousousin-update-', dir=directory)
     target = Path(filename)
     try:
         os.close(descriptor)
-        with Transfer('Application update') as transfer:
-            request = urllib.request.Request(update['url'], headers={'User-Agent': 'Akousousin-update'})
-            if not 0 < update['size'] <= MAX_IMAGE:
-                raise ValueError('Invalid update size')
-            transfer.phase('Downloading', total=update['size'])
-            transfer.fetch(request, target, size=update['size'], sha256=update['sha256'])
-            transfer.phase('Verifying update')
-            with target.open('rb') as output:
-                os.fsync(output.fileno())
+        request = urllib.request.Request(update['url'], headers={'User-Agent': 'Akousousin-update'})
+        if not 0 < update['size'] <= MAX_IMAGE:
+            raise ValueError('Invalid update size')
+        transfer.phase('Downloading update', total=update['size'])
+        transfer.fetch(request, target, size=update['size'], sha256=update['sha256'])
+        transfer.phase('Verifying update…')
+        with target.open('rb') as output:
+            os.fsync(output.fileno())
         target.chmod(0o755)
         return target
     except BaseException:
@@ -101,7 +107,7 @@ def environment():
 def install(update, path):
     """Replace the AppImage at its registered path; preserve a rollback image."""
     image = os.environ.get('APPIMAGE')
-    if os.name == 'nt' or not image or not Path(image).is_file():
+    if not is_appimage():
         raise RuntimeError('Automatic installation requires the Linux AppImage; use the release download instead')
     target = Path(image).resolve()
     import fcntl
@@ -114,11 +120,17 @@ def install(update, path):
 
 
 def _install(update, path, target):
-    stage = download(update, target.parent)
+    with Transfer('Application update') as transfer:
+        return _apply(update, path, target, transfer)
+
+
+def _apply(update, path, target, transfer):
+    stage = download(update, target.parent, transfer)
     backup = target.with_name(target.name + '.previous')
     replaced = stopped = False
     env = environment()
     try:
+        transfer.phase('Applying update… Speech will stop briefly.')
         shutil.copy2(target, backup)
         runtime.call(path, {'command': 'quit', 'update_pid': os.getpid()}, launch=False)
         stopped = True
@@ -139,10 +151,17 @@ def _install(update, path, target):
             if time.monotonic() >= deadline:
                 raise RuntimeError('Speech has not stopped for the updated application restart')
             time.sleep(.1)
+        transfer.phase('Update ready — restarting Akousousin…')
+        time.sleep(3)  # Keep the warning visible while the GUI continues polling.
+        save_update_state(path, installed_version=update['version'], available=None)
         subprocess.Popen([str(target), '--settings', str(path), '--configure'], env=env,
                          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return backup
     except Exception as error:
+        try:
+            save_update_state(path, installed_version=None)
+        except OSError:
+            pass  # Receipt failure must never prevent restoring the old image.
         if replaced:
             os.replace(backup, target)
             try:
@@ -173,3 +192,117 @@ def refresh_registrations(path):
         installer = Installer(resources.root(), prefix, registration['wine'] or None)
         if installer.manifest.is_file():
             installer.install(config, path)
+
+
+WEEK = 7 * 24 * 60 * 60
+
+
+def is_appimage():
+    """Require both a package marker and an actual executable AppImage launch."""
+    if os.name == 'nt' or os.environ.get('FLATPAK_ID'):
+        return False
+    try:
+        build = json.loads((resources.root() / 'build.json').read_text())
+        image = Path(os.environ.get('APPIMAGE', ''))
+        return build.get('distribution') == 'appimage' and image.is_file() and os.access(image, os.X_OK)
+    except (OSError, ValueError):
+        return False
+
+
+def update_state(path):
+    try:
+        value = json.loads(Path(path).with_suffix('.updates.json').read_text())
+        return value if isinstance(value, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def save_update_state(path, **values):
+    state = update_state(path)
+    state.update(values)
+    file = Path(path).with_suffix('.updates.json')
+    file.parent.mkdir(parents=True, exist_ok=True)
+    # Unique staging names allow manual and scheduled checks to finish safely.
+    descriptor, stage = tempfile.mkstemp(dir=file.parent, prefix='.update-state-')
+    try:
+        with os.fdopen(descriptor, 'w') as stream:
+            json.dump(state, stream)
+        os.replace(stage, file)
+    finally:
+        Path(stage).unlink(missing_ok=True)
+    return state
+
+
+def perform_check(path):
+    if not is_appimage():
+        return None
+    config = settings.load(path)
+    save_update_state(path, attempted_at=time.time())
+    candidate = check(include_beta=config['update_betas'])
+    save_update_state(path, checked_at=time.time(), available=candidate)
+    return candidate
+
+
+def available_update(path):
+    if not is_appimage():
+        return None
+    candidate = update_state(path).get('available')
+    if not isinstance(candidate, dict):
+        return None
+    try:
+        version = Version(candidate['version'])
+        if version <= Version(__version__):
+            return None
+        if not settings.load(path)['update_betas'] and version.is_prerelease:
+            return None
+        return candidate
+    except (KeyError, InvalidVersion):
+        return None
+
+
+def remind_later(path):
+    save_update_state(path, remind_after=time.time() + WEEK)
+
+
+def completed_update(path):
+    if update_state(path).get('installed_version') != __version__:
+        return None
+    save_update_state(path, installed_version=None)
+    return 'Updated successfully to ' + __version__
+
+
+class UpdateMonitor:
+    """One controller-owned background check, with persistent weekly timing."""
+    def __init__(self, path):
+        self.path = path
+        self.busy = False
+        self.notified = None
+        self.notified_at = 0
+
+    def tick(self, quiet=False):
+        if not is_appimage():
+            return None
+        config = settings.load(self.path)
+        if not config['update_weekly']:
+            return None
+        state = update_state(self.path)
+        now = time.time()
+        if (not self.busy and now - state.get('checked_at', 0) >= WEEK
+                and now - state.get('attempted_at', 0) >= 3600):
+            self.busy = True
+            def work():
+                try:
+                    perform_check(self.path)
+                except Exception:
+                    import logging
+                    logging.exception('Automatic update check failed')
+                finally:
+                    self.busy = False
+            threading.Thread(target=work, daemon=True).start()
+        candidate = available_update(self.path)
+        if (candidate and not quiet and now >= state.get('remind_after', 0)
+                and (candidate['version'] != self.notified or now - self.notified_at >= WEEK)):
+            self.notified = candidate['version']
+            self.notified_at = now
+            return candidate
+        return None

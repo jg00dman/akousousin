@@ -154,23 +154,39 @@ or every Logos desktop behavior; test in a backed-up prefix.
 
 ## Checking for application updates
 
-Open **Updates → Check for updates** in the control panel. Akousousin checks its
-GitHub releases only when requested and offers newer versioned releases, including
-betas. Cancel leaves the installation and speech untouched.
+Application update controls are shown only when AKS is launched as an AppImage.
+Flatpak, distro packages, Windows ZIP and source installations use their software
+manager or installation source instead. Voice and Whisper model downloads remain
+available independently in every format. Packaging records its distribution type
+in `resources/build.json`; AppImage controls also require a valid executable
+`APPIMAGE` path. A renamed executable alone does not enable self-updating.
 
-For Linux AppImages, accepting downloads and verifies the release asset's SHA-256
-and size before stopping speech. Close Wine applications first. The AppImage is
-replaced at its existing registered path, saved SAPI registrations are refreshed,
-and the panel restarts. Voices and preferences are retained. The previous image
-is kept alongside it as `.AppImage.previous`; a failed registration restores the
-previous image and attempts to restore its registrations. A second simultaneous
-update is refused. Restarted speech starts on demand as usual.
+On the Updates page:
 
-Windows ZIP and source installations offer the matching release download for
-manual installation after quitting Akousousin. Automatic replacement is currently
-available for Linux AppImages only. Release tags include the package version,
-for example `standalone-beta-0.7.0b1-<build>-1`; older run-number-only tags are not
-offered as updates. Each new release must increase the package version.
+- **Check for updates weekly** is enabled by default. Checks run quietly while AKS
+  is running and remember their timing across restarts. Failed checks retry after
+  an hour. Turning this off leaves manual Check for updates available.
+- **Show beta testing updates** defaults on for beta installations and off for
+  stable installations; saved choices survive upgrades. Turning it off offers
+  only newer stable releases. An installed `0.7.0b1` stays installed until stable
+  `0.7.0` or a later stable release is available; it never downgrades to `0.6.x`.
+- Automatic notifications offer **Update now…** (opens Updates for review and
+  installation) and **Remind me later** (one week). They wait while AKS is speaking,
+  reading or processing dictation. The tray also shows an available-update action.
+  Neither checking nor notification installs an update automatically.
+
+Accepting an update downloads and verifies its SHA-256 and size before stopping
+speech. The shared panel/tray progress shows Downloading update with byte counts,
+then indeterminate Verifying update, Applying update and an explicit restarting
+warning for three seconds. After relaunch the panel briefly confirms the installed
+version. Close Wine applications first; voices, models and preferences are retained.
+
+The AppImage is replaced at its registered path and saved SAPI registrations are
+refreshed. The previous image is kept alongside it as `.AppImage.previous`; a
+failed registration restores the previous image and attempts to restore its
+registrations. A second simultaneous update is refused. Speech starts on demand
+as usual. Release tags include a package version; older run-number-only tags are
+not offered as updates. Each new release must increase the package version.
 
 ## Experimental Voice Input on Linux
 

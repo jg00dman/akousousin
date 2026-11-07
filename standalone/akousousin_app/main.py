@@ -90,11 +90,13 @@ def main():
         return
     if args.uninstall_speech_dispatcher:
         from .speech_dispatcher import configure
-        print(f'Module removed from {configure(args.settings, remove=True)}. Speech Dispatcher restarted.')
+        configure(args.settings, remove=True)
+        print('Akousousin Speech Dispatcher support removed. Speech Dispatcher restarted.')
         return
     if args.install_speech_dispatcher:
         from .speech_dispatcher import configure
-        print(f'Module registered in {configure(args.settings)}. Speech Dispatcher restarted; select akousousin.')
+        configure(args.settings)
+        print('Akousousin added to Speech Dispatcher. Speech Dispatcher restarted; select akousousin.')
         return
     if args.wine_prefix:
         config['wine_prefix'] = str(args.wine_prefix.expanduser().resolve())

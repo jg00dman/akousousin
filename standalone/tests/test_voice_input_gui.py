@@ -23,6 +23,41 @@ class VoiceInputGuiTests(unittest.TestCase):
         reporter.start(); self.addCleanup(reporter.stop)
         self.addCleanup(lambda: self.assertEqual(self.callback_errors, [], 'Tk callback errors'))
 
+    def test_update_controls_are_appimage_only_and_preferences_persist(self):
+        from akousousin_app.panel import Panel
+        def widgets(parent):
+            for child in parent.winfo_children():
+                yield child
+                yield from widgets(child)
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'settings.json'
+            settings.save(path, copy.deepcopy(settings.DEFAULTS))
+            for appimage in (False, True):
+                root = tk.Tk()
+                try:
+                    panel = Panel.__new__(Panel)
+                    panel.path, panel.root = path, root
+                    panel.pages = {'Updates': ttk.Frame(root)}
+                    panel.pages['Updates'].pack(fill='both', expand=True)
+                    panel.config = settings.load(path)
+                    panel.status = tk.StringVar(root)
+                    panel.updating = False
+                    with patch('akousousin_app.updates.is_appimage', return_value=appimage):
+                        panel.build_updates(); root.update()
+                        checks = [w for w in widgets(root) if isinstance(w, ttk.Checkbutton)]
+                        self.assertEqual(len(checks), 2 if appimage else 0)
+                        if appimage:
+                            weekly = next(w for w in checks if w.cget('text') == 'Check for updates weekly')
+                            weekly.invoke(); root.update()
+                            self.assertFalse(settings.load(path)['update_weekly'])
+                            beta = next(w for w in checks if w.cget('text') == 'Show beta testing updates')
+                            beta.invoke(); root.update()
+                            self.assertFalse(settings.load(path)['update_betas'])
+                        else:
+                            self.assertFalse(any(isinstance(w, ttk.Button) for w in widgets(root)))
+                finally:
+                    root.destroy()
+
     def test_restart_error_has_selectable_text_and_copy_command(self):
         from akousousin_app.dialogs import show_error
         from akousousin_app.speech_dispatcher import RestartError, RESTART_COMMAND

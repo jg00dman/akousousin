@@ -23,6 +23,10 @@ class UpdateTests(unittest.TestCase):
         state.start(); self.addCleanup(state.stop)
         self.image = self.root / 'Akousousin.AppImage'
         self.image.write_bytes(b'previous image')
+        self.image.chmod(0o755)
+        (self.root / 'build.json').write_text(json.dumps({'distribution': 'appimage'}))
+        resource_root = patch.object(updates.resources, 'root', return_value=self.root)
+        resource_root.start(); self.addCleanup(resource_root.stop)
         self.payload = b'verified replacement image'
         self.update = {'version': '0.7.0b1', 'url': updates.RELEASES + '/download/v0.7.0b1/Akousousin-x86_64.AppImage',
                        'size': len(self.payload), 'sha256': hashlib.sha256(self.payload).hexdigest()}
@@ -79,7 +83,8 @@ class UpdateTests(unittest.TestCase):
             self.assertEqual(call.call_count, 0)
             return io.BytesIO(self.payload)
         with patch.dict(os.environ, {'APPIMAGE': str(self.image)}), \
-                patch.object(updates.urllib.request, 'urlopen', side_effect=received):
+                patch.object(updates.urllib.request, 'urlopen', side_effect=received), \
+                patch.object(updates.time, 'sleep'):
             backup = updates.install(self.update, self.root / 'settings.json')
         self.assertEqual(self.image.read_bytes(), self.payload)
         self.assertEqual(backup.read_bytes(), b'previous image')
@@ -102,6 +107,105 @@ class UpdateTests(unittest.TestCase):
         launch.assert_not_called()
         self.assertEqual(call.call_args.args[1], {'command': 'wake'})
 
+    def test_initial_beta_preference_follows_version_and_then_preserves_choice(self):
+        from akousousin_app import settings
+        path = self.root / 'settings.json'
+        with patch('akousousin_app.__version__', '0.7.0'):
+            self.assertFalse(settings.load(path)['update_betas'])
+        with patch('akousousin_app.__version__', '0.7.0b2'):
+            self.assertTrue(settings.load(path)['update_betas'])
+            config = settings.load(path)
+            config['update_betas'] = False
+            settings.save(path, config)
+            self.assertFalse(settings.load(path)['update_betas'])
+
+    def test_stable_only_does_not_downgrade_installed_beta(self):
+        releases = [self.release('v0.6.0'), self.release('v0.7.0b2', prerelease=True),
+                    self.release('v0.8.0rc1'), self.release('v0.7.0')]
+        with patch.object(updates.urllib.request, 'urlopen', side_effect=lambda *a, **kw: io.BytesIO(json.dumps(releases).encode())):
+            self.assertEqual(updates.check('0.7.0b1', include_beta=False)['version'], '0.7.0')
+            self.assertEqual(updates.check('0.7.0b1', include_beta=True)['version'], '0.8.0rc1')
+            self.assertIsNone(updates.check('0.8.0b1', include_beta=False))
+
+    def test_github_prerelease_flag_is_respected_even_for_stable_tag(self):
+        releases = [self.release('v0.8.0', prerelease=True)]
+        with patch.object(updates.urllib.request, 'urlopen', return_value=io.BytesIO(json.dumps(releases).encode())):
+            self.assertIsNone(updates.check('0.7.0b1', include_beta=False))
+
+    def test_source_flatpak_and_distro_builds_cannot_enable_self_updating(self):
+        with patch.dict(os.environ, {'APPIMAGE': str(self.image)}, clear=False):
+            self.assertTrue(updates.is_appimage())
+            with patch.dict(os.environ, {'FLATPAK_ID': 'org.akousousin.Akousousin'}):
+                self.assertFalse(updates.is_appimage())
+            for distribution in ('flatpak', 'deb', 'source'):
+                (self.root / 'build.json').write_text(json.dumps({'distribution': distribution}))
+                self.assertFalse(updates.is_appimage())
+                with patch.object(updates.urllib.request, 'urlopen') as network:
+                    self.assertIsNone(updates.perform_check(self.root / 'settings.json'))
+                    network.assert_not_called()
+
+    def test_weekly_check_persists_and_reminder_does_not_install(self):
+        from akousousin_app import settings
+        path = self.root / 'settings.json'
+        settings.save(path, dict(settings.DEFAULTS))
+        candidate = dict(self.update, version='0.8.0b1')
+        def thread(**kwargs):
+            return Mock(start=kwargs['target'])
+        with patch.object(updates, 'is_appimage', return_value=True), \
+                patch.object(updates.time, 'time', return_value=2000000), \
+                patch.object(updates.threading, 'Thread', side_effect=thread), \
+                patch.object(updates, 'check', return_value=candidate) as check, \
+                patch.object(updates, 'install') as install:
+            monitor = updates.UpdateMonitor(path)
+            self.assertIsNone(monitor.tick(quiet=True))
+            check.assert_called_once_with(include_beta=True)
+            self.assertEqual(monitor.tick()['version'], '0.8.0b1')
+            updates.remind_later(path)
+            self.assertIsNone(updates.UpdateMonitor(path).tick())
+            self.assertEqual(check.call_count, 1)
+            config = settings.load(path); config['update_betas'] = False; settings.save(path, config)
+            self.assertIsNone(updates.available_update(path))
+            install.assert_not_called()
+        with patch.object(updates, 'is_appimage', return_value=True), \
+                patch.object(updates.time, 'time', return_value=2000000 + updates.WEEK + 1), \
+                patch.object(updates.threading, 'Thread', side_effect=thread), \
+                patch.object(updates, 'check', return_value=None) as check:
+            updates.UpdateMonitor(path).tick()
+            check.assert_called_once_with(include_beta=False)
+
+    def test_disabling_weekly_checks_leaves_manual_check_available(self):
+        from akousousin_app import settings
+        path = self.root / 'settings.json'
+        settings.save(path, dict(settings.DEFAULTS, update_weekly=False, update_betas=False))
+        with patch.object(updates, 'is_appimage', return_value=True), \
+                patch.object(updates, 'check', return_value=None) as check:
+            self.assertIsNone(updates.UpdateMonitor(path).tick())
+            check.assert_not_called()
+            updates.perform_check(path)
+            check.assert_called_once_with(include_beta=False)
+
+    def test_restart_warning_stays_visible_and_success_is_shown_once(self):
+        path = self.root / 'settings.json'
+        phases = []
+        original = updates.Transfer.phase
+        def phase(progress, text, **kwargs):
+            phases.append(text)
+            return original(progress, text, **kwargs)
+        with patch.dict(os.environ, {'APPIMAGE': str(self.image)}), \
+                patch.object(updates.urllib.request, 'urlopen', return_value=io.BytesIO(self.payload)), \
+                patch.object(updates.runtime, 'call', return_value=None), \
+                patch.object(updates.subprocess, 'run'), \
+                patch.object(updates.subprocess, 'Popen'), \
+                patch.object(updates.Transfer, 'phase', phase), \
+                patch.object(updates.time, 'sleep') as pause:
+            updates.install(self.update, path)
+        self.assertEqual(phases, ['Downloading update', 'Verifying update…',
+                                 'Applying update… Speech will stop briefly.',
+                                 'Update ready — restarting Akousousin…'])
+        pause.assert_called_once_with(3)
+        self.assertIn(__version__, updates.completed_update(path))
+        self.assertIsNone(updates.completed_update(path))
+
     def test_packaged_and_project_versions_agree(self):
         import tomllib
         project = Path(__file__).resolve().parents[1] / 'pyproject.toml'
@@ -113,8 +217,11 @@ class UpdateTests(unittest.TestCase):
         panel.busy = 0
         panel.update_status = Mock()
         panel.root = Mock()
+        panel.path = self.root / 'settings.json'
+        panel.updating = False
         panel.worker = lambda function, success: success(function())
-        with patch('akousousin_app.panel.updates.check', return_value=self.update), \
+        with patch.object(updates, 'is_appimage', return_value=True), \
+                patch('akousousin_app.panel.updates.perform_check', return_value=self.update), \
                 patch('akousousin_app.panel.messagebox.askyesno', return_value=False), \
                 patch('akousousin_app.panel.updates.install') as install, \
                 patch.object(updates.runtime, 'call') as call:

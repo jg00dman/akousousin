@@ -93,6 +93,7 @@ icon.save(RESOURCE / 'akousousin.png')
 commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
 (RESOURCE / 'build.json').write_text(json.dumps({'build': commit[:12] + '-' + sys.platform,
                                                'commit': commit, 'version': __version__,
+                                               'distribution': 'appimage' if sys.platform == 'linux' else 'windows-zip',
                                                'starter_voice': 'en_US-ljspeech-medium' if options.bundle_starter_voice else None}, indent=2))
 recognition_options = []
 if importlib.util.find_spec('faster_whisper') is not None:

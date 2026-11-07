@@ -45,9 +45,18 @@ its permanent location, then run:
 ```
 
 This creates a user-owned launcher in `$XDG_DATA_HOME/Akousousin` (normally
-`~/.local/share/Akousousin`) and adds an `AddModule` entry to your user
-`$XDG_CONFIG_HOME/speech-dispatcher/speechd.conf`. Existing settings and the default
-output module are preserved. Installation restarts your systemd user Speech
+`~/.local/share/Akousousin`) and an automatically discovered `sd_akousousin`
+launcher in the sibling `libexec/speech-dispatcher-modules` directory (normally
+`~/.local/libexec/speech-dispatcher-modules`). It adds AKS as another engine choice;
+eSpeak and other existing engines remain available, and the default is unchanged.
+
+Speech Dispatcher stops automatic engine discovery if any explicit `AddModule`
+exists. AKS therefore uses discovery when the current configuration does. For an
+explicit engine list, it adds only its own entry and preserves existing entries.
+If the system has an explicit list and there is no user configuration, the new
+user configuration includes the system file rather than replacing its settings.
+Reinstalling support repairs the minimal AKS-only configuration created by earlier
+builds, without deleting user preferences. Installation restarts your systemd user Speech
 Dispatcher service as its final step and verifies it is active, then:
 
 ```sh
@@ -70,10 +79,12 @@ Speech Dispatcher is responsible for resubmitting remaining text on resume.
 Model inference is cancelled only for the matching random request id; cancelling
 one caller must not stop another caller's synthesis. Synthesis sharing is bounded as described below.
 
-To remove module registration, remove the `AddModule "akousousin"` line from your
-user speechd.conf and delete `~/.local/share/Akousousin/speech-dispatcher-module`.
-Use the Remove button or `--uninstall-speech-dispatcher` to restart the user
-service after removal. Other modules and Akousousin settings are retained.
+Use Settings → Remove Speech Dispatcher support or
+`--uninstall-speech-dispatcher` to remove the AKS discovery launcher, its private
+launcher and its explicit entry if present, then restart the user service.
+Other engines, defaults and Akousousin settings are retained. After installing a
+build with this fix, choose Install Speech Dispatcher support again and reopen
+Orca preferences to refresh its list of engines.
 
 ## Manual restart if registration was saved
 

@@ -55,6 +55,19 @@ need testing. User testing confirmed microphone capture and insertion into Kate
 and a chat text field on Kubuntu 26.04 Wayland. See COMPATIBILITY.md and TESTING.md,
 and the [Voice Input guide](https://github.com/jg00dman/akousousin/blob/main/recognition/PANEL-TESTING.md).
 
+## Updates on main after 0.7.0b1
+
+AppImage launches provide optional weekly checking, stable/beta selection,
+Update now / Remind me later notifications and explicit verification, installation
+and restart progress. Disabling beta updates never downgrades an installed beta.
+Other distribution formats defer application updates to their package manager or
+installation source. Model downloads remain independent.
+
+Speech Dispatcher registration preserves automatic engine discovery, keeping
+eSpeak and AKS available together. Reinstall support to repair an earlier AKS-only
+registration, then reopen Orca preferences. Existing explicit engine lists and
+defaults are retained.
+
 ## On-demand voice packaging
 
 Default builds download Piper voices on first use instead of bundling LJSpeech.

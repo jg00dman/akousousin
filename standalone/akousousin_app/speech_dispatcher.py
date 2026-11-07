@@ -305,58 +305,117 @@ class Module:
             self.stop()
 
 
-def install(path):
-    """Opt-in user module registration. Preserve all existing dispatcher settings."""
+# Speech Dispatcher disables module autodiscovery when any AddModule is present.
+# Its GLib user-data directory is $XDG_DATA_HOME (normally ~/.local/share), and
+# it discovers user binaries in the sibling libexec/speech-dispatcher-modules.
+SYSTEM_CONFIGS = ('/etc/speech-dispatcher/speechd.conf',
+                  '/usr/local/etc/speech-dispatcher/speechd.conf')
+LAUNCHER_HEADER = '#!/bin/sh\n# Akousousin managed Speech Dispatcher module\n'
+
+
+def dispatcher_paths():
     import os
-    import shlex
+    from pathlib import Path
+    config = Path(os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config')) / 'speech-dispatcher/speechd.conf'
+    launcher = settings.data_path() / 'speech-dispatcher-module'
+    discovered = settings.data_path().parent.parent / 'libexec/speech-dispatcher-modules/sd_akousousin'
+    return config, launcher, discovered
+
+
+def without_registration(text, launcher):
+    """Remove our directive, rejecting a registration owned by another install."""
+    kept, owned = [], False
+    for line in text.splitlines(keepends=True):
+        fields = shlex.split(line, comments=True)
+        if len(fields) >= 2 and [field.lower() for field in fields[:2]] == ['addmodule', 'akousousin']:
+            if len(fields) < 3 or fields[2] != str(launcher):
+                raise ValueError('Module points at another installation; left unchanged')
+            owned = True
+        elif line.strip() != '# Akousousin user speech module':
+            kept.append(line)
+    return ''.join(kept), owned
+
+
+def explicit_modules(text, include_directory, seen=None):
+    """Follow dotconf Includes using the daemon's system configuration directory."""
+    import glob
+    from pathlib import Path
+    seen = set() if seen is None else seen
+    for line in text.splitlines():
+        fields = shlex.split(line, comments=True)
+        if not fields:
+            continue
+        if fields[0].lower() == 'addmodule':
+            return True
+        if fields[0].lower() == 'include' and len(fields) == 2:
+            pattern = Path(fields[1])
+            if not pattern.is_absolute():
+                pattern = include_directory / pattern
+            for name in sorted(glob.glob(str(pattern))):
+                file = Path(name).resolve()
+                if file not in seen:
+                    seen.add(file)
+                    if explicit_modules(file.read_text(), include_directory, seen):
+                        return True
+    return False
+
+
+def install(path):
+    """Add an engine choice without disabling the daemon's other engines."""
+    import os
     from pathlib import Path
     if os.name == 'nt':
         raise ValueError('Speech Dispatcher integration is for Linux')
-    launcher = settings.data_path() / 'speech-dispatcher-module'
-    directory = Path(os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config')) / 'speech-dispatcher'
-    directory.mkdir(parents=True, exist_ok=True)
-    config = directory / 'speechd.conf'
-    existing = config.read_text() if config.exists() else ''
-    registration = f'AddModule "akousousin" "{launcher}" ""'
-    if any(c in str(launcher) for c in '\r\n"'):
-        raise ValueError('Unsupported Speech Dispatcher launcher path')
-    lines = existing.splitlines()
-    matches = [line for line in lines if line.lstrip().startswith('AddModule "akousousin"')]
-    if matches and matches != [registration]:
-        raise ValueError('An akousousin module is already configured at a different path')
-    launcher.parent.mkdir(parents=True, exist_ok=True)
+    config, launcher, discovered = dispatcher_paths()
+    previous = config.read_text() if config.exists() else ''
+    existing, owned = without_registration(previous, launcher)
+    # Repair the minimal user config made by older AKS installers. That file
+    # shadowed the system config and its AddModule disabled autodiscovery.
+    user_config = config.exists() and not (owned and not existing.strip())
+    system = next((Path(name) for name in SYSTEM_CONFIGS if Path(name).is_file()), None)
+    include_directory = system.parent if system else config.parent
+    effective = existing if user_config else system.read_text() if system else ''
+    if discovered.exists() and not discovered.read_text().startswith(LAUNCHER_HEADER):
+        raise ValueError('Another installation owns the discovered akousousin module; left unchanged')
+    for file in (launcher, discovered):
+        if any(c in str(file) for c in '\r\n"'):
+            raise ValueError('Unsupported Speech Dispatcher launcher path')
+    explicit = explicit_modules(effective, include_directory)
+    if explicit:
+        if not user_config and system:
+            existing = f'Include "{system}"\n'
+        registration = f'AddModule "akousousin" "{launcher}" ""'
+        existing = existing.rstrip('\n') + '\n# Akousousin user speech module\n' + registration + '\n'
     command = runtime.command('--speech-dispatcher', '--settings', str(Path(path).resolve()))
-    launcher.write_text('#!/bin/sh\nexec ' + shlex.join(command) + '\n', encoding='utf-8')
-    launcher.chmod(0o700)
-    if not matches:
-        temporary = config.with_suffix('.tmp')
-        temporary.write_text(existing + '\n# Akousousin user speech module\n' + registration + '\n', encoding='utf-8')
-        temporary.replace(config)
+    for file in (launcher, discovered):
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text(LAUNCHER_HEADER + 'exec ' + shlex.join(command) + '\n', encoding='utf-8')
+        file.chmod(0o700)
+    if explicit or user_config:
+        if existing != previous:
+            config.parent.mkdir(parents=True, exist_ok=True)
+            temporary = config.with_suffix('.tmp')
+            temporary.write_text(existing, encoding='utf-8')
+            temporary.replace(config)
+    elif owned:
+        config.unlink()
     return config
 
 
 def uninstall(path):
-    """Remove only the registration pointing at our owned launcher."""
-    import os
-    from pathlib import Path
-    launcher = settings.data_path() / 'speech-dispatcher-module'
-    config = Path(os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config')) / 'speech-dispatcher/speechd.conf'
-    if config.exists():
-        lines = config.read_text().splitlines(keepends=True)
-        kept = []
-        for line in lines:
-            try:
-                fields = shlex.split(line, comments=True)
-            except ValueError:
-                fields = []
-            if len(fields) >= 3 and fields[:2] == ['AddModule', 'akousousin']:
-                if fields[2] != str(launcher):
-                    raise ValueError('Module points at another installation; left unchanged')
-                continue
-            kept.append(line)
+    """Remove only our registration and launchers, retaining other engine choices."""
+    config, launcher, discovered = dispatcher_paths()
+    previous = config.read_text() if config.exists() else ''
+    kept, owned = without_registration(previous, launcher)
+    if discovered.exists() and not discovered.read_text().startswith(LAUNCHER_HEADER):
+        raise ValueError('Another installation owns the discovered akousousin module; left unchanged')
+    if owned and not kept.strip():
+        config.unlink()
+    elif kept != previous:
         temporary = config.with_suffix('.tmp')
-        temporary.write_text(''.join(kept))
+        temporary.write_text(kept)
         temporary.replace(config)
+    discovered.unlink(missing_ok=True)
     launcher.unlink(missing_ok=True)
     return config
 

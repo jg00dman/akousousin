@@ -84,8 +84,9 @@ Source: [output module](standalone/akousousin_app/speech_dispatcher.py),
   remains independent between SAPI and speechd.
 - The panel supports voice import/download, shared preferences, service controls,
   optional SAPI/speechd registration and application update checks. Linux AppImages
-  can update in place with verification and rollback; Windows ZIP/source builds
-  offer the matching manual download. speechd install/remove restarts the user
+  provide optional weekly checks, stable/beta selection, explicit installation
+  and updates with verification and rollback; Windows ZIP/source builds
+  use their installation source; Flatpak/distro builds defer to their software manager. speechd install/remove restarts the user
   service and reports restart failures.
 - Supported packages: Linux x86-64/glibc 2.35+ with existing 64-bit Wine prefixes,
   and native Windows x86-64. macOS deployment, 32-bit callers and full UI

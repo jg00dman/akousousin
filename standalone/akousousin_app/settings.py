@@ -11,7 +11,7 @@ DEFAULTS = {'version': 1, 'voice': 'en_US-ljspeech-medium', 'speed': 1.0, 'volum
             'language_voices': {}, 'voices': {}, 'wine_prefix': '', 'wine': '', 'port': 5000,
             'idle_timeout': 300, 'stt_model': 'small', 'stt_language': '',
             'stt_source': '', 'stt_beep': True, 'stt_mode': 'toggle',
-            'stt_idle_timeout': 300, 'stt_threshold': 250}
+            'stt_idle_timeout': 300, 'stt_threshold': 250, 'update_weekly': True, 'update_betas': True}
 
 
 def config_path():
@@ -28,14 +28,21 @@ def data_path():
 
 def load(path):
     value = json.loads(json.dumps(DEFAULTS))
-    if Path(path).exists():
-        value.update(json.loads(Path(path).read_text(encoding='utf-8')))
+    stored = json.loads(Path(path).read_text(encoding='utf-8')) if Path(path).exists() else {}
+    value.update(stored)
     value.pop('runtime', None)
+    if 'update_betas' not in stored:
+        from packaging.version import Version
+        from . import __version__
+        value['update_betas'] = Version(__version__).is_prerelease
     validate(value)
     return value
 
 
 def validate(value):
+    for key in ("update_weekly", "update_betas"):
+        if not isinstance(value.get(key, DEFAULTS[key]), bool):
+            raise ValueError("Invalid update preference: " + key)
     if value.get('stt_mode', 'toggle') not in ('toggle', 'push-to-talk'):
         raise ValueError('Invalid dictation activation mode')
     for key, low, high in [('stt_idle_timeout', 0, 86400), ('stt_threshold', 1, 10000)]:

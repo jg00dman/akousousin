@@ -19,6 +19,10 @@ class DispatcherTests(unittest.TestCase):
         self.addCleanup(temp.cleanup)
         self.root = Path(temp.name)
         self.path = self.root / 'settings.json'
+        system_configs = patch('akousousin_app.speech_dispatcher.SYSTEM_CONFIGS',
+                               (str(self.root / 'system/speechd.conf'),))
+        system_configs.start()
+        self.addCleanup(system_configs.stop)
         settings.save(self.path, dict(settings.DEFAULTS, voice='english', voices={
             'english': {'name': 'English', 'language': 'en_US', 'sample_rate': 22050}}))
 
@@ -94,7 +98,7 @@ class DispatcherTests(unittest.TestCase):
             directory = self.root / 'config/speech-dispatcher'
             directory.mkdir(parents=True)
             path = directory / 'speechd.conf'
-            path.write_text('DefaultModule "espeak-ng"\n')
+            path.write_text('DefaultModule "espeak-ng"\nAddModule "espeak-ng" "sd_espeak-ng" "espeak-ng.conf"\n')
             install(self.path)
             install(self.path)
             text = path.read_text()
@@ -104,6 +108,90 @@ class DispatcherTests(unittest.TestCase):
             self.assertTrue(launcher.stat().st_mode & 0o100)
             self.assertIn('--speech-dispatcher', launcher.read_text())
 
+
+    def registration_environment(self):
+        return patch.dict('os.environ', {'XDG_CONFIG_HOME': str(self.root / 'config'),
+                                         'XDG_DATA_HOME': str(self.root / 'data')})
+
+    def test_auto_discovery_retains_system_config_and_module_defaults(self):
+        system = self.root / 'system/speechd.conf'
+        system.parent.mkdir()
+        original = '# Modules are auto-discovered\nDefaultModule "espeak-ng"\nAudioOutputMethod "pulse"\n'
+        system.write_text(original)
+        with self.registration_environment():
+            from akousousin_app.speech_dispatcher import dispatcher_paths
+            config = install(self.path)
+            _, launcher, discovered = dispatcher_paths()
+            install(self.path)
+            self.assertFalse(config.exists(), 'A user config must not shadow the system config')
+            self.assertEqual(system.read_text(), original)
+            self.assertTrue(discovered.is_file())
+            self.assertEqual(discovered, self.root / 'libexec/speech-dispatcher-modules/sd_akousousin')
+            self.assertEqual(discovered.read_text(), launcher.read_text())
+            uninstall(self.path)
+            self.assertFalse(discovered.exists())
+            self.assertFalse(launcher.exists())
+            self.assertEqual(system.read_text(), original)
+
+    def test_user_auto_discovery_config_is_unchanged(self):
+        with self.registration_environment():
+            config = self.root / 'config/speech-dispatcher/speechd.conf'
+            config.parent.mkdir(parents=True)
+            original = '# User audio preferences\nDefaultModule "espeak-ng"\nDefaultRate 12\n'
+            config.write_text(original)
+            install(self.path)
+            self.assertEqual(config.read_text(), original)
+            uninstall(self.path)
+            self.assertEqual(config.read_text(), original)
+
+    def test_reinstall_repairs_legacy_module_only_config(self):
+        with self.registration_environment():
+            from akousousin_app.speech_dispatcher import dispatcher_paths
+            config, launcher, discovered = dispatcher_paths()
+            config.parent.mkdir(parents=True)
+            config.write_text('\n# Akousousin user speech module\n'
+                              f'AddModule "akousousin" "{launcher}" ""\n')
+            install(self.path)
+            self.assertFalse(config.exists())
+            self.assertTrue(discovered.exists())
+
+    def test_legacy_registration_repair_keeps_user_preferences(self):
+        with self.registration_environment():
+            from akousousin_app.speech_dispatcher import dispatcher_paths
+            config, launcher, _ = dispatcher_paths()
+            config.parent.mkdir(parents=True)
+            original = 'DefaultModule "espeak-ng"\nDefaultRate 15\n'
+            config.write_text(original + '# Akousousin user speech module\n'
+                              f'AddModule "akousousin" "{launcher}" ""\n')
+            install(self.path)
+            self.assertEqual(config.read_text(), original)
+
+    def test_system_explicit_modules_and_includes_are_preserved(self):
+        system = self.root / 'system/speechd.conf'
+        system.parent.mkdir()
+        original = 'DefaultModule "espeak-ng"\nInclude "modules.conf"\n'
+        system.write_text(original)
+        (system.parent / 'modules.conf').write_text('AddModule "espeak-ng" "sd_espeak-ng" "espeak-ng.conf"\n')
+        with self.registration_environment():
+            config = install(self.path)
+            install(self.path)
+            self.assertEqual(system.read_text(), original)
+            self.assertIn(f'Include "{system}"', config.read_text())
+            self.assertEqual(config.read_text().count('AddModule "akousousin"'), 1)
+            uninstall(self.path)
+            self.assertIn(f'Include "{system}"', config.read_text())
+            self.assertNotIn('akousousin', config.read_text())
+
+    def test_foreign_registration_is_left_unchanged(self):
+        with self.registration_environment():
+            config = self.root / 'config/speech-dispatcher/speechd.conf'
+            config.parent.mkdir(parents=True)
+            original = 'AddModule "akousousin" "/someone-else/module" ""\n'
+            config.write_text(original)
+            for action in (install, uninstall):
+                with self.assertRaisesRegex(ValueError, 'another installation'):
+                    action(self.path)
+                self.assertEqual(config.read_text(), original)
 
     def test_orca_ssml_entities_and_marks_are_not_spoken(self):
         text = '<speak><mark name="0:5"/>Hello &amp; café.<mark name="__spd_0"/><mark name="14:19"/> Next.</speak>'
@@ -135,7 +223,10 @@ class DispatcherTests(unittest.TestCase):
     def test_uninstall_preserves_other_modules_and_defaults(self):
         with patch.dict('os.environ', {'XDG_CONFIG_HOME': str(self.root / 'config'),
                                       'XDG_DATA_HOME': str(self.root / 'data')}):
-            path = install(self.path)
+            path = self.root / 'config/speech-dispatcher/speechd.conf'
+            path.parent.mkdir(parents=True)
+            path.write_text('DefaultModule "espeak-ng"\nAddModule "espeak-ng" "sd_espeak-ng" "espeak-ng.conf"\n')
+            install(self.path)
             path.write_text(path.read_text() + 'DefaultModule "espeak-ng"\nAddModule "other" "/other" ""\n')
             uninstall(self.path)
             uninstall(self.path)

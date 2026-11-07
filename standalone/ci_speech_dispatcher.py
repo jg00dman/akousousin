@@ -50,6 +50,50 @@ AudioALSADevice "null"
 AddModule "akousousin" "{launcher}" ""
 DefaultModule "akousousin"
 ''')
+# Regression: a user registration must add AKS to the real engine list without
+# hiding auto-discovered eSpeak. Use normal user-config lookup (no -C) here.
+user_config = Path(os.environ['XDG_CONFIG_HOME']) / 'speech-dispatcher/speechd.conf'
+user_config.parent.mkdir(parents=True, exist_ok=True)
+user_config.write_text(f'LogDir "{logs}"\nAudioOutputMethod "alsa"\nAudioALSADevice "null"\nDefaultModule "espeak-ng"\n')
+installed = subprocess.run([str(executable), '--settings', str(settings_path), '--install-speech-dispatcher'],
+                           capture_output=True, text=True, timeout=45)
+assert not installed.returncode or 'Registration saved;' in installed.stderr, installed.stderr
+assert 'AddModule' not in user_config.read_text(), 'Registration disabled module autodiscovery'
+with (work / 'discovery.log').open('wb') as discovery_log:
+    discovery = subprocess.Popen(['speech-dispatcher', '-s', '-S', str(sockpath), '-P', str(work / 'discovery.pid')],
+                                 stdout=discovery_log, stderr=discovery_log, env=reader_env)
+    try:
+        deadline = time.monotonic() + 20
+        with socket.socket(socket.AF_UNIX) as client:
+            while True:
+                try:
+                    client.connect(str(sockpath)); break
+                except OSError:
+                    if discovery.poll() is not None or time.monotonic() > deadline:
+                        raise AssertionError((work / 'discovery.log').read_text(errors='replace'))
+                    time.sleep(.1)
+            client.settimeout(20)
+            client.sendall(b'LIST OUTPUT_MODULES\r\n')
+            stream = client.makefile('rb')
+            reply = []
+            while True:
+                line = stream.readline()
+                assert line, 'Dispatcher closed module-list connection'
+                reply.append(line)
+                if line[3:4] == b' ':
+                    break
+            text = b''.join(reply).decode()
+            names = {line[4:].split()[0] for line in text.splitlines() if line[3:4] == '-'}
+            assert {'akousousin', 'espeak-ng'} <= names, text
+            print('PASS: real engine list retains eSpeak alongside AKS:', text, flush=True)
+    finally:
+        discovery.terminate()
+        try:
+            discovery.wait(10)
+        except subprocess.TimeoutExpired:
+            discovery.kill(); discovery.wait(5)
+        sockpath.unlink(missing_ok=True)
+
 events = []
 marks = []
 with (work / 'daemon.log').open('wb') as log:

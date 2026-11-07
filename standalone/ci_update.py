@@ -13,7 +13,7 @@ import sys
 import tempfile
 from unittest.mock import patch
 
-from akousousin_app import updates
+from akousousin_app import updates, __version__
 
 source = Path(sys.argv[1]).resolve()
 with tempfile.TemporaryDirectory(prefix='akousousin-update-') as directory:
@@ -24,7 +24,7 @@ with tempfile.TemporaryDirectory(prefix='akousousin-update-') as directory:
     os.environ.update(APPIMAGE=str(image), APPIMAGE_EXTRACT_AND_RUN='1',
                       XDG_DATA_HOME=str(root / 'data'), XDG_CONFIG_HOME=str(root / 'config'),
                       XDG_STATE_HOME=str(root / 'state'), XDG_RUNTIME_DIR=str(root / 'run'))
-    update = {'url': 'https://example.invalid/test-only', 'size': source.stat().st_size,
+    update = {'version': __version__, 'url': 'https://example.invalid/test-only', 'size': source.stat().st_size,
               'sha256': hashlib.file_digest(source.open('rb'), 'sha256').hexdigest()}
     import subprocess
     real_popen = subprocess.Popen
@@ -32,7 +32,8 @@ with tempfile.TemporaryDirectory(prefix='akousousin-update-') as directory:
         if '--configure' in command:
             return None
         return real_popen(command, **kwargs)
-    with patch.object(updates.urllib.request, 'urlopen', side_effect=lambda *args, **kwargs: source.open('rb')), \
+    with patch.object(updates.resources, 'root', return_value=Path(__file__).resolve().parents[1] / 'build/standalone-package/resources'), \
+            patch.object(updates.urllib.request, 'urlopen', side_effect=lambda *args, **kwargs: source.open('rb')), \
             patch.object(updates.subprocess, 'Popen', side_effect=start):
         backup = updates.install(update, config)
     assert hashlib.file_digest(image.open('rb'), 'sha256').hexdigest() == update['sha256']
