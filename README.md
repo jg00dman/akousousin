@@ -39,6 +39,10 @@ Global selected-text reading is available on KDE Wayland through the Read select
 page. It needs Speech Dispatcher and wl-clipboard; Wine applications may require
 the explicit copied-text fallback.
 
+<!-- akousousin-screenshot:start -->
+![Akousousin 0.7.0b1 control panel showing the speech service, voice preview and desktop reading navigation](docs/images/control-panel.png)
+<!-- akousousin-screenshot:end -->
+
 ## Try the beta
 
 Download the [Linux AppImage or Windows ZIP](https://github.com/jg00dman/akousousin/releases).
