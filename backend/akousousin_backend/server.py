@@ -116,6 +116,21 @@ class Synthesizer:
             return audio
         except BlockingIOError:
             raise
+        except InterruptedError:
+            # Screen readers frequently interrupt tiny utterances. If inference
+            # is about to finish, discard its response but keep the loaded model.
+            # A slow/hung worker still takes the bounded terminate/kill path.
+            reusable = False
+            if self.pipe is not None and self.process is not None:
+                try:
+                    if self.pipe.poll(.25):
+                        response = self.pipe.recv()
+                        reusable = bool(response[0]) and self.process.is_alive()
+                except (EOFError, OSError, TypeError, IndexError):
+                    pass
+            if not reusable:
+                self.close()
+            raise
         except (ValueError, wave.Error) as error:
             self.close()
             raise RuntimeError("Invalid synthesized audio") from error

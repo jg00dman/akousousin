@@ -7,7 +7,7 @@ SPDX-FileCopyrightText: 2026 John Goodman
 
 **akousousin:** *The unified neural speech engine for Linux, implementing Microsoft SAPI and Speech Dispatcher, based on Piper and Whisper.*
 
-The 0.7.0b4 beta implements SAPI text-to-speech using Piper, native Linux Speech
+The 0.7.0b5 beta implements SAPI text-to-speech using Piper, native Linux Speech
 Dispatcher output and experimental local Whisper voice input on Linux. SAPI
 recognition and native Windows microphone capture are not implemented. See the
 [compatibility table](../COMPATIBILITY.md) for the implemented capabilities.
@@ -71,6 +71,21 @@ the default; subsequent downloads preserve your selection. Optional offline
 builds copy the bundled starter into the same persistent voice library. Select Make default, then Settings → Install /
 apply voice registration. Overview → Start server → Play sample tests real Piper and
 playback. Next test Logos Read Aloud using the same Wine package.
+
+## Removing voices and playback speed
+
+Select an installed entry in Voice library and choose **Delete voice…**. Confirm
+before deletion. AKS stops its speech service, removes the library entry and
+cleans its language preferences. Downloaded voice files in the managed cache are
+deleted; imported original files and their configuration files are retained.
+Deleting the default selects another installed voice. Deleting the last voice
+leaves speech unavailable until another is installed; the starter is not silently
+reinstalled. Use **Settings → Install / apply voice registration** afterwards to
+remove stale SAPI voice tokens, and restart applications that cache their lists.
+
+Default speed ranges from **0.5 to 4.0**, in **0.25** steps, with a stepped slider
+and a value control that avoids excessive decimal places. Application rate
+requests still combine with the shared default speed.
 
 ## Tray and lifecycle
 
@@ -240,7 +255,10 @@ Test ready sound checks playback separately on the system default output.
 Choose a readable microphone or System default, and Automatic detection or a
 language from the searchable, scrollable picker. The detected language is displayed
 separately and does not silently lock the next recording. Start recording tests a
-ten-second capture and displays text. Spoken punctuation commands are not interpreted.
+ten-second capture and displays text. Per-phrase timing shows audio length, queue
+wait, recognition time and insertion time to help distinguish capture latency
+from model or desktop-insertion delays. Timings stay with the in-memory transcript
+history; no transcript log file is written. Spoken punctuation commands are not interpreted.
 
 On KDE Wayland, enable desktop shortcuts and approve KDE's shortcut and keyboard
 input dialogs. The proposed shortcut is Ctrl+Alt+Space, subject to KDE approval.

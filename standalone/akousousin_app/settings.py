@@ -56,7 +56,7 @@ def validate(value):
     for key in ('stt_language', 'stt_source'):
         if not isinstance(value.get(key, ''), str):
             raise ValueError('Invalid voice input preference')
-    for key, low, high in [('speed', .5, 2), ('volume', 0, 1), ('noise_scale', 0, 2), ('noise_w_scale', 0, 2)]:
+    for key, low, high in [('speed', .5, 4), ('volume', 0, 1), ('noise_scale', 0, 2), ('noise_w_scale', 0, 2)]:
         number = value[key]
         if isinstance(number, bool) or not isinstance(number, (int, float)) or not low <= number <= high:
             raise ValueError(f'Invalid {key}')

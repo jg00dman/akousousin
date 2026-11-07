@@ -78,6 +78,13 @@ class DictationTests(unittest.TestCase):
         self.assertEqual(status['results'][-1]['language'], 'de')
         self.assertEqual(status['results'][-1]['output'], 'displayed')
 
+    def test_transcript_records_audio_and_recognition_timing(self):
+        self.manager.start(); self.wait()
+        timings = self.manager.status()['results'][-1]['timings']
+        self.assertEqual(timings['audio_seconds'], .2)
+        self.assertGreaterEqual(timings['queue_seconds'], 0)
+        self.assertGreaterEqual(timings['recognition_seconds'], 0)
+
     def test_focus_refusal_retains_text_and_stops(self):
         self.manager.insert = Mock(side_effect=RuntimeError('Active window changed'))
         self.manager.start(target=('editor', 1)); self.wait()

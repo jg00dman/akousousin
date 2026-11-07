@@ -108,7 +108,7 @@ class RecognitionTests(unittest.TestCase):
         events = []
         process = Mock()
         process.poll.return_value = None
-        def launch(args, stdout, stderr):
+        def launch(args, stdout, stderr, **kwargs):
             stdout.write(b'\x02\x00' * 100)
             stdout.flush()
             def wait(timeout):
@@ -131,7 +131,7 @@ class RecognitionTests(unittest.TestCase):
     def test_capture_failure_does_not_signal_ready(self):
         process = Mock()
         process.poll.return_value = 1
-        def launch(args, stdout, stderr):
+        def launch(args, stdout, stderr, **kwargs):
             stderr.write(b'connection refused'); stderr.flush()
             return process
         ready = Mock()
@@ -175,10 +175,11 @@ class ReadyCueTests(unittest.TestCase):
             self.assertIn(crossings, (29, 30, 31))
             self.assertEqual(set(samples[1600:3040]), {0})
             self.assertGreater(max(samples[3040:]), 32000)
-            self.assertEqual(options['env']['LD_LIBRARY_PATH'], '/host/lib')
+            self.assertNotIn('LD_LIBRARY_PATH', options['env'])
+            self.assertNotIn('LD_LIBRARY_PATH_ORIG', options['env'])
             self.assertIn('--client-name=Akousousin', arguments)
             self.assertTrue(options['check'])
-        with patch.dict(os.environ, {'LD_LIBRARY_PATH': '/private/appimage', 'LD_LIBRARY_PATH_ORIG': '/host/lib'}), patch('shutil.which', return_value='/usr/bin/paplay'), patch('subprocess.run', side_effect=play):
+        with patch.dict(os.environ, {'LD_LIBRARY_PATH': '/private/appimage', 'LD_LIBRARY_PATH_ORIG': '/tmp/.mount_parent/lib'}), patch('shutil.which', return_value='/usr/bin/paplay'), patch('subprocess.run', side_effect=play):
             ready_cue()
 
     def test_playback_error_retains_player_diagnostic(self):

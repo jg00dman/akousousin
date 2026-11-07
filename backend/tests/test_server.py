@@ -23,6 +23,19 @@ def fake_worker(pipe, model):
         pipe.send((True, out.getvalue()))
 
 
+def brief_worker(pipe, model):
+    pipe.send((True, 22050))
+    while True:
+        request = pipe.recv()
+        if request['text'] == 'brief':
+            time.sleep(.15)
+        out = io.BytesIO()
+        with wave.open(out, 'wb') as audio:
+            audio.setparams((1, 2, 22050, 0, 'NONE', ''))
+            audio.writeframes(bytes([ord(request['text'][0]), 0]) * 100)
+        pipe.send((True, out.getvalue()))
+
+
 class BackendTests(unittest.TestCase):
     def setUp(self):
         self.synth = Synthesizer('test.onnx', timeout=0.1, target=fake_worker)
@@ -86,6 +99,24 @@ class BackendTests(unittest.TestCase):
         self.assertLess(time.monotonic() - started, 2)
         self.assertIsNone(self.synth.process)
         self.assertTrue(self.synth.synthesize({'text': 'again', 'length_scale': 1}).startswith(b'RIFF'))
+
+    def test_brief_cancel_discards_old_audio_and_reuses_warm_worker(self):
+        import threading
+        self.synth.close()
+        self.synth.target = brief_worker
+        self.synth.start()
+        original_pid = self.synth.process.pid
+        cancelled = threading.Event()
+        timer = threading.Timer(.05, cancelled.set); timer.start()
+        try:
+            with self.assertRaises(InterruptedError):
+                self.synth.synthesize({'text':'brief', 'length_scale':1}, cancelled)
+        finally:
+            timer.join()
+        self.assertEqual(self.synth.process.pid, original_pid)
+        audio = self.synth.synthesize({'text':'new', 'length_scale':1})
+        with wave.open(io.BytesIO(audio), 'rb') as result:
+            self.assertEqual(result.readframes(1), bytes([ord('n'), 0]))
 
     def test_cancel_during_cold_start_is_bounded(self):
         import threading

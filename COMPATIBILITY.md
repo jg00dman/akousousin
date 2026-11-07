@@ -5,7 +5,7 @@ SPDX-FileCopyrightText: 2026 John Goodman
 
 # API coverage and implementation status
 
-Applies to main's **0.7.0b4 beta**, reviewed on 7 November 2026.
+Applies to main's **0.7.0b5 beta**, reviewed on 7 November 2026.
 [Releases and downloads](https://github.com/jg00dman/akousousin/releases).
 
 **Core speech output works through SAPI and Speech Dispatcher; neither is a

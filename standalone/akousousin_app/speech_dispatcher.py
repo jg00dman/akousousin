@@ -147,12 +147,16 @@ class Module:
 
     def stop(self, paused=False):
         with self.lock:
-            if not self.busy or self.cancelled.is_set():
+            if self.cancelled.is_set():
                 return
+            was_busy = self.busy
             self.cancelled.set()
             request_id = self.request_id
             self.busy = False
-            self.send('704 PAUSE\n' if paused else '703 STOP\n')
+            if was_busy:
+                self.send('704 PAUSE\n' if paused else '703 STOP\n')
+            if not request_id:
+                return
         # Never wait for an unresponsive backend in the command-reading thread.
         def cancel():
             try:

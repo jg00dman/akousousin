@@ -286,6 +286,11 @@ class VoiceInput:
             self.result.delete('1.0', 'end')
             for item in result['results']:
                 self.result.insert('end', item['text'] + '\n[' + (item['language'] or 'unknown') + ' · ' + item['output'] + ']\n')
+                if item.get('timings'):
+                    names = [('audio_seconds', 'Audio'), ('queue_seconds', 'queued'),
+                             ('recognition_seconds', 'recognition'), ('insertion_seconds', 'insertion')]
+                    self.result.insert('end', ' · '.join(f"{label}: {item['timings'][key]:.2f}s"
+                        for key, label in names if key in item['timings']) + '\n')
                 if item.get('error'):
                     self.result.insert('end', item['error'] + '\n')
 

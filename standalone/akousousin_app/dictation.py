@@ -3,6 +3,8 @@
 """Controller-owned recognition. No GUI, keyboard or heavyweight inference on import."""
 import queue
 import threading
+import io
+import wave
 import time
 
 from . import settings
@@ -140,7 +142,14 @@ class Dictation:
                     continue
                 self.change('Listening — transcribing previous phrase' if not self.capture.done.is_set()
                             else 'Transcribing…', 'listening' if not self.capture.done.is_set() else 'transcribing')
+                began = time.monotonic()
+                queued = getattr(self.capture, 'queued_at', {}).pop(id(audio), began)
+                with wave.open(io.BytesIO(audio), 'rb') as sound:
+                    audio_seconds = sound.getnframes() / sound.getframerate()
                 result = self.recognizer.transcribe(audio, config['stt_language'] or None, self.cancelled)
+                result['timings'] = {'audio_seconds': round(audio_seconds, 3),
+                                     'queue_seconds': round(max(0, began - queued), 3),
+                                     'recognition_seconds': round(time.monotonic() - began, 3)}
                 if self.cancelled.is_set():
                     raise InterruptedError('Dictation cancelled')
                 if not result['text']:
@@ -154,12 +163,15 @@ class Dictation:
                         pending = self.store_result(result, 'pending')
                     else:
                         language = pending['language'] if pending['language'] == result['language'] else None
-                        self.update_result(pending, text=text, language=language)
+                        self.update_result(pending, text=text, language=language, timings={
+                            key: round(pending.get('timings', {}).get(key, 0) + value, 3)
+                            for key, value in result['timings'].items()})
                     self.last_activity = time.monotonic()
                     continue
                 outcome = 'displayed'
                 error = None
                 if target is not None:
+                    insertion_started = time.monotonic()
                     try:
                         if self.insert is None:
                             raise RuntimeError('Keyboard session is unavailable')
@@ -167,6 +179,8 @@ class Dictation:
                         outcome = 'inserted'
                     except Exception as failure:
                         outcome, error = 'retained', str(failure)
+                    finally:
+                        result['timings']['insertion_seconds'] = round(time.monotonic() - insertion_started, 3)
                 self.store_result(result, outcome, error)
                 if error:
                     self.capture.cancel()
@@ -180,7 +194,11 @@ class Dictation:
                 if self.insert is None:
                     raise RuntimeError('Keyboard session is unavailable')
                 self.change('Inserting transcript…', 'transcribing')
+                insertion_started = time.monotonic()
                 self.insert(pending['text'], target, self.cancelled)
+                timings = dict(pending.get('timings', {}))
+                timings['insertion_seconds'] = round(time.monotonic() - insertion_started, 3)
+                self.update_result(pending, timings=timings)
                 self.update_result(pending, output='inserted')
             self.change('Ready — recording stopped', 'ready')
         except InterruptedError:

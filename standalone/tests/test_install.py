@@ -115,6 +115,17 @@ class InstallTests(unittest.TestCase):
         self.assertEqual((self.app.directory / 'akousousin-piper.dll').read_bytes(), b'engine')
         self.assertEqual(self.app.manifest.read_bytes(), state)
 
+    def test_apply_removes_deleted_voice_token_and_restores_default_when_empty(self):
+        from akousousin_app.install import TOKEN_BASE, FULL_TOKEN
+        self.app.install(self.config)
+        key = TOKEN_BASE + self.config['voice']
+        self.assertIn(key, self.app.reg)
+        self.config['voices'] = {}
+        self.app.install(self.config)
+        self.assertNotIn(key, self.app.reg)
+        self.assertEqual(self.app.reg[VOICES]['DefaultDefaultTokenId'], self.original[VOICES]['DefaultDefaultTokenId'])
+        self.assertEqual(self.app.reg[r'HKCU\Software\Unrelated'], self.original[r'HKCU\Software\Unrelated'])
+
     def test_manual_dll_change_is_not_overwritten_by_uninstall(self):
         self.app.install(self.config)
         path = self.app.directory / 'akousousin-piper.dll'

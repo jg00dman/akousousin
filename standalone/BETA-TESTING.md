@@ -3,7 +3,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
-# Testing the 0.7.0b4 beta
+# Testing the 0.7.0b5 beta
 
 Download the [Linux AppImage or Windows ZIP](https://github.com/jg00dman/akousousin/releases).
 Linux trial users need only the AppImage; source archives are separate downloads.
@@ -82,6 +82,21 @@ tagging are not implemented. SAPI support remains text-to-speech only.
 Live shortcut dispatch and primary-selection availability in native/Wine apps
 still require desktop confirmation. Automated portal, clipboard and real-daemon
 checks do not establish those cases.
+
+## Voice deletion, speed and latency
+
+- Delete an installed downloaded voice after confirmation; its managed cache
+  folder should disappear. Remove an imported voice and confirm its original
+  ONNX/config files remain. Deleting the default should select another installed
+  voice; deleting the last voice should show first-run choices without silently
+  reimporting the bundled starter. Apply voice registration and check SAPI lists.
+- Change speed using the slider and value control. Both should use 0.5–4.0 in
+  quarter steps without long decimals; confirm the preference affects new speech.
+- With the same voice in AKS and Orca, compare a warm sample with short interrupted
+  speech. Confirm Stop is prompt, later speech recovers and other clients continue.
+- Test dictation with a short phrase and include the displayed audio/queue/
+  recognition/insertion timings in the report. The SteamOS delays remain under
+  investigation; do not assume this trial resolves every latency cause.
 
 ## Panel and shutdown
 

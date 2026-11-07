@@ -92,6 +92,23 @@ class DispatcherTests(unittest.TestCase):
         self.assertNotIn(b'705-AUDIO', module.output.getvalue())
         self.assertNotIn(b'702 END', module.output.getvalue())
 
+    def test_stop_after_rendering_still_cancels_the_playback_pause(self):
+        cancelled = threading.Event()
+        requests = []
+        def opened(request, **kwargs):
+            requests.append(request)
+            cancelled.set()
+            return io.BytesIO(b'{}')
+        module = Module(self.path, output=io.BytesIO())
+        module.request_id = 'completed-speech'
+        module.busy = False
+        with patch('urllib.request.build_opener') as opener:
+            opener.return_value.open.side_effect = opened
+            module.stop()
+            self.assertTrue(cancelled.wait(1))
+        self.assertEqual(requests[0].get_header('X-akousousin-request'), 'completed-speech')
+        self.assertEqual(module.output.getvalue(), b'')
+
     def test_user_install_is_idempotent_and_preserves_existing_config(self):
         with patch.dict('os.environ', {'XDG_CONFIG_HOME': str(self.root / 'config'),
                                       'XDG_DATA_HOME': str(self.root / 'data')}):

@@ -67,7 +67,10 @@ spd-say -o akousousin -w 'Testing Akousousin through Speech Dispatcher.'
 spd-say -o akousousin -L
 ```
 
-Select the module in your screen reader's speech settings when ready. Synthesis
+Select the module in your screen reader's speech settings when ready. In Orca,
+select AKS and Apply to refresh the available voices, then choose an actual
+installed Piper voice and Apply/OK again. Selecting only the engine may leave
+an old or empty voice selection. This sequence was confirmed on SteamOS Plasma. Synthesis
 uses the same voice library/defaults as SAPI. Explicit synthesis voice and language
 selection, rate and volume are supported. Piper has no general pitch control;
 pitch is unsupported; punctuation and spelling use the fallback described below.
@@ -178,3 +181,18 @@ Keep the working AppImage and eSpeak configuration available for rollback.
    repeat a short utterance.
 
 Automated protocol and PCM checks do not establish audible or Orca acceptance.
+
+## Interrupted speech and dictation timing
+
+Cancelled speech is removed from AKS's estimated playback activity so dictation
+is not held behind audio that was never played. Cancellation remains scoped to
+its request and preserves other clients' remaining activity. Short interrupted
+inferences get up to 250 ms to finish and be discarded while retaining the loaded
+model; slow or hung workers are still terminated. These changes address measured
+code paths, not a guarantee of screen-reader responsiveness on every desktop.
+
+SteamOS testing reported approximately 86 ms for warm synthesis and immediate
+playback of the resulting WAV, while Orca speech was delayed. Voice Input now
+reports per-phrase timings to help isolate the separate dictation delay. Further
+on-device validation is needed. Native playback/capture utilities use the host
+library environment instead of inheriting bundled AppImage libraries.

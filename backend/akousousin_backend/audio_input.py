@@ -13,6 +13,8 @@ import threading
 import time
 import wave
 
+from .host import host_environment
+
 RATE = 16000
 FRAME_BYTES = 640  # 20 ms, mono signed 16-bit PCM
 
@@ -68,6 +70,7 @@ class Capture:
         self.paused, self.changed = paused, changed
         self.endpoint = Endpoint(threshold)
         self.segments = queue.Queue(maxsize=2)
+        self.queued_at = {}
         self.stop = threading.Event()
         self.cancelled = threading.Event()
         self.ready = threading.Event()
@@ -89,8 +92,10 @@ class Capture:
     def put(self, segment):
         if segment is not None:
             try:
+                self.queued_at[id(segment)] = time.monotonic()
                 self.segments.put_nowait(segment)
             except queue.Full:
+                self.queued_at.pop(id(segment), None)
                 raise RuntimeError('Recognition cannot keep up. Dictation stopped; previous results are retained.')
 
     def _pump(self):
@@ -104,7 +109,7 @@ class Capture:
             if os.name == 'nt':
                 raise RuntimeError('Desktop microphone capture currently requires Linux')
             with tempfile.TemporaryFile() as errors:
-                process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=errors, bufsize=0)
+                process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=errors, bufsize=0, env=host_environment())
                 os.set_blocking(process.stdout.fileno(), False)
                 selector.register(process.stdout, selectors.EVENT_READ)
                 startup = time.monotonic() + 5

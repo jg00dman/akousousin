@@ -70,6 +70,32 @@ class RoutingTests(unittest.TestCase):
             with patch('akousousin_app.backend.time.monotonic', return_value=102):
                 self.assertFalse(self.router.speaking())
 
+    def test_cancel_completed_speech_releases_dictation_pause(self):
+        with patch('akousousin_app.backend.time.monotonic', return_value=100):
+            self.router.synthesize({'text':'A'}, 'character-a')
+            self.assertTrue(self.router.cancel('character-a'))
+        with patch('akousousin_app.backend.time.monotonic', return_value=100.2):
+            self.assertFalse(self.router.speaking())
+
+    def test_repeated_cancelled_characters_do_not_accumulate_phantom_speech(self):
+        with patch('akousousin_app.backend.time.monotonic', return_value=100):
+            for number in range(60):
+                identifier = f'character-{number}'
+                self.router.synthesize({'text':'A'}, identifier)
+                self.router.cancel(identifier)
+        with patch('akousousin_app.backend.time.monotonic', return_value=101):
+            self.assertFalse(self.router.speaking())
+
+    def test_cancelling_playback_preserves_another_clients_remaining_audio(self):
+        with patch('akousousin_app.backend.time.monotonic', return_value=100):
+            self.router.synthesize({'text':'First'}, 'first')
+            self.router.synthesize({'text':'Other client'}, 'other')
+            self.router.cancel('first')
+        with patch('akousousin_app.backend.time.monotonic', return_value=100.4):
+            self.assertTrue(self.router.speaking())
+        with patch('akousousin_app.backend.time.monotonic', return_value=100.7):
+            self.assertFalse(self.router.speaking())
+
     def test_explicit_sapi_language_routes_and_resamples(self):
         result = self.router.synthesize({'text': 'Guten Tag', 'language': 0x407, 'sample_rate': 22050})
         self.assertEqual(self.router.voice, 'german')
@@ -96,6 +122,12 @@ class RoutingTests(unittest.TestCase):
         self.router.synthesize({'text': 'Hello', 'length_scale': 1})
         self.assertEqual(self.router.synth.requests[-1]['length_scale'], .5)
         self.assertEqual(self.router.synth.requests[-1]['volume'], .5)
+
+    def test_four_times_speed_reaches_synthesis_without_clipping_to_old_limit(self):
+        self.config['speed'] = 4.0
+        settings.save(self.path, self.config)
+        self.router.synthesize({'text':'Faster speech', 'length_scale':1})
+        self.assertEqual(self.router.synth.requests[-1]['length_scale'], .25)
 
     def test_missing_model_fails_without_selecting_wrong_voice(self):
         Path(self.config['voices']['german']['path']).unlink()

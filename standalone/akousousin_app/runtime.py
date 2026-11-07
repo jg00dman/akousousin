@@ -86,11 +86,8 @@ def environment():
 
 
 def host_environment():
-    value = environment()
-    for name in ('LD_LIBRARY_PATH', 'LD_LIBRARY_PATH_ORIG', 'LD_PRELOAD',
-                 'QT_PLUGIN_PATH', 'QT_QPA_PLATFORM_PLUGIN_PATH'):
-        value.pop(name, None)
-    return value
+    from akousousin_backend.host import host_environment as clean
+    return clean(environment())
 
 
 def launch_controller(path):

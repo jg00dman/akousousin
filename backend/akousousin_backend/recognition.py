@@ -20,6 +20,7 @@ import time
 import wave
 
 from .server import Synthesizer
+from .host import host_environment
 
 RATE = 16000
 MAX_SECONDS = 30
@@ -213,11 +214,7 @@ def ready_cue():
         file.flush()
         # PyInstaller prepends its private libraries for AKS. System audio tools
         # must load the host libraries, as they do when launched from a terminal.
-        environment = os.environ.copy()
-        if 'LD_LIBRARY_PATH_ORIG' in environment:
-            environment['LD_LIBRARY_PATH'] = environment['LD_LIBRARY_PATH_ORIG']
-        else:
-            environment.pop('LD_LIBRARY_PATH', None)
+        environment = host_environment()
         arguments = [player]
         if Path(player).name == 'paplay':
             arguments += ['--client-name=Akousousin', '--stream-name=Dictation ready',
@@ -243,7 +240,7 @@ def capture(seconds, source=None, on_ready=None, cue=None):
     if source:
         args.append('--device=' + source)
     with tempfile.TemporaryFile() as recording, tempfile.TemporaryFile() as errors:
-        process = subprocess.Popen(args, stdout=recording, stderr=errors)
+        process = subprocess.Popen(args, stdout=recording, stderr=errors, env=host_environment())
         try:
             deadline = time.monotonic() + 5
             while os.fstat(recording.fileno()).st_size == 0:

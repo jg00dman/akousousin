@@ -83,7 +83,7 @@ class Panel:
         self.prefix = tk.StringVar(value=self.config['wine_prefix'])
         self.wine = tk.StringVar(value=self.config['wine'])
         self.preview = tk.StringVar(value='The quick brown fox jumps over the lazy dog.')
-        self.speed = tk.DoubleVar(value=self.config['speed'])
+        self.speed = tk.DoubleVar(value=round(self.config['speed'] * 4) / 4)
         self.volume = tk.DoubleVar(value=self.config['volume'] * 100)
         self.noise = tk.DoubleVar(value=self.config['noise_scale'])
         self.noise_w = tk.DoubleVar(value=self.config['noise_w_scale'])
@@ -217,13 +217,22 @@ class Panel:
         self.default_label.pack(anchor='w', pady=(0, 12))
         ttk.Entry(frame, textvariable=self.preview).pack(fill='x', pady=8)
         ttk.Button(frame, text='▶  Play sample', style='Accent.TButton', command=self.play).pack(anchor='w', pady=8)
-        for caption, variable, low, high in [('Default speed', self.speed, .5, 2), ('Volume', self.volume, 0, 100)]:
+        for caption, variable, low, high in [('Default speed', self.speed, .5, 4), ('Volume', self.volume, 0, 100)]:
             row = ttk.Frame(frame, style='Card.TFrame')
             row.pack(fill='x', pady=8)
             ttk.Label(row, text=caption, width=18, style='Card.TLabel').pack(side='left')
-            ttk.Scale(row, variable=variable, from_=low, to=high).pack(side='left', fill='x', expand=True)
-            ttk.Spinbox(row, textvariable=variable, from_=low, to=high, increment=.1 if high == 2 else 1,
-                        width=7).pack(side='right', padx=(12, 0))
+            if variable is self.speed:
+                self.speed_slider = tk.Scale(row, variable=variable, from_=low, to=high, resolution=.25,
+                                             orient='horizontal', showvalue=False, highlightthickness=0,
+                                             borderwidth=0, bg='white')
+                self.speed_slider.pack(side='left', fill='x', expand=True)
+                self.speed_spin = ttk.Spinbox(row, textvariable=variable, from_=low, to=high,
+                                             increment=.25, format='%.2f', state='readonly', width=7)
+                self.speed_spin.pack(side='right', padx=(12, 0))
+            else:
+                ttk.Scale(row, variable=variable, from_=low, to=high).pack(side='left', fill='x', expand=True)
+                ttk.Spinbox(row, textvariable=variable, from_=low, to=high, increment=1,
+                            width=7).pack(side='right', padx=(12, 0))
         ttk.Button(frame, text='Save playback preferences', command=self.save).pack(anchor='e', pady=8)
         ttk.Label(page, text='Preferences apply to new speech. Applications may need restarting after changing the default voice.',
                   wraplength=820).pack(anchor='w', padx=4)
@@ -249,7 +258,8 @@ class Panel:
         self.installed_only = tk.BooleanVar()
         ttk.Checkbutton(row, text='Installed only', variable=self.installed_only,
                         command=self.refresh_library).pack(side='right')
-        table = ttk.Frame(page); table.pack(fill='both', expand=True, pady=8)
+        table = ttk.Frame(page, height=100); table.pack(fill='both', expand=True, pady=8)
+        table.grid_propagate(False)  # Reserve room for actions on small screens.
         table.rowconfigure(0, weight=1); table.columnconfigure(0, weight=1)
         self.tree = ttk.Treeview(table, columns=('language', 'quality', 'size', 'status'), show='tree headings', height=12)
         self.tree.heading('#0', text='Voice')
@@ -268,6 +278,10 @@ class Panel:
         ttk.Button(row, text='Review licence & download', command=self.download).pack(side='left', padx=3)
         ttk.Button(row, text='Make default', style='Accent.TButton', command=self.make_default).pack(side='left', padx=3)
         ttk.Button(row, text='Import local model', command=self.import_model).pack(side='left', padx=3)
+        delete_row = ttk.Frame(page); delete_row.pack(fill='x', pady=(0, 4))
+        self.delete_voice_button = ttk.Button(delete_row, text='Delete voice…', command=self.delete_voice, state='disabled')
+        self.delete_voice_button.pack(side='left', padx=3)
+        self.tree.bind('<<TreeviewSelect>>', self.update_delete_voice)
         ttk.Label(page, text='Catalogue: Piper voices, pinned revision. Licences vary by voice; LJSpeech has reviewed provenance; models download separately. Other downloads require your licence review.',
                   wraplength=820).pack(anchor='w', pady=10)
 
@@ -291,6 +305,44 @@ class Panel:
                       else 'Reviewed free-use' if key in catalogue.APPROVED else 'Licence review required')
             self.tree.insert('', 'end', iid=key, text=entry['name'], values=(label(entry['language']['code']),
                              entry['quality'], f'{size:.0f} MB', status))
+
+    def update_delete_voice(self, event=None):
+        selected = self.tree.selection()
+        self.delete_voice_button.configure(state='normal' if selected and selected[0] in self.config['voices'] else 'disabled')
+
+    def delete_voice(self):
+        if self.busy:
+            self.status.set('Please wait for the current operation to finish.')
+            return
+        try:
+            key = self.selected()
+            if key not in self.config['voices']:
+                raise ValueError('Select an installed voice')
+        except ValueError as error:
+            messagebox.showinfo('Delete voice', str(error)); return
+        text = (f'Delete {self.config["voices"][key]["name"]} from the AKS voice library?\n\n'
+                'Downloaded files in the AKS voice cache will be deleted. Imported original files are kept. '
+                'Current AKS speech will stop. If this is the default voice, another installed voice will be selected. '
+                'Deleting the last voice leaves speech unavailable until you install another. '
+                'Apply voice registration in Settings afterwards and restart applications that cache voices.')
+        if not messagebox.askyesno('Delete installed voice', text, parent=self.root):
+            return
+        def remove():
+            runtime.call(self.path, {'command': 'stop'}, launch=False)
+            return resources.remove_voice(self.path, key)
+        def removed(config):
+            self.config = config
+            if not self.library[key]['files']:
+                self.library.pop(key)
+            self.refresh_library(); self.refresh_languages()
+            self.update_delete_voice()
+            for child in self.pages['Overview'].winfo_children():
+                child.destroy()
+            if hasattr(self, 'starter_card'):
+                del self.starter_card
+            self.build_overview()
+            self.status.set('Voice deleted. Apply voice registration in Settings; restart applications if needed.')
+        self.worker(remove, removed)
 
     def selected(self):
         selected = self.tree.selection()
@@ -599,7 +651,7 @@ class Panel:
 
     def save(self):
         try:
-            self.config.update(speed=float(self.speed.get()), volume=float(self.volume.get()) / 100,
+            self.config.update(speed=round(float(self.speed.get()) * 4) / 4, volume=float(self.volume.get()) / 100,
                                noise_scale=float(self.noise.get()), noise_w_scale=float(self.noise_w.get()),
                                idle_timeout=int(self.idle_timeout.get()), port=int(self.port.get()), wine_prefix=self.prefix.get(), wine=self.wine.get(),
                                book_language=next((code for code in {v['language'] for v in self.config['voices'].values()}
@@ -672,7 +724,7 @@ class Panel:
             else:
                 player = next((shutil.which(name) for name in ('pw-play', 'paplay', 'aplay') if shutil.which(name)), None)
                 if player:
-                    subprocess.run([player, str(path)], check=True, timeout=120)
+                    subprocess.run([player, str(path)], check=True, timeout=120, env=runtime.host_environment())
                 else:
                     return f'Preview saved to {path}; no pw-play, paplay or aplay audio player was found.'
             return 'Preview complete.'

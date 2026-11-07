@@ -294,6 +294,15 @@ class Installer:
 "Language"="{language:x}"
 
 '''
+            # Removed voices must disappear on the next explicit Apply. Only
+            # restore/delete keys recorded as owned by this installation.
+            wanted = {TOKEN_BASE + key for key in config['voices']}
+            for key, backup in self.state['keys'].items():
+                if key.startswith(TOKEN_BASE) and key not in wanted:
+                    self.capture_key(key)
+                    self.execute('reg.exe', 'delete', key, '/f', '/reg:64', check=False)
+                    if backup:
+                        self.execute('regedit.exe', '/S', self.windows(self.directory / backup))
             self.registry(text)
             activation = self.execute(self.windows(self.resource / 'compat-probe.exe'), '--engine', check=False)
             if activation.returncode:
@@ -303,6 +312,15 @@ class Installer:
                 self.remember_value(key, name)
                 self.execute('reg.exe', 'add', key, '/v', name, '/t', 'REG_SZ', '/d',
                              FULL_TOKEN + config['voice'], '/f', '/reg:64')
+            if not config['voices']:
+                # Do not leave a default pointing at a removed AKS token.
+                for item in self.state['values']:
+                    if item['name'] not in ('DefaultDefaultTokenId', 'DefaultTokenId'):
+                        continue
+                    current = self.read_value(item['key'], item['name'])
+                    if current and current['data'].startswith(FULL_TOKEN):
+                        self.remember_value(item['key'], item['name'])
+                        self.write_value(item['key'], item['name'], item['value'])
             stage = self.manifest.with_suffix('.tmp')
             stage.write_text(json.dumps(self.state, indent=2))
             stage.replace(self.manifest)

@@ -23,6 +23,54 @@ class VoiceInputGuiTests(unittest.TestCase):
         reporter.start(); self.addCleanup(reporter.stop)
         self.addCleanup(lambda: self.assertEqual(self.callback_errors, [], 'Tk callback errors'))
 
+    def test_speed_steps_and_confirmed_import_removal(self):
+        from akousousin_app.panel import Panel
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'settings.json'
+            original = Path(folder) / 'local.onnx'; original.write_bytes(b'keep model')
+            config = copy.deepcopy(settings.DEFAULTS)
+            config.update(voice='local', speed=1.23456789, voices={'local': {
+                'path':str(original), 'language':'en_US', 'name':'Local', 'quality':'local', 'sample_rate':22050}})
+            settings.save(path, config)
+            with patch('akousousin_app.resources.root', return_value=Path(folder)), \
+                    patch('akousousin_app.catalogue.catalogue', return_value={}), \
+                    patch('akousousin_app.runtime.call', return_value=None), \
+                    patch('akousousin_app.updates.is_appimage', return_value=False), \
+                    patch('akousousin_app.voice_input.discover_microphones', return_value=[('', 'System default')]):
+                panel = Panel(path, offer_install=False)
+                try:
+                    panel.root.update()
+                    self.assertEqual(panel.speed.get(), 1.25)
+                    panel.speed_slider.set(2.123456)
+                    panel.root.update()
+                    self.assertEqual(panel.speed.get(), 2.0)
+                    self.assertLessEqual(len(panel.speed_spin.get().partition('.')[2]), 2)
+                    panel.speed_slider.set(4)
+                    self.assertTrue(panel.save())
+                    self.assertEqual(settings.load(path)['speed'], 4)
+                    panel.root.geometry('760x480')
+                    panel.show('Voice library')
+                    panel.root.update()
+                    self.assertTrue(panel.delete_voice_button.winfo_ismapped())
+                    self.assertLessEqual(panel.delete_voice_button.winfo_rooty() + panel.delete_voice_button.winfo_height(),
+                                         panel.root.winfo_rooty() + panel.root.winfo_height())
+                    panel.tree.selection_set('local')
+                    panel.tree.event_generate('<<TreeviewSelect>>'); panel.root.update()
+                    self.assertFalse(panel.delete_voice_button.instate(['disabled']))
+                    with patch('akousousin_app.panel.messagebox.askyesno', return_value=True):
+                        panel.delete_voice_button.invoke()
+                    deadline = time.monotonic() + 3
+                    while panel.busy and time.monotonic() < deadline:
+                        panel.root.update(); time.sleep(.01)
+                    self.assertFalse(panel.busy)
+                    self.assertFalse(settings.load(path)['voices'])
+                    self.assertEqual(original.read_bytes(), b'keep model')
+                    self.assertNotIn('local', panel.tree.get_children())
+                    panel.show('Overview'); panel.root.update()
+                    self.assertTrue(panel.starter_card.winfo_ismapped())
+                finally:
+                    panel.root.destroy()
+
     def test_header_uses_actual_application_image(self):
         from akousousin_app.panel import Panel
         with tempfile.TemporaryDirectory() as folder:

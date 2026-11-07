@@ -6,6 +6,7 @@ import json
 import logging
 import math
 import hmac
+from collections import deque
 from pathlib import Path
 import threading
 import time
@@ -72,6 +73,7 @@ class Router:
         self.waiters = {}
         self.slots = threading.BoundedSemaphore(3)
         self.speaking_until = 0
+        self.playback = deque()
         self.processing = False
 
     def speaking(self):
@@ -140,17 +142,46 @@ class Router:
             self.lock.release()
 
     def cancel(self, identifier):
-        # Request ids are unguessable and only cancel that caller's current work.
+        # Cancel both inference and audio already handed to a playback client.
+        # Losing the latter leaves dictation paused for speech which was stopped.
         with self.control_lock:
             if not identifier:
                 return False
+            found = False
             if identifier in self.waiters:
                 self.waiters[identifier].set()
-                return True
+                found = True
             if identifier == self.active_request:
                 self.cancelled.set()
-                return True
-            return False
+                found = True
+            now, shift, remaining = time.monotonic(), 0, deque()
+            for key, start, end in self.playback:
+                if end <= now:
+                    continue
+                if key == identifier:
+                    shift += max(0, end - max(start, now))
+                    found = True
+                else:
+                    remaining.append((key, max(now, start - shift), max(now, end - shift)))
+            self.playback = remaining
+            if shift:
+                # Keep a small drain margin for the host audio buffer, retaining
+                # the full remaining duration of every other playback request.
+                self.speaking_until = max(now + .1, remaining[-1][2] if remaining else 0)
+            return found
+
+    def record_playback(self, identifier, duration):
+        # Called with control_lock held. Preserve conservative serial playback
+        # timing but retain request ownership so STOP can remove cancelled audio.
+        now = time.monotonic()
+        while self.playback and self.playback[0][2] <= now:
+            self.playback.popleft()
+        start = max(self.speaking_until, now)
+        self.speaking_until = start + duration + .5
+        self.playback.append((identifier, start, self.speaking_until))
+        if len(self.playback) > 128:
+            first, second = self.playback.popleft(), self.playback.popleft()
+            self.playback.appendleft((None, first[1], second[2]))
 
     def synthesize(self, request, identifier=None):
         # Three synthesis callers maximum leave a WSGI thread for cancellation
@@ -199,8 +230,8 @@ class Router:
                 if acquired:
                     self.active_request = None
                     self.processing = False
-                    if audio_duration:
-                        self.speaking_until = max(self.speaking_until, time.monotonic()) + audio_duration + .5
+                    if audio_duration and not cancelled.is_set():
+                        self.record_playback(identifier, audio_duration)
             if acquired:
                 self.last_activity = time.monotonic()
                 self.lock.release()
