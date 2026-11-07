@@ -3,13 +3,24 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
-# Testing the 0.7.0b2 beta
+# Testing the 0.7.0b3 beta
 
 Download the [Linux AppImage or Windows ZIP](https://github.com/jg00dman/akousousin/releases).
 Linux trial users need only the AppImage; source archives are separate downloads.
 Quit the previous instance from its tray, replace the application and launch it.
 Keep existing preferences and models; a configuration reset is not required.
 See [installation and storage](README.md#linux-installation-and-storage).
+
+## AppImage installation and menu shortcut
+
+Launch from Downloads: the panel should offer to move the AppImage to the
+recommended XDG data location and add a menu shortcut. Declining should leave the
+file in place; Settings → AppImage installation can retry. Accepting should verify
+the copy, refresh existing registrations, restart and remove the unchanged source.
+Check the menu shortcut opens AKS and displays its icon after the old temporary
+AppImage mount disappears. An existing destination requires confirmation. Running
+from the recommended location should create the shortcut without asking to move.
+The panel header should show the AKS artwork, without a bars text character.
 
 ## First run and speech output
 

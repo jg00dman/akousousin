@@ -23,6 +23,33 @@ class VoiceInputGuiTests(unittest.TestCase):
         reporter.start(); self.addCleanup(reporter.stop)
         self.addCleanup(lambda: self.assertEqual(self.callback_errors, [], 'Tk callback errors'))
 
+    def test_header_uses_actual_application_image(self):
+        from akousousin_app.panel import Panel
+        with tempfile.TemporaryDirectory() as folder:
+            icon_root = tk.Tk()
+            picture = tk.PhotoImage(master=icon_root, width=128, height=128)
+            picture.put('#087e82', to=(0, 0, 128, 128))
+            picture.write(str(Path(folder) / 'akousousin.png'), format='png')
+            icon_root.destroy()
+            with patch('akousousin_app.resources.root', return_value=Path(folder)), \
+                    patch('akousousin_app.resources.bootstrap', return_value=copy.deepcopy(settings.DEFAULTS)), \
+                    patch('akousousin_app.catalogue.catalogue', return_value={}), \
+                    patch('akousousin_app.runtime.call', return_value=None), \
+                    patch('akousousin_app.updates.is_appimage', return_value=False), \
+                    patch('akousousin_app.voice_input.discover_microphones', return_value=[('', 'System default')]):
+                panel = Panel(Path(folder) / 'settings.json', offer_install=False)
+                try:
+                    panel.root.update()
+                    self.assertEqual(panel.header_icon.width(), 32)
+                    self.assertEqual(panel.header_icon.get(0, 0), (8, 126, 130))
+                    header = panel.root.winfo_children()[0]
+                    labels = [child for child in header.winfo_children() if isinstance(child, ttk.Label)]
+                    self.assertTrue(any(str(child.cget('image')) for child in labels))
+                    self.assertTrue(any(child.cget('text') == 'Akousousin' for child in labels))
+                    self.assertFalse(any('▥' in str(child.cget('text')) for child in labels))
+                finally:
+                    panel.root.destroy()
+
     def test_update_controls_are_appimage_only_and_preferences_persist(self):
         from akousousin_app.panel import Panel
         def widgets(parent):

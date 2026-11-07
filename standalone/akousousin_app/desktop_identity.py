@@ -24,7 +24,7 @@ def desktop_exec(arguments):
     return ' '.join(quoted).replace('\\', '\\\\')
 
 
-def ensure_desktop_entry(arguments=None, data_home=None, app_id=APP_ID, name='Akousousin'):
+def ensure_desktop_entry(arguments=None, data_home=None, app_id=APP_ID, name='Akousousin', visible=None, icon=None):
     from . import runtime, settings
     base = Path(data_home) if data_home is not None else settings.data_path().parent
     directory = base / 'applications'
@@ -42,10 +42,19 @@ def ensure_desktop_entry(arguments=None, data_home=None, app_id=APP_ID, name='Ak
             raise RuntimeError('The running AppImage has moved or been removed. Quit AKS and launch it from its current location.')
         if image and not os.access(image, os.X_OK):
             raise RuntimeError('The AppImage is not executable. Enable executable permission in its file Properties, then restart AKS.')
+    old = destination.read_text(encoding='utf-8') if destination.exists() else ''
+    if visible is None:
+        visible = 'NoDisplay=false' in old
+    if icon is None:
+        icon = next((line[5:] for line in old.splitlines() if line.startswith('Icon=')), None)
+    if icon is not None and any(c in str(icon) for c in ('\n', '\r', '\0')):
+        raise ValueError('Invalid desktop icon path')
     invocation = runtime.command('--configure') if arguments is None else arguments
     content = ('[Desktop Entry]\nType=Application\nName=' + name + '\n'
-               'Comment=Local neural speech and dictation\nNoDisplay=true\nTerminal=false\n'
-               'Exec=' + desktop_exec(invocation) + '\n' + MARKER + '\n')
+               'Comment=Local neural speech and dictation\nNoDisplay=' + ('false' if visible else 'true') + '\nTerminal=false\n'
+               + ('Icon=' + str(icon) + '\n' if icon else '')
+               + ('Categories=AudioVideo;Audio;Accessibility;\n' if visible else '')
+               + 'Exec=' + desktop_exec(invocation) + '\n' + MARKER + '\n')
     # Do not invalidate the desktop service's application cache on every attempt.
     if destination.exists() and destination.read_text(encoding='utf-8') == content:
         return destination

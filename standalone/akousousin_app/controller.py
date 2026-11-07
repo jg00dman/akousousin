@@ -235,6 +235,10 @@ def run(path):
         from .desktop_identity import ensure_desktop_entry
         try:
             ensure_desktop_entry()
+            from .appimage_install import needs_move, create_menu_entry
+            from .updates import is_appimage
+            if is_appimage() and not needs_move():
+                create_menu_entry()
             from .selection_shortcuts import ReadingShortcuts
             ensure_desktop_entry(app_id=ReadingShortcuts.app_id, name=ReadingShortcuts.desktop_name)
         except (OSError, ValueError, RuntimeError):

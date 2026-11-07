@@ -7,7 +7,7 @@ SPDX-FileCopyrightText: 2026 John Goodman
 
 **akousousin:** *The unified neural speech engine for Linux, implementing Microsoft SAPI and Speech Dispatcher, based on Piper and Whisper.*
 
-The 0.7.0b2 beta implements SAPI text-to-speech using Piper, native Linux Speech
+The 0.7.0b3 beta implements SAPI text-to-speech using Piper, native Linux Speech
 Dispatcher output and experimental local Whisper voice input on Linux. SAPI
 recognition and native Windows microphone capture are not implemented. See the
 [compatibility table](../COMPATIBILITY.md) for the implemented capabilities.
@@ -27,7 +27,15 @@ optional build includes LJSpeech for offline first use.
 ## Linux installation and storage
 
 OuDedetai installs the AppImage to `~/.local/share/Akousousin/Akousousin-x86_64.AppImage`.
-For manual installation, put the downloaded AppImage there and make it executable.
+When launched from elsewhere, the control panel offers to move the AppImage to
+that location and add an application-menu shortcut with a persistent AKS icon.
+Choose No to keep running portably; Settings → AppImage installation lets you
+retry later. An existing destination requires confirmation before replacement.
+The copy is verified before registrations are refreshed and AKS restarts; the
+unchanged original is removed only after the restart command succeeds. Existing
+voices, models and preferences are kept. Launching an AppImage already at the
+recommended path creates/refreshes its menu shortcut without a move prompt.
+Custom desktop entries are preserved. The header displays the actual AKS icon.
 The Ubuntu 22.04 / x86-64 / glibc 2.35+ build target is unchanged.
 
 - Preferences: `~/.config/Akousousin/settings.json`.

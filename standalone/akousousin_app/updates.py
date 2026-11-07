@@ -193,6 +193,12 @@ def refresh_registrations(path):
         if installer.manifest.is_file():
             installer.install(config, path)
 
+    if os.name != 'nt':
+        from .speech_dispatcher import dispatcher_paths, install as register_dispatcher
+        _, launcher, _ = dispatcher_paths()
+        if launcher.is_file():
+            register_dispatcher(path)
+
 
 WEEK = 7 * 24 * 60 * 60
 

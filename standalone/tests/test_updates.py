@@ -232,6 +232,21 @@ class UpdateTests(unittest.TestCase):
         install.assert_not_called()
         call.assert_not_called()
 
+    def test_refresh_updates_only_existing_dispatcher_launcher(self):
+        from akousousin_app import settings
+        from akousousin_app.speech_dispatcher import dispatcher_paths
+        path = self.root / 'settings.json'
+        settings.save(path, dict(settings.DEFAULTS))
+        with patch.dict(os.environ, {'XDG_DATA_HOME': str(self.root / 'data')}), \
+                patch('akousousin_app.speech_dispatcher.install') as register:
+            updates.refresh_registrations(path)
+            register.assert_not_called()
+            _, launcher, _ = dispatcher_paths()
+            launcher.parent.mkdir(parents=True, exist_ok=True)
+            launcher.write_text('#!/bin/sh\nexec /old.AppImage --speech-dispatcher\n')
+            updates.refresh_registrations(path)
+            register.assert_called_once_with(path)
+
     def test_refresh_does_not_reinstall_uninstalled_or_deleted_prefixes(self):
         active, removed = self.root / 'active', self.root / 'removed'
         for prefix in (active, removed):

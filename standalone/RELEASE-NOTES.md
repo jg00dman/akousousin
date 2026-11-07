@@ -3,44 +3,39 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
-# Akousousin 0.7.0b2 beta
+# Akousousin 0.7.0b3 beta
 
-This beta fixes Speech Dispatcher registration hiding eSpeak and makes the final
-steps of an AppImage update visible. It adds optional weekly update checks and
-stable/beta selection for AppImage installations.
+This beta adds optional AppImage installation and replaces the bars character in
+the control-panel header with the actual Akousousin icon.
 
-- **Keep eSpeak available:** AKS joins Speech Dispatcher's discovered engine list
-  instead of disabling discovery with its own AddModule entry. Existing explicit
-  engine lists and defaults are preserved. After updating, choose **Settings →
-  Install Speech Dispatcher support** again to repair an earlier AKS-only
-  registration, then reopen Orca preferences. AKS and eSpeak should both appear.
-- **Clear update progress:** download percentages describe only the download.
-  Verification and installation show activity indicators, followed by an explicit
-  restarting warning for three seconds. The relaunched panel briefly confirms
-  the installed version. Failed registration still restores the previous image.
-- **Optional weekly checks:** the Updates page provides Check for updates weekly
-  and Show beta testing updates. Notifications offer Update now… (opens Updates
-  for review) and Remind me later (one week), and wait while AKS is speaking or
-  dictating. Nothing is installed automatically.
-- **Stable/beta selection:** beta installations initially include beta updates;
-  stable installations initially exclude them. Saved choices survive upgrades.
-  Turning betas off never downgrades an installed beta: it waits for a newer
-  stable release. Manual checks respect the same choice.
-- **AppImage-only self-updating:** controls require an AppImage package marker and
-  an executable APPIMAGE launch path. Other formats defer to their software
-  manager or installation source. Voice and Whisper downloads remain independent.
+- Launching the AppImage outside its recommended XDG-aware location offers to
+  move it to `~/.local/share/Akousousin/Akousousin-x86_64.AppImage` and create an
+  application-menu shortcut. Choose No to continue running portably; retry later
+  from Settings → AppImage installation.
+- Existing destination files require replacement confirmation. The copy is
+  verified and active registrations are refreshed before restarting. The original
+  download remains until the restart command succeeds. Voices, models and
+  preferences are retained.
+- The menu shortcut uses a persistent icon and the installed AppImage path.
+  Running an already-installed AppImage refreshes its shortcut. Custom desktop
+  entries are preserved, and ordinary portal registration keeps the menu entry
+  visible. No root privileges are required.
+- Saved Speech Dispatcher launchers are refreshed when the AppImage path changes.
+  Existing engines and module defaults remain unchanged.
+- The header now shows the same AKS artwork used by the tray and window icon.
+
+The 0.7.0b2 fixes remain included: eSpeak and AKS stay available together in Speech
+Dispatcher; AppImage updates provide optional weekly checking, stable/beta
+selection and explicit verification, installation and restart feedback. For an
+older AKS-only Speech Dispatcher registration, install support again in Settings
+and reopen Orca preferences.
 
 The default AppImage contains runtimes but no Piper voice or Whisper model
-weights. Existing downloads, preferences and selected voices are retained. New
-users can download the starter voice (about 64 MB) or choose another voice;
-Whisper Small is a separate one-time download (about 485 MB).
+weights. Existing downloads are reused. Native/Wine selection availability and
+wider desktop behaviour remain beta testing items. Spoken punctuation commands,
+SAPI recognition and GNOME global shortcut integration are not added in this
+release.
 
-Global reading shortcuts, KDE Wayland dictation, private Wine SAPI installation,
-Linux Speech Dispatcher output and Windows SAPI output remain available. This is
-still a beta: native/Wine selection availability and wider desktop behaviour need
-user testing. SAPI recognition, Windows microphone capture and comprehensive
-control-panel accessibility are not implemented.
-
-See the [beta checklist](https://github.com/jg00dman/akousousin/blob/main/standalone/BETA-TESTING.md)
-and [installation guide](https://github.com/jg00dman/akousousin/blob/main/standalone/README.md).
+See the [installation guide](https://github.com/jg00dman/akousousin/blob/main/standalone/README.md)
+and [beta checklist](https://github.com/jg00dman/akousousin/blob/main/standalone/BETA-TESTING.md).
 Licences, matching sources and checksums accompany the packages.

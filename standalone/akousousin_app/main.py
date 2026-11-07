@@ -150,7 +150,7 @@ def main():
         return
     runtime.initialize()
     from .panel import Panel
-    panel = Panel(args.settings)
+    panel = Panel(args.settings, offer_install=not args.smoke_test)
     if args.smoke_test:
         panel.show('Voice Input')
         assert panel.voice_input.state.get()

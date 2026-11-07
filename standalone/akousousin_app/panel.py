@@ -22,7 +22,7 @@ from .service import Service
 
 
 class Panel:
-    def __init__(self, path):
+    def __init__(self, path, offer_install=True):
         self.path = Path(path)
         self.config = resources.bootstrap(path)
         self.library = catalogue.catalogue(resources.root())
@@ -61,7 +61,10 @@ class Panel:
         style.configure('Treeview.Heading', font=('DejaVu Sans', 10, 'bold'), padding=8)
         header = ttk.Frame(self.root, padding=(24, 18))
         header.pack(fill='x')
-        ttk.Label(header, text='▥  Akousousin', style='Title.TLabel').pack(side='left')
+        if hasattr(self, 'window_icon'):
+            self.header_icon = self.window_icon.subsample(max(1, (self.window_icon.width() + 31) // 32))
+            ttk.Label(header, image=self.header_icon, padding=(0, 0, 12, 0)).pack(side='left')
+        ttk.Label(header, text='Akousousin', style='Title.TLabel').pack(side='left')
         ttk.Label(header, text='The unified neural speech engine for Linux (beta)',
                   font=('DejaVu Sans', 10, 'italic'), padding=(18, 8), wraplength=460).pack(side='left')
         ttk.Label(header, text=f'Beta {__version__}').pack(side='right')
@@ -108,6 +111,8 @@ class Panel:
         self.root.after(100, self.poll)
         self.root.after(200, self.check_server)
         self.root.after(300, self.poll_panel)
+        if offer_install:
+            self.root.after(800, self.offer_appimage_install)
 
     def show(self, name):
         for page in self.pages.values():
@@ -413,6 +418,11 @@ class Panel:
         self.settings_scroll = ScrollArea(self.pages['Settings'])
         self.settings_scroll.pack(fill='both', expand=True)
         page = self.settings_scroll.inner
+        if updates.is_appimage():
+            frame = self.card(page, 'AppImage installation')
+            from .appimage_install import recommended_path
+            ttk.Label(frame, text=str(recommended_path()), style='Card.TLabel', wraplength=780).pack(anchor='w', pady=8)
+            ttk.Button(frame, text='Move AppImage and add menu shortcut…', command=lambda: self.offer_appimage_install(manual=True)).pack(anchor='w')
         frame = self.card(page, 'Install into a Wine prefix or Windows')
         if os.name != 'nt':
             ttk.Label(frame, text='Wine prefix', style='Card.TLabel').pack(anchor='w')
@@ -448,6 +458,31 @@ class Panel:
                   wraplength=780, style='Card.TLabel').pack(anchor='w', pady=12)
         ttk.Button(frame, text='Save settings', command=self.save).pack(anchor='e')
         ttk.Button(page, text='Open service log', command=lambda: webbrowser.open(self.service.log.as_uri())).pack(anchor='w')
+
+    def offer_appimage_install(self, manual=False):
+        from . import appimage_install
+        if not updates.is_appimage() or self.busy or self.updating:
+            return
+        if not appimage_install.needs_move():
+            if manual:
+                self.worker(appimage_install.create_menu_entry,
+                            lambda _: self.status.set('Application-menu shortcut installed.'))
+            return
+        target = appimage_install.recommended_path()
+        replace_existing = target.exists()
+        replacement = '\nAn AppImage already exists there and will be replaced.' if replace_existing else ''
+        text = (f'Move Akousousin to its recommended location?\n\n{target}\n\n'
+                'This also adds an application-menu shortcut with the AKS icon. '
+                'AKS will restart; voices, models and preferences are retained. '
+                'Close applications using AKS speech first.' + replacement +
+                '\n\nChoose No to keep running from the current location.')
+        if not messagebox.askyesno('Install Akousousin AppImage', text, parent=self.root):
+            return
+        if self.save():
+            self.updating = True
+            self.status.set('Installing AppImage… Please keep this window open.')
+            self.worker(lambda: appimage_install.install(self.path, replace=replace_existing),
+                        lambda _: self.root.after_idle(self.root.destroy), parallel=True)
 
     def build_updates(self):
         frame = self.card(self.pages['Updates'], 'Application updates')
