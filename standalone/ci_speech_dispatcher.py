@@ -202,10 +202,14 @@ with (work / 'daemon.log').open('wb') as log:
         reading('--read-selection'); finished()
         command('SET SELF PRIORITY IMPORTANT')
         command('SPEAK')
-        command(('Another application must finish uninterrupted. ' * 250) + '\r\n.')
+        # Keep this comfortably within the 90-second deadline on shared runners.
+        # Check below that it is still active when the reader is stopped.
+        command(('Another application must finish uninterrupted. ' * 50) + '\r\n.')
         event(701)
         selected.write_text('This long reading will be stopped. ' * 1500)
         assert reading('--read-selection')['reading']
+        command('GET OUTPUT_MODULE')  # Drain notifications received during startup.
+        assert 702 not in events, 'Other-client fixture finished before the stop test'
         reading('--read-selection')
         assert finished()['state'] == 'Reading stopped'
         event(702)  # Stopping the reader must preserve this other client's speech.
