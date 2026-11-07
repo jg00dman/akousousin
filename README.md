@@ -8,6 +8,11 @@ SPDX-FileCopyrightText: 2026 John Goodman
 **akousousin:** *The unified neural speech engine for Linux, implementing Microsoft SAPI and Speech Dispatcher, based on Piper and Whisper.*
 
 **Main version: 0.7.0b1 beta.** [Downloads and release notes](https://github.com/jg00dman/akousousin/releases).
+
+<!-- akousousin-screenshot:start -->
+![Akousousin 0.7.0b1 control panel showing the speech service, voice preview and desktop reading navigation](docs/images/control-panel.png)
+<!-- akousousin-screenshot:end -->
+
 Core speech output works through 64-bit SAPI (Wine and native Windows) and the
 native Linux Speech Dispatcher output module. On-demand startup, idle model
 unloading and control-panel update checks are included. Neither output interface
@@ -38,10 +43,6 @@ We report feature coverage rather than an invented percentage of the full APIs.
 Global selected-text reading is available on KDE Wayland through the Read selection
 page. It needs Speech Dispatcher and wl-clipboard; Wine applications may require
 the explicit copied-text fallback.
-
-<!-- akousousin-screenshot:start -->
-![Akousousin 0.7.0b1 control panel showing the speech service, voice preview and desktop reading navigation](docs/images/control-panel.png)
-<!-- akousousin-screenshot:end -->
 
 ## Try the beta
 
