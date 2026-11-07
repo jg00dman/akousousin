@@ -38,8 +38,8 @@ another language too. The sound can be disabled. **Test ready sound** plays the
 two tones without loading a model or recording; it uses the system default
 playback device. If playback completes silently, check AKS output routing and
 volume in KDE audio settings. **System default** follows the Linux default microphone; choose a named input
-from the dropdown or use Refresh after connecting a device. **Automatic detection**
-keeps language detection enabled. Choose… opens a searchable, scrollable language
+from the dropdown or use Refresh after connecting a device. **Multilingual (auto)**
+detects once per recording session, then locks the detected language until that session ends. Choose… opens a searchable, scrollable language
 list, and the panel shows the last automatically detected language separately.
 
 Closing the panel leaves the shared controller and recognition worker available.

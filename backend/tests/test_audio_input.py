@@ -29,7 +29,7 @@ class AudioInputTests(unittest.TestCase):
             endpoint.feed(QUIET)
         for _ in range(25):
             self.assertIsNone(endpoint.feed(VOICE))
-        for _ in range(39):
+        for _ in range(24):
             self.assertIsNone(endpoint.feed(QUIET))
         result = endpoint.feed(QUIET)
         self.assertIsNotNone(result)
@@ -56,6 +56,28 @@ class AudioInputTests(unittest.TestCase):
         endpoint.feed(VOICE)
         for _ in range(50):
             self.assertIsNone(endpoint.feed(QUIET))
+
+    def test_calibrated_room_noise_is_not_continuous_speech(self):
+        endpoint = Endpoint()
+        noise = b'\x90\x01' * (FRAME_BYTES // 2)
+        endpoint.calibrate(noise * 10)
+        for _ in range(200):
+            self.assertIsNone(endpoint.feed(noise))
+        for _ in range(25):
+            endpoint.feed(VOICE)
+        result = None
+        for _ in range(25):
+            result = endpoint.feed(noise)
+        self.assertIsNotNone(result)
+        self.assertEqual(endpoint.last_metadata['endpoint_wait_seconds'], .5)
+        self.assertEqual(endpoint.last_metadata['speech_seconds'], .5)
+        self.assertLess(len(read_wav(result)), 2 * 16000)
+
+    def test_default_cap_is_eight_seconds(self):
+        endpoint = Endpoint()
+        for _ in range(399):
+            self.assertIsNone(endpoint.feed(VOICE))
+        self.assertIsNotNone(endpoint.feed(VOICE))
 
     def test_backlog_is_bounded_and_reported(self):
         capture = Capture()

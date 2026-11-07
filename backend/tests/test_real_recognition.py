@@ -25,6 +25,23 @@ class RealRecognitionTests(unittest.TestCase):
     def tearDownClass(cls):
         cls.recognizer.close()
 
+    def test_new_cached_tiers_run_offline_with_locked_english(self):
+        from akousousin_backend.models import installed
+        tiers = ('base', 'base.en', 'small.en')
+        if not all(installed(tier, MODELS) for tier in tiers):
+            self.skipTest('Explicitly install Base, Base.en and Small.en before this test')
+        for tier in tiers:
+            with self.subTest(tier=tier):
+                recognizer = Recognizer(MODELS, model=tier, threads=2)
+                try:
+                    result = recognizer.transcribe(self.audio, 'en', endpointed=True)
+                    self.assertEqual(result['model'], tier)
+                    self.assertEqual(result['language'], 'en')
+                    self.assertIn('americans', result['text'].lower())
+                    self.assertEqual(result['language_source'], 'explicit')
+                finally:
+                    recognizer.close()
+
     def assert_speech(self, result):
         text = result['text'].lower()
         self.assertIn('ask not what your country can do for you', text)

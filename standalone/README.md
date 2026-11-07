@@ -239,26 +239,33 @@ This setup screenshot uses an isolated profile with the model unloaded. The
 [recording controls screenshot](../docs/images/voice-input-recording.png) shows
 the lower part of this scrollable page.
 
-Recognition uses **faster-whisper with CTranslate2**, CPU int8 and neural VAD.
-The original OpenAI Whisper Python package and PyTorch are not shipped. Small is
-multilingual; languages are selected within the model, not separate downloads.
-Turbo currently requires importing a converted local model; its download option
-is not implemented. If Turbo fails to load, recognition tries installed Small.
+Recognition uses **faster-whisper with CTranslate2**, CPU int8 and one killable
+worker. It does not ship the original OpenAI Whisper Python package or PyTorch.
+Base.en is the compact English default, and multilingual Base is the default for
+other supported locales. Small/Small.en are quality options. Turbo requires a
+converted local import and is not presented as a CPU speed option; a failed
+Turbo load falls back to installed Small.
 
 Install `pulseaudio-utils` for `parec`/`paplay`; PipeWire remains your audio server
-through its PulseAudio-compatible service. Open Voice Input and select Small
-(default). Enable voice input downloads its pinned weights once if necessary and
-loads them; Disable voice input stops recognition and frees model memory without
-deleting the download. The ready status and two 300 Hz tones announce readiness;
-Test ready sound checks playback separately on the system default output.
+through its PulseAudio-compatible service. Enable voice input downloads the
+selected pinned weights once if necessary and loads them. Disable stops
+recognition and frees model memory, retaining downloads. Wait for the ready state
+and two optional 300 Hz tones before speaking. Test ready sound checks playback
+separately. Tones use cached audio through memory/stdin.
 
-Choose a readable microphone or System default, and Automatic detection or a
-language from the searchable, scrollable picker. The detected language is displayed
-separately and does not silently lock the next recording. Start recording tests a
-ten-second capture and displays text. Per-phrase timing shows audio length, queue
-wait, recognition time and insertion time to help distinguish capture latency
-from model or desktop-insertion delays. Timings stay with the in-memory transcript
-history; no transcript log file is written. Spoken punctuation commands are not interpreted.
+Choose a named microphone or System default, and a language from the searchable,
+scrollable picker. The initial language follows the supported system locale.
+Multilingual (auto) explicitly detects the first nonempty phrase, then locks its
+language for the rest of that recording session. Starting a new session detects
+again. Start recording tests ten seconds and displays text.
+
+Capture uses an adaptive energy endpointer with approximately 500 ms silence and
+an 8-second cap. Endpointed input skips Whisper's redundant VAD pass; standalone
+WAV transcription retains neural VAD. Per-phrase timing shows voiced duration,
+endpoint wait, audio length, recognition queue wait, recognition time, insertion
+queue wait and insertion time. Recent transcripts stay in memory; numeric timings
+and outcomes are logged without dictated text. Spoken punctuation commands are
+not interpreted.
 
 On KDE Wayland, enable desktop shortcuts and approve KDE's shortcut and keyboard
 input dialogs. The proposed shortcut is Ctrl+Alt+Space, subject to KDE approval.
@@ -330,3 +337,18 @@ requests spanning a recording session cannot resume afterwards. The Speech
 Dispatcher module cancels current AKS output, and previews stop their own player.
 Suppression is released after recording/transcription ends, cancellation, or an
 error; a terminated controller cannot leave a permanent mute behind.
+
+Dictation language now defaults to the supported system locale. Base.en is the
+compact English default; Base is the compact multilingual default with the chosen
+language passed explicitly. Small/Small.en trade memory and CPU for quality.
+Multilingual (auto) is explicit: the first nonempty phrase determines the language
+for that recording session. Stop and start another session to detect again.
+English-only models switch to their multilingual counterpart when another language
+or auto is chosen. Turbo remains importable, with no CPU speed claim.
+
+Voice Input offers CPU threads, Keep model loaded while voice input is enabled,
+and an idle timeout (one hour by default when keep-loaded is off). More threads
+are not always faster on CPU-limited systems; see the reproducible benchmark in
+`backend/tools/benchmark_recognition.py`. Timing logs contain numeric measurements
+and outcomes, never dictated text. Model cards accompany on-demand downloads;
+model files and their upstream licences are not bundled into the AppImage.

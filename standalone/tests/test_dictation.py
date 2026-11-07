@@ -27,7 +27,7 @@ class Recognition:
     def close(self):
         self.process = None
         self.closed = True
-    def transcribe(self, audio, language=None, cancelled=None):
+    def transcribe(self, audio, language=None, cancelled=None, endpointed=False):
         return {'text': 'Guten Morgen', 'language': language or 'de'}
 
 
@@ -57,7 +57,7 @@ class DictationTests(unittest.TestCase):
     def setUp(self):
         folder = tempfile.TemporaryDirectory(); self.addCleanup(folder.cleanup)
         self.path = Path(folder.name) / 'settings.json'
-        config = dict(settings.DEFAULTS, stt_beep=False)
+        config = dict(settings.DEFAULTS, stt_beep=False, stt_model='small', stt_language='', stt_keep_loaded=False)
         settings.save(self.path, config)
         self.installed = patch('akousousin_backend.models.installed', return_value=True)
         self.installed.start(); self.addCleanup(self.installed.stop)
@@ -86,6 +86,58 @@ class DictationTests(unittest.TestCase):
             self.wait()
         self.assertEqual(self.manager.status()['phase'], 'error')
         self.assertFalse(speech_gate.snapshot(self.path)[0])
+
+    def test_auto_detects_once_and_resets_between_sessions(self):
+        languages = []
+        class TwoPhrases(Audio):
+            def start(capture):
+                capture.ready.set()
+                capture.segments.put(wav(b'\x01\0' * 3200))
+                capture.segments.put(wav(b'\x01\0' * 3200))
+                capture.done.set()
+        class Detecting(Recognition):
+            def transcribe(recognizer, audio, language=None, cancelled=None, endpointed=False):
+                languages.append(language)
+                self.assertTrue(endpointed)
+                return {'text':'Guten Morgen', 'language':'de',
+                        'language_source':'explicit' if language else 'detected'}
+        self.manager.capture_factory = TwoPhrases
+        self.manager.recognizer_factory = Detecting
+        self.manager.start(); self.wait()
+        self.assertEqual(languages, [None, 'de'])
+        self.assertEqual(self.manager.results[-1]['language_source'], 'session')
+        self.manager.start(); self.wait()
+        self.assertEqual(languages, [None, 'de', None, 'de'])
+
+    def test_empty_first_result_does_not_lock_session_language(self):
+        languages = []
+        class ThreePhrases(Audio):
+            def start(capture):
+                capture.ready.set()
+                for _ in range(3):
+                    capture.segments.put(wav(b'\x01\0' * 3200))
+                capture.done.set()
+        class Detecting(Recognition):
+            def transcribe(recognizer, audio, language=None, cancelled=None, endpointed=False):
+                languages.append(language)
+                return {'text':'' if len(languages) == 1 else 'Guten Morgen',
+                        'language':'en' if len(languages) == 1 else 'de'}
+        self.manager.capture_factory = ThreePhrases
+        self.manager.recognizer_factory = Detecting
+        self.manager.start(); self.wait()
+        self.assertEqual(languages, [None, None, 'de'])
+        self.assertEqual(len(self.manager.results), 2)
+
+    def test_keep_loaded_ignores_idle_timeout_until_disabled(self):
+        config = settings.load(self.path)
+        config.update(stt_keep_loaded=True, stt_idle_timeout=1)
+        settings.save(self.path, config)
+        self.manager.prepare(); self.wait()
+        self.manager.last_activity = time.monotonic() - 100
+        self.manager.expire()
+        self.assertIsNotNone(self.manager.recognizer)
+        self.manager.unload()
+        self.assertIsNone(self.manager.recognizer)
 
     def wait(self):
         self.manager.thread.join(2)
@@ -118,7 +170,7 @@ class DictationTests(unittest.TestCase):
 
     def test_idle_unload_and_explicit_unload_preserve_models(self):
         self.manager.prepare(); self.wait()
-        self.manager.last_activity = time.monotonic() - 301
+        self.manager.last_activity = time.monotonic() - 3601
         self.manager.expire()
         self.assertIsNone(self.manager.recognizer)
         self.manager.prepare(); self.wait()
@@ -137,7 +189,7 @@ class DictationTests(unittest.TestCase):
 
     def test_recording_reenables_input_after_disabling_and_idle_unloads_keep_enabled(self):
         self.manager.prepare(); self.wait()
-        self.manager.last_activity = time.monotonic() - 301
+        self.manager.last_activity = time.monotonic() - 3601
         self.manager.expire()
         self.assertTrue(self.manager.status()['enabled'])
         self.manager.unload()

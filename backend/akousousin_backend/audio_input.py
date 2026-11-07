@@ -28,12 +28,20 @@ def wav(pcm):
 
 
 class Endpoint:
-    """Energy endpointing only. Whisper's neural VAD still filters each result."""
-    def __init__(self, threshold=250, silence_frames=40, max_frames=750):
+    """Adaptive energy fallback; calibrated on microphone startup, before ready."""
+    def __init__(self, threshold=250, silence_frames=25, max_frames=400):
         self.threshold = threshold
         self.silence_frames = silence_frames
         self.max_frames = max_frames
+        self.noise_floor = threshold / 3
+        self.last_metadata = {}
         self.reset()
+
+    def calibrate(self, pcm):
+        levels = [audioop.rms(pcm[i:i + FRAME_BYTES], 2)
+                  for i in range(0, len(pcm) - FRAME_BYTES + 1, FRAME_BYTES)]
+        if levels:
+            self.noise_floor = sorted(levels)[len(levels) // 2]
 
     def reset(self):
         self.preroll = deque(maxlen=12)
@@ -43,7 +51,10 @@ class Endpoint:
     def feed(self, frame):
         if len(frame) != FRAME_BYTES:
             raise ValueError('Expected a complete 20 ms frame')
-        speech = audioop.rms(frame, 2) >= self.threshold
+        level = audioop.rms(frame, 2)
+        speech = level >= max(self.threshold, self.noise_floor * 2 + 40)
+        if not speech:
+            self.noise_floor = .98 * self.noise_floor + .02 * level
         if not self.frames:
             self.preroll.append(frame)
             if not speech:
@@ -58,8 +69,13 @@ class Endpoint:
         return None
 
     def finish(self):
-        pcm = b''.join(self.frames) if self.voiced >= 10 else None
+        metadata = {'speech_seconds': round(self.voiced * .02, 3),
+                    'endpoint_wait_seconds': round(self.quiet * .02, 3)}
+        trim = max(0, self.quiet - 5)
+        frames = self.frames[:-trim] if trim else self.frames
+        pcm = b''.join(frames) if self.voiced >= 10 else None
         self.reset()
+        self.last_metadata = metadata
         return wav(pcm) if pcm else None
 
 
@@ -71,6 +87,7 @@ class Capture:
         self.endpoint = Endpoint(threshold)
         self.segments = queue.Queue(maxsize=2)
         self.queued_at = {}
+        self.segment_info = {}
         self.stop = threading.Event()
         self.cancelled = threading.Event()
         self.ready = threading.Event()
@@ -93,9 +110,11 @@ class Capture:
         if segment is not None:
             try:
                 self.queued_at[id(segment)] = time.monotonic()
+                self.segment_info[id(segment)] = dict(self.endpoint.last_metadata)
                 self.segments.put_nowait(segment)
             except queue.Full:
                 self.queued_at.pop(id(segment), None)
+                self.segment_info.pop(id(segment), None)
                 raise RuntimeError('Recognition cannot keep up. Dictation stopped; previous results are retained.')
 
     def _pump(self):
@@ -132,6 +151,7 @@ class Capture:
                         raise RuntimeError('Microphone stream ended')
                     last_audio = time.monotonic()
                     if first:
+                        self.endpoint.calibrate(data)
                         if self.cue:
                             self.cue()
                         # Drain startup/cue audio before accepting speech.

@@ -165,9 +165,9 @@ class RecognitionTests(unittest.TestCase):
 class ReadyCueTests(unittest.TestCase):
     def test_two_tones_use_host_libraries_and_identifiable_stream(self):
         def play(arguments, **options):
-            with wave.open(arguments[-1], 'rb') as sound:
-                self.assertEqual((sound.getframerate(), sound.getnchannels()), (16000, 1))
-                pcm = sound.readframes(sound.getnframes())
+            pcm = options['input']
+            self.assertIn('--rate=16000', arguments)
+            self.assertIn('--channels=1', arguments)
             samples = struct.unpack('<' + 'h' * (len(pcm) // 2), pcm)
             self.assertGreater(max(samples[:1600]), 32000)
             self.assertLessEqual(max(samples), 32767)

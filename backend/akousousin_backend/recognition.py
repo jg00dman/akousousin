@@ -18,9 +18,11 @@ import sys
 import tempfile
 import time
 import wave
+from functools import lru_cache
 
 from .server import Synthesizer
 from .host import host_environment
+from .recognition_config import TIERS, cpu_threads, system_language, default_model
 
 RATE = 16000
 MAX_SECONDS = 30
@@ -68,20 +70,20 @@ def read_wav(data):
         return pcm
 
 
-def load_model(root, selected, factory):
+def load_model(root, selected, factory, threads=None):
     """Never download during inference. Only model loading triggers fallback."""
-    if selected not in ('small', 'turbo'):
+    if selected not in TIERS:
         raise ValueError('Unknown model tier')
     try:
         model = factory(str(Path(root) / selected), device='cpu', compute_type='int8',
-                        cpu_threads=2, num_workers=1, local_files_only=True)
+                        cpu_threads=cpu_threads(threads), num_workers=1, local_files_only=True)
         return model, selected, None
     except Exception:
-        if selected == 'small':
+        if selected != 'turbo':
             raise
         logging.exception('Turbo unavailable; falling back to Small')
         model = factory(str(Path(root) / 'small'), device='cpu', compute_type='int8',
-                        cpu_threads=2, num_workers=1, local_files_only=True)
+                        cpu_threads=cpu_threads(threads), num_workers=1, local_files_only=True)
         return model, 'small', 'Selected Turbo model could not load; using Small'
 
 
@@ -91,9 +93,9 @@ def prepare_model_assets(config):
     if config.get('download_missing'):
         from . import models
         if not models.installed(config['model'], config['root']):
-            # Turbo currently falls back to the pinned Small download.
-            if not models.installed('small', config['root']):
-                models.install('small', root=config['root'])
+            selected = 'small' if config['model'] == 'turbo' else config['model']
+            if not models.installed(selected, config['root']):
+                models.install(selected, root=config['root'])
 
 
 def worker(pipe, config):
@@ -101,7 +103,7 @@ def worker(pipe, config):
         import numpy as np
         from faster_whisper import WhisperModel
         prepare_model_assets(config)
-        model, active, fallback = load_model(config['root'], config['model'], WhisperModel)
+        model, active, fallback = load_model(config['root'], config['model'], WhisperModel, config.get('cpu_threads'))
         pipe.send((True, {'model': active, 'fallback': fallback}))
         while True:
             request = pipe.recv()
@@ -113,7 +115,7 @@ def worker(pipe, config):
                 continue
             samples = np.frombuffer(request['pcm'], dtype='<i2').astype(np.float32) / 32768.0
             segments, info = model.transcribe(samples, language=language, task='transcribe',
-                                               vad_filter=True, beam_size=1,
+                                               vad_filter=not request.get('endpointed', False), beam_size=1,
                                                condition_on_previous_text=False)
             text = ''.join(segment.text for segment in segments).strip()
             pipe.send((True, {'text': text, 'language': info.language if text else None,
@@ -134,9 +136,9 @@ def worker(pipe, config):
 
 class Recognizer(Synthesizer):
     """One bounded inference at a time; timeout/death permits a fresh worker."""
-    def __init__(self, root=None, model='small', timeout=120, startup_timeout=120, target=worker):
+    def __init__(self, root=None, model='small', timeout=120, startup_timeout=120, target=worker, threads=None):
         super().__init__('', timeout, startup_timeout, target)
-        self.model = {'root': str(root if root is not None else model_root()), 'model': model}
+        self.model = {'root': str(root if root is not None else model_root()), 'model': model, 'cpu_threads': cpu_threads(threads)}
 
     def start(self, cancelled=None):
         self.close()
@@ -169,7 +171,7 @@ class Recognizer(Synthesizer):
     def status(self):
         return self.rate
 
-    def transcribe(self, wav, language=None, cancelled=None):
+    def transcribe(self, wav, language=None, cancelled=None, endpointed=False):
         pcm = read_wav(wav)
         token = language_token(language)
         if not self.lock.acquire(blocking=False):
@@ -177,7 +179,7 @@ class Recognizer(Synthesizer):
         try:
             if self.process is None or not self.process.is_alive():
                 self.start(cancelled)
-            self.pipe.send({'pcm': pcm, 'language': token})
+            self.pipe.send({'pcm': pcm, 'language': token, 'endpointed': endpointed})
             ok, result = self.receive(self.timeout, cancelled)
             if not ok:
                 raise RuntimeError(result)
@@ -189,8 +191,9 @@ class Recognizer(Synthesizer):
             self.lock.release()
 
 
-def ready_cue():
-    """Two short 300 Hz tones, synchronously, before accepted speech audio."""
+@lru_cache(maxsize=1)
+def cue_audio():
+    """Cached waveform; independent of model and playback state."""
     output = io.BytesIO()
     samples = []
     for duration, tone in ((.10, True), (.09, False), (.10, True)):
@@ -202,31 +205,36 @@ def ready_cue():
     with wave.open(output, 'wb') as audio:
         audio.setparams((1, 2, RATE, 0, 'NONE', ''))
         audio.writeframes(b''.join(samples))
+    return output.getvalue()
+
+
+def ready_cue():
+    """Two short 300 Hz tones through stdin/memory, before accepted audio."""
+    data = cue_audio()
     if os.name == 'nt':
         import winsound
-        winsound.PlaySound(output.getvalue(), winsound.SND_MEMORY)
+        winsound.PlaySound(data, winsound.SND_MEMORY)
         return
     player = shutil.which('paplay') or shutil.which('pw-play')
     if player is None:
         raise RuntimeError('Ready sound needs paplay or pw-play; disable the sound to continue')
-    with tempfile.NamedTemporaryFile(suffix='.wav') as file:
-        file.write(output.getvalue())
-        file.flush()
-        # PyInstaller prepends its private libraries for AKS. System audio tools
-        # must load the host libraries, as they do when launched from a terminal.
-        environment = host_environment()
-        arguments = [player]
-        if Path(player).name == 'paplay':
-            arguments += ['--client-name=Akousousin', '--stream-name=Dictation ready',
-                          '--property=media.role=event']
-        try:
-            subprocess.run([*arguments, file.name], check=True, timeout=5,
-                           env=environment, capture_output=True, text=True)
-        except subprocess.CalledProcessError as error:
-            detail = (error.stderr or '').strip()[:400]
-            raise RuntimeError('Ready sound playback failed' + (': ' + detail if detail else '')) from error
-        except subprocess.TimeoutExpired as error:
-            raise RuntimeError('Ready sound playback timed out; check the system default output') from error
+    environment = host_environment()
+    if Path(player).name == 'paplay':
+        arguments = [player, '--raw', '--format=s16le', '--rate=16000', '--channels=1',
+                     '--client-name=Akousousin', '--stream-name=Dictation ready', '--property=media.role=event']
+    else:
+        arguments = [player, '--format=s16', '--rate=16000', '--channels=1', '-']
+    try:
+        subprocess.run(arguments, input=read_wav(data), check=True, timeout=5,
+                       env=environment, capture_output=True)
+    except subprocess.CalledProcessError as error:
+        detail = error.stderr or ''
+        if isinstance(detail, bytes):
+            detail = detail.decode(errors='replace')
+        detail = detail.strip()[:400]
+        raise RuntimeError('Ready sound playback failed' + (': ' + detail if detail else '')) from error
+    except subprocess.TimeoutExpired as error:
+        raise RuntimeError('Ready sound playback timed out; check the system default output') from error
 
 
 def capture(seconds, source=None, on_ready=None, cue=None):
@@ -293,10 +301,15 @@ def main():
     inputs.add_argument('--import-model', type=Path)
     parser.add_argument('--no-beep', action='store_true')
     parser.add_argument('--source', help='PulseAudio source name; omit to follow system default')
-    parser.add_argument('--model', choices=['small', 'turbo'], default='small')
+    parser.add_argument('--model', choices=TIERS, default=None)
+    parser.add_argument('--cpu-threads', type=int, default=None, help='Physical cores by default; minimum 1')
     parser.add_argument('--models', type=Path, default=model_root())
-    parser.add_argument('--language', help='Fixed language tag; omit for automatic detection')
+    parser.add_argument('--language', default=system_language(), help='Fixed language tag (system locale by default); auto opts into detection')
     args = parser.parse_args()
+    language = None if args.language == 'auto' else language_token(args.language)
+    args.model = args.model or default_model(language)
+    if args.model.endswith('.en') and language != 'en':
+        parser.error('English-only models require --language en; use Base/Small for auto or another language')
     def status(text):
         print(text, file=sys.stderr, flush=True)
     if args.download_model or args.import_model:
@@ -304,7 +317,7 @@ def main():
         install(args.model, args.models, source=args.import_model, progress=status)
         status('Model installed in ' + str(args.models / args.model))
         return
-    recognizer = Recognizer(args.models, args.model)
+    recognizer = Recognizer(args.models, args.model, threads=args.cpu_threads)
     try:
         if args.wav:
             with args.wav.open('rb') as audio:
@@ -317,7 +330,7 @@ def main():
                            on_ready=lambda: status('Listening — speak now'),
                            cue=None if args.no_beep else ready_cue)
             status('Transcribing…')
-        print(json.dumps(recognizer.transcribe(data, args.language), ensure_ascii=False))
+        print(json.dumps(recognizer.transcribe(data, language), ensure_ascii=False))
     finally:
         recognizer.close()
 

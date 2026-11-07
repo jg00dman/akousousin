@@ -35,6 +35,21 @@ class ModelsTests(unittest.TestCase):
             install(root=root, source=source)
             self.assertEqual((target / 'model.bin').read_bytes(), b'test')
 
+    def test_new_tiers_import_and_retain_upstream_model_notice(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder) / 'shared'
+            source = Path(folder) / 'source'; source.mkdir()
+            for name, data in [('model.bin', b'model'), ('config.json', b'{}'),
+                               ('tokenizer.json', b'{}'), ('vocabulary.json', b'[]'),
+                               ('README.md', b'Upstream model notice')]:
+                (source / name).write_bytes(data)
+            for tier in ('base', 'base.en', 'small.en'):
+                target = install(tier, root=root, source=source)
+                self.assertTrue(installed(tier, root))
+                self.assertEqual((target / 'README.md').read_bytes(), b'Upstream model notice')
+                receipt = json.loads((target / 'installation.json').read_text())
+                self.assertEqual(receipt['sha256']['vocabulary.json'], hashlib.sha256(b'[]').hexdigest())
+
     def test_incomplete_import_preserves_existing_assets(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder) / 'shared'; (root / 'small').mkdir(parents=True)
@@ -51,19 +66,24 @@ class ModelsTests(unittest.TestCase):
             install('turbo')
 
     def test_first_download_is_pinned_and_not_repeated(self):
-        with tempfile.TemporaryDirectory() as folder:
-            names = ('model.bin', 'config.json', 'tokenizer.json', 'vocabulary.txt', 'README.md')
-            payload = {name: b'{}' for name in names}
-            entries = [SimpleNamespace(rfilename=name, size=2, lfs=SimpleNamespace(sha256=hashlib.sha256(b'{}').hexdigest())
-                       if name == 'model.bin' else None, blob_id=hashlib.sha1(b'blob 2\0{}').hexdigest()) for name in names]
-            with patch('huggingface_hub.HfApi') as api, \
-                    patch('huggingface_hub.hf_hub_url', side_effect=lambda repo, name, revision: name), \
-                    patch('urllib.request.urlopen', side_effect=lambda name, **kwargs: io.BytesIO(payload[name])):
-                api.return_value.model_info.return_value.siblings = entries
-                install(root=folder)
-                install(root=folder)
-                api.return_value.model_info.assert_called_once_with('Systran/faster-whisper-small',
-                    revision='536b0662742c02347bc0e980a01041f333bce120', files_metadata=True)
+        from akousousin_backend.model_pins import REVISIONS
+        self.assertEqual(set(REVISIONS), {'base', 'base.en', 'small', 'small.en'})
+        for tier, revision in REVISIONS.items():
+            self.assertRegex(revision, r'^[a-f0-9]{40}$')
+            with self.subTest(tier=tier), tempfile.TemporaryDirectory() as folder:
+                names = ('model.bin', 'config.json', 'tokenizer.json', 'vocabulary.txt', 'README.md')
+                payload = {name: b'{}' for name in names}
+                entries = [SimpleNamespace(rfilename=name, size=2, lfs=SimpleNamespace(sha256=hashlib.sha256(b'{}').hexdigest())
+                           if name == 'model.bin' else None, blob_id=hashlib.sha1(b'blob 2\0{}').hexdigest()) for name in names]
+                with patch('huggingface_hub.HfApi') as api, \
+                        patch('huggingface_hub.hf_hub_url', side_effect=lambda repo, name, revision: name), \
+                        patch('urllib.request.urlopen', side_effect=lambda name, **kwargs: io.BytesIO(payload[name])):
+                    api.return_value.model_info.return_value.siblings = entries
+                    install(tier, root=folder)
+                    self.assertIn('Copyright (c) 2022 OpenAI', (Path(folder) / tier / 'LICENSE.txt').read_text())
+                    install(tier, root=folder)
+                    api.return_value.model_info.assert_called_once_with('Systran/faster-whisper-' + tier,
+                        revision=revision, files_metadata=True)
 
 
     def test_abandoned_download_stage_is_removed_without_deleting_cached_assets(self):

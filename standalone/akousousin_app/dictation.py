@@ -6,8 +6,22 @@ import threading
 import io
 import wave
 import time
+import logging
+import json
 
 from . import settings, speech_gate
+
+_TIMINGS = logging.getLogger('akousousin.dictation.timings')
+if not _TIMINGS.handlers:
+    _TIMINGS.addHandler(logging.StreamHandler())
+_TIMINGS.setLevel(logging.INFO)
+_TIMINGS.propagate = False
+
+
+def log_timings(record):
+    # Numbers and outcome only; dictated text is never written to the log.
+    _TIMINGS.info('Dictation phrase=%s output=%s timings=%s', record['sequence'],
+                  record['output'], json.dumps(record.get('timings', {}), sort_keys=True))
 
 
 class Dictation:
@@ -71,18 +85,25 @@ class Dictation:
         from akousousin_backend import models
         from akousousin_backend.recognition import Recognizer
         model = config['stt_model']
+        if model.endswith('.en') and config['stt_language'] != 'en':
+            raise ValueError('English-only models require English; select Base or Small for other languages or auto detection')
         missing = not models.installed(model) and not (model == 'turbo' and models.installed('small'))
         if self.recognizer and self.recognizer.model['model'] != model:
             self.recognizer.close()
             self.recognizer = None
         if self.recognizer is None:
             self.recognizer = (self.recognizer_factory or Recognizer)(model=model)
+        threads = config.get('stt_cpu_threads')
+        if threads is not None and self.recognizer.model.get('cpu_threads') != threads:
+            self.recognizer.close()
+            self.recognizer.model['cpu_threads'] = threads
         if self.recognizer.process is None or not self.recognizer.process.is_alive():
             self.recognizer.model['download_missing'] = missing
             if missing:
-                self.change('Downloading Small (about 485 MB), then loading…', 'loading')
+                self.change('Downloading ' + model + ', then loading…', 'loading')
                 self.recognizer.startup_timeout = 900
             self.recognizer.start(self.cancelled)
+            self.recognizer.model['download_missing'] = False
         if self.cancelled.is_set():
             raise InterruptedError('Dictation cancelled')
         warning = self.recognizer.status.get('fallback')
@@ -100,17 +121,23 @@ class Dictation:
                           output=outcome, error=error)
             self.results.append(record)
             self.results = self.results[-5:]
+            if outcome == 'displayed':
+                log_timings(record)
             return record
 
     def update_result(self, record, **values):
         with self.lock:
             record.update(values)
             self.sequence += 1
+            if values.get('output') in ('inserted', 'retained', 'cancelled'):
+                log_timings(record)
 
     def _run(self, record, target, seconds, config):
         timer = None
         pending = None
         mute = None
+        insertion = None
+        session_language = config['stt_language'] or None
         deferred = target is not None and config.get('stt_mode', 'toggle') == 'push-to-talk'
         try:
             from akousousin_backend.audio_input import Capture
@@ -118,6 +145,18 @@ class Dictation:
             self._ready(config)
             if not record or self.finished.is_set():
                 return
+            if target is not None and not deferred:
+                from .insertion import InsertionQueue
+                def completed(item, outcome, error, timings):
+                    self.update_result(item, output=outcome, error=error,
+                                       timings={**item.get('timings', {}), **timings})
+                    if error and self.capture:
+                        self.capture.cancel()
+                def insert(text, destination, cancelled):
+                    if self.insert is None:
+                        raise RuntimeError('Keyboard session is unavailable')
+                    self.insert(text, destination, cancelled)
+                insertion = InsertionQueue(insert, self.cancelled, completed)
             mute = speech_gate.Lease(self.path)
             mute.acquire()
             self.change('Opening microphone…', 'opening')
@@ -127,6 +166,8 @@ class Dictation:
                 threshold=config.get('stt_threshold', 250))
             self.capture.start()
             while True:
+                if insertion and insertion.error:
+                    raise RuntimeError(insertion.error + ' — transcript retained in Voice Input')
                 if seconds and timer is None and self.capture.ready.is_set():
                     timer = threading.Timer(seconds, self.finish)
                     timer.daemon = True
@@ -149,8 +190,14 @@ class Dictation:
                 queued = getattr(self.capture, 'queued_at', {}).pop(id(audio), began)
                 with wave.open(io.BytesIO(audio), 'rb') as sound:
                     audio_seconds = sound.getnframes() / sound.getframerate()
-                result = self.recognizer.transcribe(audio, config['stt_language'] or None, self.cancelled)
-                result['timings'] = {'audio_seconds': round(audio_seconds, 3),
+                result = self.recognizer.transcribe(audio, session_language, self.cancelled, endpointed=True)
+                if not config['stt_language'] and result.get('text') and result.get('language'):
+                    if session_language:
+                        result['language_source'] = 'session'
+                    else:
+                        session_language = result['language']
+                endpoint = getattr(self.capture, 'segment_info', {}).pop(id(audio), {})
+                result['timings'] = {**endpoint, 'audio_seconds': round(audio_seconds, 3),
                                      'queue_seconds': round(max(0, began - queued), 3),
                                      'recognition_seconds': round(time.monotonic() - began, 3)}
                 if self.cancelled.is_set():
@@ -171,23 +218,15 @@ class Dictation:
                             for key, value in result['timings'].items()})
                     self.last_activity = time.monotonic()
                     continue
-                outcome = 'displayed'
-                error = None
-                if target is not None:
-                    insertion_started = time.monotonic()
+                if insertion:
+                    item = self.store_result(result, 'queued')
                     try:
-                        if self.insert is None:
-                            raise RuntimeError('Keyboard session is unavailable')
-                        self.insert(result['text'], target, self.cancelled)
-                        outcome = 'inserted'
+                        insertion.submit(item, result['text'], target)
                     except Exception as failure:
-                        outcome, error = 'retained', str(failure)
-                    finally:
-                        result['timings']['insertion_seconds'] = round(time.monotonic() - insertion_started, 3)
-                self.store_result(result, outcome, error)
-                if error:
-                    self.capture.cancel()
-                    raise RuntimeError(error + ' — transcript retained in Voice Input')
+                        self.update_result(item, output='retained', error=str(failure))
+                        raise
+                else:
+                    self.store_result(result, 'displayed')
                 self.last_activity = time.monotonic()
             if self.cancelled.is_set():
                 raise InterruptedError('Dictation cancelled')
@@ -203,6 +242,10 @@ class Dictation:
                 timings['insertion_seconds'] = round(time.monotonic() - insertion_started, 3)
                 self.update_result(pending, timings=timings)
                 self.update_result(pending, output='inserted')
+            if insertion:
+                insertion.finish()
+                if insertion.error:
+                    raise RuntimeError(insertion.error + ' — transcript retained in Voice Input')
             self.change('Ready — recording stopped', 'ready')
         except InterruptedError:
             if pending is not None:
@@ -222,6 +265,8 @@ class Dictation:
                 if self.capture:
                     self.capture.close()
                     self.capture = None
+                if insertion:
+                    insertion.finish()
             finally:
                 if mute:
                     mute.close()
@@ -264,7 +309,9 @@ class Dictation:
 
     def expire(self):
         config = settings.load(self.path)
-        timeout = config.get('stt_idle_timeout', 300)
+        if self.enabled and config.get('stt_keep_loaded', True):
+            return
+        timeout = config.get('stt_idle_timeout', 3600)
         if timeout and self.recognizer and not self.status()['busy'] and time.monotonic() - self.last_activity >= timeout:
             self.unload(only_if_idle=True)
 

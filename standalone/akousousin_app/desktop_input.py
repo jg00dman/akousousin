@@ -376,6 +376,20 @@ class Desktop(PortalRequests):
         except Exception as error:
             self.status = str(error)
 
+    async def notify_keysym(self, symbol, state, reply=False):
+        # Portal keyboard notifications have no output values. D-Bus preserves
+        # send order on this connection; await transport writes, not each reply.
+        if reply:
+            return await self.call('org.freedesktop.portal.Desktop', '/org/freedesktop/portal/desktop',
+                'org.freedesktop.portal.RemoteDesktop', 'NotifyKeyboardKeysym', 'oa{sv}iu',
+                [self.remote, {}, symbol, state], timeout=3)
+        from dbus_next import Message, MessageFlag
+        message = Message(destination='org.freedesktop.portal.Desktop',
+            path='/org/freedesktop/portal/desktop', interface='org.freedesktop.portal.RemoteDesktop',
+            member='NotifyKeyboardKeysym', signature='oa{sv}iu',
+            body=[self.remote, {}, symbol, state], flags=MessageFlag.NO_REPLY_EXPECTED)
+        await asyncio.wait_for(self.bus.send(message), 3)
+
     async def type_text(self, text, target, cancelled):
         if not self.enabled:
             raise RuntimeError('Keyboard session closed')
@@ -386,23 +400,17 @@ class Desktop(PortalRequests):
             await asyncio.sleep(.03)
         await self.confirm_focus()
         self.guard.check(target)
-        count = 0
-        for symbol in keysyms(text):
+        symbols = keysyms(text)
+        for index, symbol in enumerate(symbols):
             if cancelled.is_set():
                 raise InterruptedError('Text insertion cancelled')
             self.guard.check(target)
-            if count % 8 == 0:
-                await self.confirm_focus()
-                self.guard.check(target)
             try:
-                await self.call('org.freedesktop.portal.Desktop', '/org/freedesktop/portal/desktop',
-                    'org.freedesktop.portal.RemoteDesktop', 'NotifyKeyboardKeysym', 'oa{sv}iu',
-                    [self.remote, {}, symbol, 1], timeout=3)
-                count += 1
+                await self.notify_keysym(symbol, 1)
             finally:
-                await self.call('org.freedesktop.portal.Desktop', '/org/freedesktop/portal/desktop',
-                    'org.freedesktop.portal.RemoteDesktop', 'NotifyKeyboardKeysym', 'oa{sv}iu',
-                    [self.remote, {}, symbol, 0], timeout=3)
+                await self.notify_keysym(symbol, 0, reply=index == len(symbols) - 1)
+            # Allow focus-change reports and cancellation between characters.
+            await asyncio.sleep(0)
 
     def insert(self, text, target, cancelled):
         if not self.loop or not self.enabled:

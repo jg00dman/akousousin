@@ -49,10 +49,26 @@ class VoiceInput:
         ttk.Label(frame, text=str(model_root()), style='Card.TLabel', wraplength=760).pack(anchor='w', pady=8)
         row = ttk.Frame(frame, style='Card.TFrame'); row.pack(fill='x', pady=8)
         ttk.Label(row, text='Model', style='Card.TLabel').pack(side='left')
-        self.combo = ttk.Combobox(row, textvariable=self.model, values=['small', 'turbo'], state='readonly', width=18)
+        self.combo = ttk.Combobox(row, textvariable=self.model, values=['base', 'base.en', 'small', 'small.en', 'turbo'], state='readonly', width=18)
         self.combo.pack(side='left', padx=12)
-        ttk.Label(frame, text='Small: about 485 MB download. Turbo: import a converted local model; download support pending.',
+        ttk.Label(frame, text='Base: faster CPU dictation. Base.en: English only. Small / Small.en: higher quality. Turbo: local import, large encoder; not a CPU speed option.',
                   style='Card.TLabel', wraplength=760).pack(anchor='w')
+        self.threads = tk.IntVar(value=config['stt_cpu_threads'])
+        self.keep_loaded = tk.BooleanVar(value=config['stt_keep_loaded'])
+        self.idle_timeout = tk.IntVar(value=config['stt_idle_timeout'])
+        row = ttk.Frame(frame, style='Card.TFrame'); row.pack(fill='x', pady=5)
+        ttk.Label(row, text='Recognition CPU threads', style='Card.TLabel').pack(side='left')
+        threads = ttk.Spinbox(row, from_=1, to=max(64, config['stt_cpu_threads']), textvariable=self.threads, width=6, command=self.save)
+        threads.pack(side='left', padx=8)
+        threads.bind('<Return>', lambda event: self.save())
+        threads.bind('<FocusOut>', lambda event: self.save())
+        ttk.Checkbutton(frame, text='Keep model loaded while voice input is enabled', variable=self.keep_loaded,
+                        command=self.save).pack(anchor='w', pady=5)
+        row = ttk.Frame(frame, style='Card.TFrame'); row.pack(fill='x', pady=5)
+        ttk.Label(row, text='Otherwise unload after idle seconds (0: never)', style='Card.TLabel').pack(side='left')
+        timeout = ttk.Spinbox(row, from_=0, to=86400, increment=300, textvariable=self.idle_timeout, width=7, command=self.save)
+        timeout.pack(side='left', padx=8)
+        timeout.bind('<Return>', lambda event: self.save())
         self.buttons = []
         row = ttk.Frame(frame, style='Card.TFrame'); row.pack(fill='x', pady=10)
         self.model_button = ttk.Button(row, text='Enable voice input', command=self.toggle_input)
@@ -138,8 +154,22 @@ class VoiceInput:
         self.refreshing_sources = False
 
     def save(self):
+        if self.model.get().endswith('.en') and self.language.get() != 'en':
+            self.model.set(self.model.get()[:-3])
+        try:
+            threads, timeout = self.threads.get(), self.idle_timeout.get()
+            if threads < 1 or not 0 <= timeout <= 86400:
+                raise ValueError('CPU threads must be at least 1; idle seconds must be 0–86400.')
+        except (tk.TclError, ValueError) as error:
+            self.threads.set(self.panel.config['stt_cpu_threads'])
+            self.idle_timeout.set(self.panel.config['stt_idle_timeout'])
+            self.events.put(('control-error', 'Voice input settings were not saved: ' + str(error)))
+            return (self.panel.config['stt_model'], self.panel.config['stt_source'] or None,
+                    self.panel.config['stt_language'] or None, self.panel.config['stt_beep'])
         self.panel.config.update(stt_model=self.model.get(), stt_language=self.language.get().strip(),
-                                 stt_source=self.source.get().strip(), stt_beep=self.beep.get(), stt_mode=self.mode.get())
+                                 stt_source=self.source.get().strip(), stt_beep=self.beep.get(), stt_mode=self.mode.get(),
+                                 stt_cpu_threads=threads, stt_keep_loaded=self.keep_loaded.get(),
+                                 stt_idle_timeout=timeout)
         settings.save(self.panel.path, self.panel.config)
         return self.model.get(), self.source.get().strip() or None, self.language.get().strip() or None, self.beep.get()
 
@@ -273,7 +303,10 @@ class VoiceInput:
         if hasattr(self, 'model_button'):
             self.model_button.configure(text='Disable voice input' if self.input_enabled else 'Enable voice input')
         if not self.local_error and not self.busy:
+            changed = self.state.get() != result['state']
             self.state.set(result['state'])
+            if changed and not self.panel.busy:
+                self.panel.status.set(result['state'])
         self.desktop_state.set(result['desktop']['state'])
         if result['sequence'] != self.last_sequence:
             self.last_sequence = result['sequence']
@@ -287,8 +320,10 @@ class VoiceInput:
             for item in result['results']:
                 self.result.insert('end', item['text'] + '\n[' + (item['language'] or 'unknown') + ' · ' + item['output'] + ']\n')
                 if item.get('timings'):
-                    names = [('audio_seconds', 'Audio'), ('queue_seconds', 'queued'),
-                             ('recognition_seconds', 'recognition'), ('insertion_seconds', 'insertion')]
+                    names = [('speech_seconds', 'Speech'), ('endpoint_wait_seconds', 'endpoint'),
+                             ('audio_seconds', 'Audio'), ('queue_seconds', 'queued'),
+                             ('recognition_seconds', 'recognition'), ('insertion_queue_seconds', 'typing queued'),
+                             ('insertion_seconds', 'insertion')]
                     self.result.insert('end', ' · '.join(f"{label}: {item['timings'][key]:.2f}s"
                         for key, label in names if key in item['timings']) + '\n')
                 if item.get('error'):

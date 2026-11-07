@@ -103,7 +103,7 @@ subprocess.run([sys.executable, '-m', 'PyInstaller', '--clean', '--noconfirm', '
                 '--distpath', str(BUILD / 'frozen'), '--workpath', str(BUILD / 'freeze'), '--specpath', str(BUILD),
                 '--paths', str(ROOT / 'standalone'), '--paths', str(ROOT / 'backend'),
                 '--exclude-module', 'readline', '--collect-all', 'piper', '--collect-all', 'numpy',
-                '--collect-all', 'onnxruntime', *recognition_options, str(ROOT / 'standalone/entrypoint.py')], check=True)
+                '--collect-all', 'onnxruntime', '--collect-data', 'akousousin_backend', *recognition_options, str(ROOT / 'standalone/entrypoint.py')], check=True)
 
 PACKAGE = BUILD / 'Akousousin'
 shutil.copytree(BUILD / 'frozen/akousousin', PACKAGE, dirs_exist_ok=True)
@@ -111,6 +111,7 @@ shutil.copytree(RESOURCE, PACKAGE / 'resources', dirs_exist_ok=True)
 shutil.copy(ROOT / 'standalone/SPEECH-DISPATCHER.md', PACKAGE / 'SPEECH-DISPATCHER.md')
 notices = PACKAGE / 'licenses'
 notices.mkdir(exist_ok=True)
+shutil.copy(ROOT / 'recognition/Whisper-LICENSE', notices / 'Whisper-models-MIT.txt')
 shutil.copy(ROOT / 'LICENSES/LGPL-2.1-or-later.txt', notices / 'Engine-LGPL-2.1.txt')
 shutil.copy(ROOT / 'LICENSE', notices / 'Akousousin-GPL-3.0.txt')
 shutil.copy(ROOT / 'LICENSING.md', notices / 'Akousousin-LICENSING.md')

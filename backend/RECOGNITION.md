@@ -6,8 +6,9 @@ SPDX-FileCopyrightText: 2026 John Goodman
 # Whisper recognition development
 
 The 0.7.0b1 beta includes experimental Linux recognition and KDE Wayland desktop
-dictation. It uses **faster-whisper and CTranslate2**, CPU int8, two inference
-threads, one worker, neural VAD and greedy decoding. It does not ship the original
+dictation. It uses **faster-whisper and CTranslate2**, CPU int8, configurable inference
+threads (physical cores by default), one worker and greedy decoding. Endpointed
+microphone input skips duplicate VAD; WAV input retains neural VAD. It does not ship the original
 OpenAI Whisper Python package or PyTorch. SAPI recognition and native Windows live
 microphone capture remain unimplemented; Windows development supports WAV input.
 
@@ -23,7 +24,8 @@ Install from the repository root:
 python -m pip install './backend[recognition]' './standalone[recognition]'
 ```
 
-The default multilingual Small model is a one-time download of about 485 MB.
+Locale-locked Base.en (English) or multilingual Base is the application/CLI default.
+Small/Small.en remain optional quality tiers, and all weights download only once.
 The panel's Enable voice input or recording/dictation activation downloads it
 when needed; the ordinary inference API and WAV CLI do not download implicitly.
 The model manager uses pinned assets, staging, an install lock, integrity checks
@@ -34,13 +36,14 @@ independently installable language modules.
 - Linux: `$XDG_DATA_HOME/Akousousin/models/whisper/`, normally
   `~/.local/share/Akousousin/models/whisper/`.
 - Windows: `%LOCALAPPDATA%/Akousousin/models/whisper/`.
-- Small and Turbo occupy `small` and `turbo` subdirectories. Turbo currently
+- Tiers occupy `base`, `base.en`, `small`, `small.en` and `turbo` subdirectories. Turbo currently
   supports local converted-model import only; its download is not implemented.
 
 The default application package contains no Whisper model weights; the small VAD
 helper is bundled. Downloads/imports survive application replacement and model
 unloading. Disable voice input frees model memory and retains files; idle
-unloading defaults to 300 seconds. An approved shortcut can enable/load it again.
+unloading defaults to one hour when Keep loaded while enabled is off; that
+keep-loaded option is on by default. An approved shortcut can enable/load it again.
 The resident controller owns the recognition worker, allowing reuse across
 recordings and panels. Quit closes its worker and capture/portal sessions.
 
@@ -49,9 +52,10 @@ recordings and panels. Quit closes its worker and capture/portal sessions.
 ```sh
 akousousin-whisper --help
 akousousin-whisper --download-model
-# Or: akousousin-whisper --import-model /path/to/converted/small
+# Or: akousousin-whisper --model small --import-model /path/to/converted/small
 akousousin-whisper --wav speech.wav
 akousousin-whisper --wav speech.wav --language de-DE
+# Explicit auto detection: --language auto (multilingual model)
 akousousin-whisper --capture-seconds 5
 ```
 
@@ -64,8 +68,10 @@ The panel waits for actual microphone audio and plays an optional pair of 300 Hz
 ready tones before accepting speech. It also provides a separate sound test.
 
 Inference runs in a separate spawn process. An explicit application/user language
-is normalized and locked, bypassing autodetection; omitted language requests
-Whisper detection. Host locale is not silently used as a lock. Results preserve
+is normalized and locked, bypassing autodetection. The application and CLI
+default visibly to the system locale. CLI --language auto opts into detection;
+Multilingual (auto) in dictation detects once per recording session. The low-level
+Python transcribe API still accepts None to request detection explicitly. Results preserve
 text, language, language probability, explicit/detected source, active model and
 fallback warnings. Probability under a forced language is not independent
 detection evidence. The panel displays detected language separately from the

@@ -56,38 +56,55 @@ class InsertionTests(unittest.IsolatedAsyncioTestCase):
         desktop.guard = FocusGuard()
         desktop.guard.report('editor', 1)
         desktop.confirm_focus = AsyncMock()
+        desktop.notify_keysym = AsyncMock()
         return desktop
 
     async def test_focus_change_stops_remaining_characters_and_releases_key(self):
         desktop = self.desktop()
         target = desktop.guard.snapshot()
         events = []
-        async def call(*args, **kwargs):
-            symbol, state = args[-1][-2:]
+        async def call(symbol, state, **kwargs):
             events.append((symbol, state))
             if state == 1:
                 desktop.guard.report('other window', 2)
             return []
-        desktop.call = call
+        desktop.notify_keysym = call
         with self.assertRaisesRegex(RuntimeError, 'changed'):
             await desktop.type_text('hello', target, threading.Event())
         self.assertEqual(events, [(ord('h'), 1), (ord('h'), 0)])
 
     async def test_cancelled_result_never_types(self):
         desktop = self.desktop()
-        desktop.call = AsyncMock()
+        desktop.notify_keysym = AsyncMock()
         cancel = threading.Event(); cancel.set()
         with self.assertRaises(InterruptedError):
             await desktop.type_text('hello', desktop.guard.snapshot(), cancel)
-        desktop.call.assert_not_called()
+        desktop.notify_keysym.assert_not_called()
 
     async def test_remote_error_still_releases_pressed_key(self):
         desktop = self.desktop()
-        desktop.call = AsyncMock(side_effect=[RuntimeError('session closed'), []])
+        desktop.notify_keysym = AsyncMock(side_effect=[RuntimeError('session closed'), []])
         with self.assertRaisesRegex(RuntimeError, 'session closed'):
             await desktop.type_text('hi', desktop.guard.snapshot(), threading.Event())
-        self.assertEqual(desktop.call.await_count, 2)
-        self.assertEqual(desktop.call.call_args.args[-1][-1], 0)
+        self.assertEqual(desktop.notify_keysym.await_count, 2)
+        self.assertEqual(desktop.notify_keysym.call_args.args[-1], 0)
+
+    async def test_keyboard_writes_are_ordered_with_one_final_reply(self):
+        from types import SimpleNamespace
+        from dbus_next import MessageFlag
+        desktop = self.desktop()
+        desktop.notify_keysym = Desktop.notify_keysym.__get__(desktop)
+        desktop.bus = SimpleNamespace(send=AsyncMock())
+        desktop.call = AsyncMock(return_value=[])
+        await desktop.type_text('abc', desktop.guard.snapshot(), threading.Event())
+        desktop.confirm_focus.assert_awaited_once()
+        self.assertEqual(desktop.bus.send.await_count, 7)
+        messages = [call.args[0] for call in desktop.bus.send.await_args_list]
+        self.assertTrue(all(message.flags & MessageFlag.NO_REPLY_EXPECTED for message in messages))
+        self.assertEqual([message.body[-2:] for message in messages],
+                         [[97,1], [97,0], [98,1], [98,0], [99,1], [99,0], [32,1]])
+        desktop.call.assert_awaited_once()
+        self.assertEqual(desktop.call.call_args.args[-1][-2:], [32,0])
 
     async def test_push_to_talk_release_finishes_without_a_second_activation(self):
         from unittest.mock import Mock

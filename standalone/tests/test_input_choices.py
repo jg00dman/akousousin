@@ -13,7 +13,7 @@ class InputChoiceTests(unittest.TestCase):
     def test_search_uses_readable_names_and_codes(self):
         self.assertEqual(language_choices('German'), [('de', 'German (de)')])
         self.assertEqual(language_choices('de'), [('de', 'German (de)')])
-        self.assertEqual(language_choices('Automatic'), [('', 'Automatic detection')])
+        self.assertEqual(language_choices('Multilingual'), [('', 'Multilingual (auto) — detect once per session')])
         self.assertEqual(language_caption('en-GB'), 'English (en-GB)')
         self.assertGreater(len(language_choices()), 90)
 

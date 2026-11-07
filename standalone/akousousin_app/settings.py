@@ -5,13 +5,15 @@ import json
 import locale
 import os
 from pathlib import Path
+from akousousin_backend.recognition_config import system_language, default_model, cpu_threads, TIERS
 
 DEFAULTS = {'version': 1, 'voice': 'en_US-ljspeech-medium', 'speed': 1.0, 'volume': 0.8,
             'noise_scale': 0.667, 'noise_w_scale': 0.8, 'book_language': '',
             'language_voices': {}, 'voices': {}, 'wine_prefix': '', 'wine': '', 'port': 5000,
-            'idle_timeout': 300, 'stt_model': 'small', 'stt_language': '',
+            'idle_timeout': 300, 'stt_model': default_model(system_language()), 'stt_language': system_language(),
             'stt_source': '', 'stt_beep': True, 'stt_mode': 'toggle',
-            'stt_idle_timeout': 300, 'stt_threshold': 250, 'update_weekly': True, 'update_betas': True}
+            'stt_idle_timeout': 3600, 'stt_threshold': 250, 'stt_cpu_threads': cpu_threads(),
+            'stt_keep_loaded': True, 'stt_config_version': 2, 'update_weekly': True, 'update_betas': True}
 
 
 def config_path():
@@ -30,6 +32,13 @@ def load(path):
     value = json.loads(json.dumps(DEFAULTS))
     stored = json.loads(Path(path).read_text(encoding='utf-8')) if Path(path).exists() else {}
     value.update(stored)
+    if stored and stored.get('stt_config_version', 1) < 2:
+        if stored.get('stt_model', 'small') == 'small' and not stored.get('stt_language'):
+            value['stt_language'] = system_language()
+            value['stt_model'] = default_model(value['stt_language'])
+        if stored.get('stt_idle_timeout', 300) == 300:
+            value['stt_idle_timeout'] = 3600
+        value['stt_config_version'] = 2
     value.pop('runtime', None)
     if 'update_betas' not in stored:
         from packaging.version import Version
@@ -49,8 +58,11 @@ def validate(value):
         number = value.get(key, DEFAULTS[key])
         if isinstance(number, bool) or not isinstance(number, int) or not low <= number <= high:
             raise ValueError('Invalid dictation preference: ' + key)
-    if value.get('stt_model', 'small') not in ('small', 'turbo'):
+    if value.get('stt_model', 'small') not in TIERS:
         raise ValueError('Invalid recognition model')
+    cpu_threads(value.get('stt_cpu_threads', cpu_threads()))
+    if not isinstance(value.get('stt_keep_loaded', True), bool):
+        raise ValueError('Invalid keep-loaded preference')
     if not isinstance(value.get('stt_beep', True), bool):
         raise ValueError('Invalid ready sound preference')
     for key in ('stt_language', 'stt_source'):

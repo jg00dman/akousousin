@@ -3,6 +3,34 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
+# Unreleased — dictation latency work
+
+- New installations use the system locale and a locked input language. English
+  defaults to Base.en, other supported locales to multilingual Base. Small and
+  Small.en remain quality choices. Turbo remains available for local import and
+  is labelled as a large-encoder model, not a CPU speed option.
+- Legacy Small + automatic-language defaults migrate to the locale and compact
+  model. Explicit legacy language/model choices are retained; selecting
+  Multilingual (auto) explicitly now detects once per recording session and locks
+  subsequent phrases. Existing downloaded models are retained.
+- CPU threads default to the detected physical core count and are configurable;
+  inference retains one killable worker. The model stays loaded while enabled by
+  default. The optional idle timeout increases from five minutes to one hour;
+  legacy five-minute defaults migrate to one hour.
+- Adaptive microphone noise calibration, 500 ms endpoint silence and an 8-second
+  phrase cap replace the fixed energy gate. Endpointed input skips the redundant
+  Whisper VAD pass. Ready tones use cached audio through memory/stdin.
+- Ordered text insertion has its own bounded queue. Per-phrase focus verification
+  and focus-change guards remain; keyboard events avoid per-key portal replies.
+  No clipboard is used for dictation insertion.
+- Numeric per-phrase speech/endpoint/recognition/typing timings are logged, without
+  transcript text, and shown beside recent transcripts. Dictation status changes
+  also reach the copyable status bar.
+
+This work is not released. All new downloadable tiers use verified immutable
+Systran revisions and retain their upstream MIT model cards. Hardware-specific
+results and remaining target-device checks are recorded in backend/WHISPER-VALIDATION.md.
+
 # Akousousin 0.7.0b6 beta
 
 This trial bundles clipboard readers for SteamOS and makes status text copyable.

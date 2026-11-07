@@ -262,7 +262,7 @@ class VoiceInputGuiTests(unittest.TestCase):
                 self.assertEqual(picker.tree.get_children(), ('de',))
                 picker.choose()
                 self.assertEqual(settings.load(panel.path)['stt_language'], 'de')
-                picker.open(); picker.search.set('Automatic'); root.update()
+                picker.open(); picker.search.set('Multilingual'); root.update()
                 picker.choose()
                 self.assertEqual(page.language.get(), '')
                 page.shared({'busy': False, 'state': 'Ready', 'desktop': {'state': 'Disabled'}, 'sequence': 1,

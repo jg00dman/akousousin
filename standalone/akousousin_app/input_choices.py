@@ -108,7 +108,7 @@ yi:Yiddish
 yo:Yoruba
 zh:Chinese
 yue:Cantonese'''.splitlines())
-AUTOMATIC = 'Automatic detection'
+AUTOMATIC = 'Multilingual (auto) — detect once per session'
 
 
 def language_caption(code):

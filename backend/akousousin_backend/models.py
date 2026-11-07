@@ -9,22 +9,27 @@ import tempfile
 
 from .recognition import model_root
 from .downloads import Transfer
+from .recognition_config import TIERS
+from .model_pins import REVISIONS
 
-FILES = ('model.bin', 'config.json', 'tokenizer.json', 'vocabulary.txt')
-SMALL_REVISION = '536b0662742c02347bc0e980a01041f333bce120'
+CORE_FILES = ('model.bin', 'config.json', 'tokenizer.json')
+FILES = (*CORE_FILES, 'vocabulary.txt')
+VOCABULARIES = ('vocabulary.txt', 'vocabulary.json')
+SMALL_REVISION = REVISIONS['small']
 
 
 def installed(model='small', root=None):
     directory = Path(root if root is not None else model_root()) / model
-    return all((directory / name).is_file() and (directory / name).stat().st_size > 0 for name in FILES)
+    return all((directory / name).is_file() and (directory / name).stat().st_size > 0 for name in CORE_FILES) and any(
+        (directory / name).is_file() and (directory / name).stat().st_size > 0 for name in VOCABULARIES)
 
 
 def install(model='small', root=None, source=None, progress=lambda text: None):
     """Stage completely before publishing; a failed install leaves old assets intact."""
-    if model not in ('small', 'turbo'):
+    if model not in TIERS:
         raise ValueError('Unknown model')
-    if source is None and model != 'small':
-        raise ValueError('Turbo download is not configured yet; import a converted local model')
+    if source is None and model not in REVISIONS:
+        raise ValueError('Download is not configured for this model; import a converted local model')
     from filelock import FileLock
     root = Path(root if root is not None else model_root())
     root.mkdir(parents=True, exist_ok=True)
@@ -40,32 +45,40 @@ def install(model='small', root=None, source=None, progress=lambda text: None):
             stage = Path(temporary) / model
             stage.mkdir()
             if source is None:
-                progress('Downloading Small (about 485 MB)…')
+                progress('Downloading ' + model + '…')
                 from huggingface_hub import HfApi, hf_hub_url
-                info = HfApi().model_info('Systran/faster-whisper-small', revision=SMALL_REVISION,
+                repository = 'Systran/faster-whisper-' + model
+                revision = REVISIONS[model]
+                info = HfApi().model_info(repository, revision=revision,
                                          files_metadata=True)
                 entries = {file.rfilename: file for file in info.siblings}
-                names = [*FILES, 'README.md']
+                vocabulary = next((name for name in VOCABULARIES if name in entries), 'vocabulary.txt')
+                names = [*CORE_FILES, vocabulary, 'README.md']
                 if any(name not in entries or not entries[name].size for name in names):
                     raise ValueError('Whisper download metadata is incomplete')
                 transfer.phase('Downloading', total=sum(entries[name].size for name in names))
                 for name in names:
                     file = entries[name]
-                    transfer.fetch(hf_hub_url('Systran/faster-whisper-small', name, revision=SMALL_REVISION),
+                    transfer.fetch(hf_hub_url(repository, name, revision=revision),
                                    stage / name, size=file.size,
                                    sha256=file.lfs.sha256 if file.lfs else None,
                                    git_sha1=None if file.lfs else file.blob_id)
             else:
                 progress('Importing model…')
                 transfer.phase('Importing model')
-                for name in (*FILES, 'README.md'):
+                for name in (*CORE_FILES, *VOCABULARIES, 'README.md'):
                     file = Path(source) / name
                     if file.is_file():
                         shutil.copy2(file, stage / name)
+            if source is None:
+                shutil.copy2(Path(__file__).with_name('Whisper-LICENSE.txt'), stage / 'LICENSE.txt')
+            elif (Path(source) / 'LICENSE.txt').is_file():
+                shutil.copy2(Path(source) / 'LICENSE.txt', stage / 'LICENSE.txt')
             progress('Verifying model files…')
             transfer.phase('Verifying model files')
             hashes = {}
-            for name in FILES:
+            vocabulary = next((name for name in VOCABULARIES if (stage / name).is_file()), 'vocabulary.txt')
+            for name in (*CORE_FILES, vocabulary):
                 file = stage / name
                 if not file.is_file() or file.stat().st_size == 0:
                     raise ValueError('Incomplete model: ' + name)
@@ -74,8 +87,8 @@ def install(model='small', root=None, source=None, progress=lambda text: None):
             json.loads((stage / 'config.json').read_text())
             json.loads((stage / 'tokenizer.json').read_text())
             (stage / 'installation.json').write_text(json.dumps({'model': model, 'sha256': hashes,
-                'repository': 'Systran/faster-whisper-small' if source is None else 'local import',
-                'revision': SMALL_REVISION if source is None else None}, indent=2))
+                'repository': repository if source is None else 'local import',
+                'revision': revision if source is None else None}, indent=2))
             target = root / model
             # Only an incomplete installation is replaced; imports cannot silently
             # overwrite an already installed model.
