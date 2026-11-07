@@ -3,9 +3,16 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
-# Akousousin 0.6.0b4 beta
+# Akousousin 0.7.0b1 beta
 
-This beta consolidates private Wine SAPI installation, on-demand voice downloads,
+This beta adds global Read selected text / Stop and explicit Read copied text
+shortcuts on KDE Wayland. Suggested keys are Ctrl+Alt+R and Ctrl+Alt+Shift+R; KDE
+asks for approval and handles conflicts. Reading is owned by the resident
+controller, stops without cancelling other clients, and continues with the panel
+closed. Configure now reuses a single control panel. Native/Wine selection
+availability remains a beta testing item.
+
+It consolidates private Wine SAPI installation, on-demand voice downloads,
 byte-based download progress and the latest desktop control fixes. Left-click
 toggles dictation; right-click opens the tray menu. Speech Dispatcher restart uses
 host libraries, and panel errors provide selectable text, copyable recovery

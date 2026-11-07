@@ -19,6 +19,7 @@ class Sessions:
         self.service = Service(path)
         self.owners = {}
         self.panels = []
+        self.panel_activation = 0
         self.independent = False
         self.on_demand = False
         self.closed = False
@@ -26,6 +27,8 @@ class Sessions:
         self.lock = threading.RLock()
         from .dictation import Dictation
         self.input = Dictation(path, speaking=self.speaking)
+        from .selection_controller import Selection
+        self.selection = Selection(path)
         self.desktop = None
         self.input_owned = False
         self._speech_check = 0
@@ -103,6 +106,25 @@ class Sessions:
                 raise RuntimeError('Akousousin is shutting down')
             if operation.startswith('stt-'):
                 return self.input_request(request)
+            if operation.startswith('selection-'):
+                if os.name == 'nt':
+                    raise RuntimeError('Selection reading is currently for Linux desktops')
+                if operation == 'selection-toggle':
+                    clipboard = request.get('clipboard', False)
+                    if not isinstance(clipboard, bool):
+                        raise ValueError('Invalid clipboard selection')
+                    self.selection.toggle(clipboard)
+                elif operation == 'selection-stop':
+                    self.selection.stop()
+                elif operation == 'selection-shortcuts-enable':
+                    self.selection.enable()
+                elif operation == 'selection-shortcuts-disable':
+                    self.selection.disable()
+                elif operation != 'selection-status':
+                    raise ValueError('Unknown reading command')
+                return self.selection.status()
+            if operation == 'panel-status':
+                return {'activation': self.panel_activation, 'reading': self.selection.status()}
             if operation in ('start', 'acquire', 'stop', 'wake'):
                 self.error = None
             port = settings.load(self.path)['port']
@@ -112,7 +134,7 @@ class Sessions:
                 self.owners[request['session']] = (owner.pid, owner.create_time())
             elif operation == 'release':
                 previous = self.owners.pop(request['session'], None)
-                if previous and not self.owners and not self.independent and not self.on_demand and not self.input_owned and not self.panels:
+                if previous and not self.owners and not self.independent and not self.on_demand and not self.input_owned and not self.panels and not self.selection.shortcuts and not self.selection.status()['reading']:
                     self.quit()
             elif operation == 'wake':
                 self.service.start(port)
@@ -127,7 +149,9 @@ class Sessions:
             elif operation == 'configure':
                 self.independent |= request.get('independent', False)
                 self.panels = [panel for panel in self.panels if panel.poll() is None]
-                self.panels.append(subprocess.Popen(runtime.command('--panel', '--settings', str(self.path)), env=runtime.environment()))
+                self.panel_activation += 1
+                if not self.panels:
+                    self.panels.append(subprocess.Popen(runtime.command('--panel', '--settings', str(self.path)), env=runtime.environment()))
             elif operation == 'voice':
                 pending = settings.select_voice(self.path, request['voice'])
                 return {'pending_registration': pending}
@@ -154,7 +178,7 @@ class Sessions:
     def quit(self, update_pid=None):
         import logging
         self.closed = True
-        cleanup = [self.input.close]
+        cleanup = [self.selection.close, self.input.close]
         if self.desktop:
             desktop, self.desktop = self.desktop, None
             cleanup.append(desktop.close)
@@ -209,6 +233,8 @@ def run(path):
         from .desktop_identity import ensure_desktop_entry
         try:
             ensure_desktop_entry()
+            from .selection_shortcuts import ReadingShortcuts
+            ensure_desktop_entry(app_id=ReadingShortcuts.app_id, name=ReadingShortcuts.desktop_name)
         except (OSError, ValueError, RuntimeError):
             import logging
             logging.exception('Could not prepare desktop identity')
@@ -375,6 +401,9 @@ def run(path):
             painter.end()
             tray.setIcon(QIcon(pixmap))
             detail = '\n'.join(caption(item) for item in downloads)
+            reading = state.selection.status()
+            if reading['reading']:
+                detail += ('\n' if detail else '') + reading['state']
             tray.setToolTip('Akousousin · ' + status + '\nVoice input: ' + input_status['state'] + ('\n' + detail if detail else ''))
             downloads_action.setVisible(bool(downloads))
             downloads_action.setText(detail or 'No downloads')

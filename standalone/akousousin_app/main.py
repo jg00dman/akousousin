@@ -36,6 +36,12 @@ def main():
     parser.add_argument('--install-speech-dispatcher', action='store_true', help='Register the output module in your user Speech Dispatcher configuration')
     parser.add_argument('--uninstall-speech-dispatcher', action='store_true', help='Remove your user output-module registration')
     parser.add_argument('--speech-dispatcher', action='store_true', help='Run a Speech Dispatcher output module on stdin/stdout')
+    reading = parser.add_mutually_exclusive_group()
+    reading.add_argument('--read-selection', action='store_true', help='Read highlighted Linux desktop text; repeat to stop')
+    reading.add_argument('--read-clipboard', action='store_true', help='Read copied text; repeat to stop')
+    reading.add_argument('--stop-reading', action='store_true', help='Stop only Akousousin selection reading')
+    reading.add_argument('--selection-status', action='store_true', help='Show selection reading and shortcut status')
+    parser.add_argument('--install-selection-action', action='store_true', help='Install a desktop action for manual global-shortcut binding')
     parser.add_argument('--dictation-toggle', action='store_true', help='Toggle enabled desktop dictation')
     parser.add_argument('--dictation-cancel', action='store_true', help='Cancel capture, recognition and pending insertion')
     parser.add_argument('--dictation-status', action='store_true', help='Show shared recognition state and latest transcripts')
@@ -54,6 +60,10 @@ def main():
     args = parser.parse_args()
     if args.protocol_version:
         print('2')
+        return
+    if args.install_selection_action:
+        from .selection import install_action
+        print(install_action(args.settings))
         return
     if args.serve:
         from .backend import serve
@@ -115,7 +125,11 @@ def main():
     import json
     import os
     request = None
-    if args.dictation_toggle or args.dictation_cancel or args.dictation_status:
+    if args.read_selection or args.read_clipboard or args.stop_reading or args.selection_status:
+        request = {'command': 'selection-stop' if args.stop_reading else 'selection-status' if args.selection_status else 'selection-toggle'}
+        if args.read_selection or args.read_clipboard:
+            request['clipboard'] = args.read_clipboard
+    elif args.dictation_toggle or args.dictation_cancel or args.dictation_status:
         request = {'command': 'stt-toggle' if args.dictation_toggle else 'stt-cancel' if args.dictation_cancel else 'stt-status'}
     elif args.api_start:
         request = {'command': 'wake'}
@@ -129,7 +143,7 @@ def main():
     elif not args.panel and not args.smoke_test:
         request = {'command': 'configure', 'independent': not args.configure}
     if request:
-        response = runtime.call(args.settings, request, launch=request['command'] not in ('release', 'stop', 'quit', 'status', 'stt-status', 'stt-cancel'))
+        response = runtime.call(args.settings, request, launch=request['command'] not in ('release', 'stop', 'quit', 'status', 'stt-status', 'stt-cancel', 'selection-status', 'selection-stop'))
         print(json.dumps(response or {'running': False, 'sessions': 0}))
         return
     runtime.initialize()

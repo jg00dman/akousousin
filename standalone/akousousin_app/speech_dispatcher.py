@@ -377,14 +377,11 @@ class RestartError(RuntimeError):
 
 def configure(path, remove=False):
     """Save registration first; restart only this user's systemd service last."""
-    import os
     import subprocess
     config = (uninstall if remove else install)(path)
     # A nested AppImage launch can put a previous mount's libraries in ORIG.
     # systemctl must use the host's libraries, including its own OpenSSL.
-    environment = os.environ.copy()
-    for name in ('LD_LIBRARY_PATH', 'LD_LIBRARY_PATH_ORIG', 'LD_PRELOAD'):
-        environment.pop(name, None)
+    environment = runtime.host_environment()
     try:
         subprocess.run(['systemctl', '--user', 'restart', 'speech-dispatcher.service'],
                        check=True, capture_output=True, text=True, timeout=20, env=environment)

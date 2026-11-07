@@ -48,6 +48,29 @@ class SessionsTests(unittest.TestCase):
         self.assertEqual(self.state.owners, {})
         self.state.service.stop.assert_not_called()
 
+    def test_configure_reuses_live_panel_and_requests_activation(self):
+        panel = Mock(pid=1234)
+        panel.poll.return_value = None
+        with patch('akousousin_app.controller.subprocess.Popen', return_value=panel) as launch:
+            first = self.state.request({'command': 'configure'})
+            activation = self.state.panel_activation
+            second = self.state.request({'command': 'configure'})
+        launch.assert_called_once()
+        self.assertEqual(first['panels'], second['panels'])
+        self.assertGreater(self.state.panel_activation, activation)
+
+    def test_configure_replaces_a_closed_panel(self):
+        old = Mock(); old.poll.return_value = 0
+        self.state.panels = [old]
+        with patch('akousousin_app.controller.subprocess.Popen') as launch:
+            self.state.request({'command': 'configure'})
+        launch.assert_called_once()
+
+    def test_quit_closes_owned_selection_reader(self):
+        with patch.object(self.state.selection, 'close') as close:
+            self.state.request({'command': 'quit'})
+        close.assert_called_once()
+
     def test_explicit_quit_stops_even_while_in_use(self):
         self.acquire('logos')
         self.state.request({'command': 'quit'})

@@ -34,6 +34,8 @@ class Panel:
         self.events = queue.Queue()
         self.busy = 0
         self.updating = False
+        self.panel_polling = False
+        self.last_panel_activation = 0
         self.root = tk.Tk()
         self.root.title('Akousousin - The unified neural speech engine for Linux (beta)')
         icon = resources.root() / 'akousousin.png'
@@ -70,7 +72,7 @@ class Panel:
         self.content = ttk.Frame(body)
         self.content.pack(side='left', fill='both', expand=True)
         self.pages = {}
-        for name in ('Overview', 'Voice library', 'Voice Input', 'Languages', 'Settings', 'Updates'):
+        for name in ('Overview', 'Voice library', 'Voice Input', 'Languages', 'Settings', 'Updates') + (('Read selection',) if os.name != 'nt' else ()):
             ttk.Button(nav, text=name, command=lambda name=name: self.show(name)).pack(fill='x', pady=4)
             self.pages[name] = ttk.Frame(self.content)
         self.status = tk.StringVar(value='Ready')
@@ -92,6 +94,8 @@ class Panel:
         from .voice_input import VoiceInput
         self.voice_input = VoiceInput(self, self.pages['Voice Input'])
         self.build_updates()
+        if os.name != 'nt':
+            self.build_selection()
         from .download_status import DownloadView
         self.downloads = DownloadView(self.root)
         footer = ttk.Frame(self.root, padding=(22, 12))
@@ -103,6 +107,7 @@ class Panel:
         self.refresh_library()
         self.root.after(100, self.poll)
         self.root.after(200, self.check_server)
+        self.root.after(300, self.poll_panel)
 
     def show(self, name):
         for page in self.pages.values():
@@ -133,6 +138,16 @@ class Panel:
         try:
             while True:
                 kind, callback, result = self.events.get_nowait()
+                if kind == 'panel-status':
+                    if result:
+                        if result['activation'] != self.last_panel_activation:
+                            self.last_panel_activation = result['activation']
+                            self.root.deiconify(); self.root.lift(); self.root.focus_force()
+                        if hasattr(self, 'reading_state'):
+                            reading = result['reading']
+                            self.reading_state.set(reading['state'])
+                            self.reading_shortcuts.set(reading['shortcut_state'])
+                    continue
                 self.busy = max(0, self.busy - 1)
                 if kind == 'error':
                     self.updating = False
@@ -145,6 +160,20 @@ class Panel:
         if not self.busy:
             self.progress.stop()
         self.root.after(100, self.poll)
+
+    def poll_panel(self):
+        if not self.panel_polling:
+            self.panel_polling = True
+            def task():
+                try:
+                    result = runtime.call(self.path, {'command': 'panel-status'}, launch=False)
+                    self.events.put(('panel-status', None, result))
+                except Exception:
+                    pass
+                finally:
+                    self.panel_polling = False
+            threading.Thread(target=task, daemon=True).start()
+        self.root.after(600, self.poll_panel)
 
     def check_server(self):
         port = self.config['port']
@@ -424,6 +453,36 @@ class Panel:
         self.update_status = tk.StringVar(value='Check GitHub for a newer release, including betas.')
         ttk.Label(frame, textvariable=self.update_status, wraplength=760, style='Card.TLabel').pack(anchor='w', pady=12)
         ttk.Button(frame, text='Check for updates', command=self.check_updates).pack(anchor='w')
+
+    def build_selection(self):
+        from .scrolling import ScrollArea
+        self.reading_scroll = ScrollArea(self.pages['Read selection'])
+        self.reading_scroll.pack(fill='both', expand=True)
+        frame = self.card(self.reading_scroll.inner, 'Read selected text / Stop')
+        ttk.Label(frame, text='Highlight text in an application, then press the global shortcut to read it. Press it again to stop only this reading. Speech Dispatcher support must be installed in Settings.',
+                  style='Card.TLabel', wraplength=760).pack(anchor='w', pady=8)
+        ttk.Label(frame, text='Enable the reading shortcuts below and approve them in KDE. Suggested keys: Ctrl+Alt+R for selected text and Ctrl+Alt+Shift+R for copied text. KDE lets you change them or resolve conflicts. No microphone or keyboard-injection permission is needed.',
+                  style='Card.TLabel', wraplength=760).pack(anchor='w', pady=8)
+        self.reading_shortcuts = tk.StringVar(value='Reading shortcuts are disabled')
+        self.reading_state = tk.StringVar(value='Ready to read selected text')
+        def command(name, **options):
+            self.worker(lambda: runtime.call(self.path, {'command': name, **options}),
+                        lambda result: self.reading_state.set(result['state']))
+        row = ttk.Frame(frame, style='Card.TFrame'); row.pack(fill='x', pady=8)
+        ttk.Button(row, text='Enable global reading shortcuts', command=lambda: command('selection-shortcuts-enable')).pack(side='left', padx=3)
+        ttk.Button(row, text='Disable shortcuts', command=lambda: command('selection-shortcuts-disable')).pack(side='left', padx=3)
+        ttk.Label(frame, textvariable=self.reading_shortcuts, style='Card.TLabel', wraplength=760).pack(anchor='w', pady=8)
+        row = ttk.Frame(frame, style='Card.TFrame'); row.pack(fill='x', pady=8)
+        ttk.Button(row, text='Read selected text / Stop', command=lambda: command('selection-toggle')).pack(side='left', padx=3)
+        ttk.Button(row, text='Read copied text / Stop', command=lambda: command('selection-toggle', clipboard=True)).pack(side='left', padx=3)
+        ttk.Button(row, text='Stop reading', command=lambda: command('selection-stop')).pack(side='left', padx=3)
+        ttk.Label(frame, textvariable=self.reading_state, style='Card.TLabel', wraplength=760).pack(anchor='w', pady=8)
+        ttk.Label(frame, text='Wayland needs wl-clipboard; X11 needs xclip. Some Wine applications do not publish selected text: copy it and use Read copied text explicitly. AKS does not silently read a stale clipboard.',
+                  style='Card.TLabel', wraplength=760).pack(anchor='w', pady=8)
+        def install_action():
+            from .selection import install_action
+            self.worker(lambda: install_action(self.path), lambda _: self.status.set('Desktop action installed. Assign its shortcut in Plasma Keyboard settings.'))
+        ttk.Button(frame, text='Install optional desktop shortcut action', command=install_action).pack(anchor='w', pady=8)
 
     def check_updates(self):
         if self.busy:

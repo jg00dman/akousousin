@@ -17,7 +17,7 @@ on:
         type: boolean
         default: false
   push:
-    branches: [main, whisper, codex/on-demand-voices, codex/private-sapi-probe, codex/project-licensing, codex/standalone-control-panel, codex/speech-dispatcher-on-demand, codex/linux-speech-dispatcher, codex/control-panel-updates]
+    branches: [main, whisper, codex/read-selection, codex/on-demand-voices, codex/private-sapi-probe, codex/project-licensing, codex/standalone-control-panel, codex/speech-dispatcher-on-demand, codex/linux-speech-dispatcher, codex/control-panel-updates]
     paths: [engine/**, standalone/**, backend/**, tests/**, .github/workflows/standalone.yml]
 permissions:
   contents: read
@@ -103,7 +103,7 @@ jobs:
         if: runner.os == 'Linux'
         run: xvfb-run -a python standalone/ci_smoke.py
       - name: Real Whisper inference from the packaged application
-        if: runner.os == 'Linux' && (github.ref == 'refs/heads/whisper' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/codex/on-demand-voices')
+        if: runner.os == 'Linux' && (github.ref == 'refs/heads/whisper' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/codex/on-demand-voices' || github.ref == 'refs/heads/codex/read-selection')
         env:
           APPIMAGE_EXTRACT_AND_RUN: '1'
         run: |

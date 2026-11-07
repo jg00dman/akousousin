@@ -77,7 +77,84 @@ poll();
 '''.replace('SERVICE', service).replace('TOKEN', secret)
 
 
-class Desktop:
+class PortalRequests:
+    """Shared portal RPC/identity handling; sessions retain their own lifecycle."""
+    async def call(self, service, path, interface, member, signature='', body=None, timeout=10):
+        from dbus_next import Message, MessageType
+        reply = await asyncio.wait_for(self.bus.call(Message(destination=service, path=path,
+            interface=interface, member=member, signature=signature, body=body or [])), timeout)
+        if reply.message_type == MessageType.ERROR:
+            raise RuntimeError(member + ': ' + (str(reply.body[0]) if reply.body else reply.error_name))
+        return reply.body
+
+
+    async def request(self, interface, member, prefix, signature, args, options=None):
+        from dbus_next import Variant
+        token = 'r' + uuid.uuid4().hex
+        sender = self.bus.unique_name[1:].replace('.', '_')
+        predicted = '/org/freedesktop/portal/desktop/request/' + sender + '/' + token
+        future = self.loop.create_future()
+        self.requests[predicted] = future
+        values = dict(options or {}, handle_token=Variant('s', token))
+        handle = None
+        try:
+            handle = (await self.call('org.freedesktop.portal.Desktop', '/org/freedesktop/portal/desktop',
+                                     interface, member, signature + 'a{sv}', [*args, values]))[0]
+            self.requests[handle] = future
+            if handle in self.early and not future.done():
+                future.set_result(self.early.pop(handle))
+            code, result = await asyncio.wait_for(future, 120)
+            if code != 0:
+                raise RuntimeError('Desktop permission was cancelled or denied')
+            return result
+        except BaseException:
+            if handle:
+                try:
+                    await self.call('org.freedesktop.portal.Desktop', handle, 'org.freedesktop.portal.Request', 'Close', timeout=2)
+                except Exception:
+                    pass
+            raise
+        finally:
+            self.requests.pop(predicted, None)
+            if handle:
+                self.requests.pop(handle, None)
+
+
+    async def session(self, interface):
+        from dbus_next import Variant
+        result = await self.request(interface, 'CreateSession', '', '', [],
+                                    {'session_handle_token': Variant('s', 's' + uuid.uuid4().hex)})
+        handle = result['session_handle'].value
+        self.sessions.append(handle)
+        return handle
+
+
+    async def register_identity(self):
+        # Registry associates this exact D-Bus peer with the application. Qt's
+        # desktopFileName alone does not identify dbus-next's separate connection.
+        # Registration must precede every other portal call on a new connection.
+        from .desktop_identity import APP_ID, ensure_desktop_entry
+        app_id = getattr(self, 'app_id', APP_ID)
+        entry = ensure_desktop_entry(app_id=app_id, name=getattr(self, 'desktop_name', 'Akousousin'))
+        # GIO's desktop-file monitor may not have processed a just-installed or
+        # updated launcher. Failed lookups do not associate this peer with an ID.
+        for attempt in range(4):
+            try:
+                await self.call('org.freedesktop.portal.Desktop', '/org/freedesktop/portal/desktop',
+                                'org.freedesktop.host.portal.Registry', 'Register', 'sa{sv}', [app_id, {}])
+                return
+            except RuntimeError as error:
+                if 'App info not found' not in str(error):
+                    raise
+                if attempt == 3:
+                    raise RuntimeError('Desktop portal could not find ' + str(entry)
+                                       + '. Check that its AppImage exists and is executable. '
+                                       'If it does, sign out and back in to refresh the desktop application cache. '
+                                       'Your settings and models can stay in place.') from error
+                await asyncio.sleep(.25 * 2 ** attempt)
+
+
+class Desktop(PortalRequests):
     def __init__(self, dictation, config, directory, identity):
         self.dictation, self.config = dictation, config
         self.directory = Path(directory)
@@ -132,13 +209,6 @@ class Desktop:
                 self.loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
             self.loop.close()
 
-    async def call(self, service, path, interface, member, signature='', body=None, timeout=10):
-        from dbus_next import Message, MessageType
-        reply = await asyncio.wait_for(self.bus.call(Message(destination=service, path=path,
-            interface=interface, member=member, signature=signature, body=body or [])), timeout)
-        if reply.message_type == MessageType.ERROR:
-            raise RuntimeError(member + ': ' + (str(reply.body[0]) if reply.body else reply.error_name))
-        return reply.body
 
     def message(self, message):
         from dbus_next import MessageType
@@ -179,67 +249,8 @@ class Desktop:
                 self.tasks.add(task)
                 task.add_done_callback(self.tasks.discard)
 
-    async def request(self, interface, member, prefix, signature, args, options=None):
-        from dbus_next import Variant
-        token = 'r' + uuid.uuid4().hex
-        sender = self.bus.unique_name[1:].replace('.', '_')
-        predicted = '/org/freedesktop/portal/desktop/request/' + sender + '/' + token
-        future = self.loop.create_future()
-        self.requests[predicted] = future
-        values = dict(options or {}, handle_token=Variant('s', token))
-        handle = None
-        try:
-            handle = (await self.call('org.freedesktop.portal.Desktop', '/org/freedesktop/portal/desktop',
-                                     interface, member, signature + 'a{sv}', [*args, values]))[0]
-            self.requests[handle] = future
-            if handle in self.early and not future.done():
-                future.set_result(self.early.pop(handle))
-            code, result = await asyncio.wait_for(future, 120)
-            if code != 0:
-                raise RuntimeError('Desktop permission was cancelled or denied')
-            return result
-        except BaseException:
-            if handle:
-                try:
-                    await self.call('org.freedesktop.portal.Desktop', handle, 'org.freedesktop.portal.Request', 'Close', timeout=2)
-                except Exception:
-                    pass
-            raise
-        finally:
-            self.requests.pop(predicted, None)
-            if handle:
-                self.requests.pop(handle, None)
 
-    async def session(self, interface):
-        from dbus_next import Variant
-        result = await self.request(interface, 'CreateSession', '', '', [],
-                                    {'session_handle_token': Variant('s', 's' + uuid.uuid4().hex)})
-        handle = result['session_handle'].value
-        self.sessions.append(handle)
-        return handle
 
-    async def register_identity(self):
-        # Registry associates this exact D-Bus peer with the application. Qt's
-        # desktopFileName alone does not identify dbus-next's separate connection.
-        # Registration must precede every other portal call on a new connection.
-        from .desktop_identity import APP_ID, ensure_desktop_entry
-        entry = ensure_desktop_entry()
-        # GIO's desktop-file monitor may not have processed a just-installed or
-        # updated launcher. Failed lookups do not associate this peer with an ID.
-        for attempt in range(4):
-            try:
-                await self.call('org.freedesktop.portal.Desktop', '/org/freedesktop/portal/desktop',
-                                'org.freedesktop.host.portal.Registry', 'Register', 'sa{sv}', [APP_ID, {}])
-                return
-            except RuntimeError as error:
-                if 'App info not found' not in str(error):
-                    raise
-                if attempt == 3:
-                    raise RuntimeError('Desktop portal could not find ' + str(entry)
-                                       + '. Check that its AppImage exists and is executable. '
-                                       'If it does, sign out and back in to refresh the desktop application cache. '
-                                       'Your settings and models can stay in place.') from error
-                await asyncio.sleep(.25 * 2 ** attempt)
 
     async def setup(self):
         if os.name == 'nt' or not os.environ.get('WAYLAND_DISPLAY'):

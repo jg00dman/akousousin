@@ -7,7 +7,7 @@ SPDX-FileCopyrightText: 2026 John Goodman
 
 **akousousin:** *The unified neural speech engine for Linux, implementing Microsoft SAPI and Speech Dispatcher, based on Piper and Whisper.*
 
-The 0.6.0b4 beta implements SAPI text-to-speech using Piper, native Linux Speech
+The 0.7.0b1 beta implements SAPI text-to-speech using Piper, native Linux Speech
 Dispatcher output and experimental local Whisper voice input on Linux. SAPI
 recognition and native Windows microphone capture are not implemented. See the
 [compatibility table](../COMPATIBILITY.md) for the implemented capabilities.
@@ -164,7 +164,7 @@ update is refused. Restarted speech starts on demand as usual.
 Windows ZIP and source installations offer the matching release download for
 manual installation after quitting Akousousin. Automatic replacement is currently
 available for Linux AppImages only. Release tags include the package version,
-for example `standalone-beta-0.6.0b4-<build>-1`; older run-number-only tags are not
+for example `standalone-beta-0.7.0b1-<build>-1`; older run-number-only tags are not
 offered as updates. Each new release must increase the package version.
 
 ## Experimental Voice Input on Linux
@@ -205,3 +205,27 @@ The Standalone Akousousin workflow exposes the same `bundle_starter_voice`
 checkbox (off by default). Both variants retain their runtime dependencies and
 licence notices; only the optional voice weights differ. Packaging clears staged
 resources so an earlier offline build cannot leak weights into a lean build.
+
+## Global read selected text / Stop
+
+On KDE Wayland, open Read selection and choose Enable global reading shortcuts.
+Approve or change the suggested Ctrl+Alt+R (selected text) and Ctrl+Alt+Shift+R
+(copied text) bindings in KDE. The panel shows the bindings KDE actually assigned.
+These shortcuts work while another application has focus and while the panel is
+closed, as long as AKS remains running in the tray. Enable the shortcut session
+again after quitting/restarting AKS; KDE retains the chosen key assignments.
+
+Install Speech Dispatcher support in Settings and download/import a voice first.
+Wayland needs `wl-clipboard` (`sudo apt install wl-clipboard` on Kubuntu); X11
+needs `xclip`. Highlight text and press the shortcut once to read, again to stop
+only that reader. Some Wine applications do not publish a primary selection;
+copy their text and use the separate copied-text shortcut. There is no silent
+fallback to stale clipboard contents. Native and Wine/Logos selection availability
+still needs confirmation on the target desktop.
+
+An optional desktop action can be installed from this page, or using
+`--install-selection-action`, for manual binding in Plasma or other desktop
+shortcut settings. It can start AKS when needed. `--read-selection`,
+`--read-clipboard`, `--stop-reading` and `--selection-status` control the same
+resident reader. Quit closes its shortcut session and stops its owned reading.
+Configure reuses the existing control panel and requests activation of that window.

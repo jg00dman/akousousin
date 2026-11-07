@@ -11,6 +11,8 @@ import socket
 import subprocess
 import sys
 import time
+import json
+import shlex
 
 executable, settings_path = map(lambda p: Path(p).resolve(), sys.argv[1:3])
 work = settings_path.parent / 'speech-dispatcher'
@@ -28,6 +30,17 @@ if installed.returncode:
     print('Expected headless user-service restart failure:', installed.stderr, flush=True)
 launcher = Path(os.environ['XDG_DATA_HOME']) / 'Akousousin/speech-dispatcher-module'
 sockpath = work / 'socket'
+fixtures = work / 'selection-fixture'
+fixtures.mkdir(exist_ok=True)
+selected = fixtures / 'text.txt'; selected.write_text('Packaged selection reading works.')
+copied = fixtures / 'clipboard.txt'; copied.write_text('Copied text is read only when explicitly requested.')
+paste = fixtures / 'wl-paste'
+paste.write_text('#!/bin/sh\ncase " $* " in *" --primary "*) exec /bin/cat ' + shlex.quote(str(selected)) +
+                 ';; *) exec /bin/cat ' + shlex.quote(str(copied)) + ';; esac\n')
+paste.chmod(0o755)
+reader_env = dict(os.environ, WAYLAND_DISPLAY='fixture-only', QT_QPA_PLATFORM='offscreen',
+                  SPEECHD_ADDRESS='unix_socket:' + str(sockpath),
+                  PATH=str(fixtures) + os.pathsep + os.environ['PATH'])
 (work / 'speechd.conf').write_text(f'''LogLevel 5
 LogDir "{logs}"
 CommunicationMethod "unix_socket"
@@ -41,7 +54,7 @@ events = []
 marks = []
 with (work / 'daemon.log').open('wb') as log:
     daemon = subprocess.Popen(['speech-dispatcher', '-s', '-C', str(work), '-S', str(sockpath),
-                               '-P', str(work / 'pid')], stdout=log, stderr=log)
+                               '-P', str(work / 'pid')], stdout=log, stderr=log, env=reader_env)
     connection = socket.socket(socket.AF_UNIX)
     try:
         deadline = time.monotonic() + 20
@@ -116,6 +129,35 @@ with (work / 'daemon.log').open('wb') as log:
         assert any('0:5' in mark for mark in marks), marks
         command('SET SELF SSML_MODE off')
         print('PASS: real Speech Dispatcher voices, PCM, cancellation, recovery and Orca SSML marks', flush=True)
+        # Clipboard data is a fixture; the packaged resident controller, SSIP
+        # connection, speech and cancellation are real. No compositor is used.
+        def reading(*args):
+            result = subprocess.run([str(executable), '--settings', str(settings_path), *args], env=reader_env,
+                                    capture_output=True, text=True, check=True, timeout=30)
+            return json.loads(result.stdout.splitlines()[-1])
+        def finished():
+            deadline = time.monotonic() + 90
+            while time.monotonic() < deadline:
+                status = reading('--selection-status')
+                if not status['reading']:
+                    assert status['state'] in ('Reading finished', 'Reading stopped'), status
+                    return status
+                time.sleep(.1)
+            raise AssertionError('Selection reading did not finish')
+        reading('--read-selection'); finished()
+        command('SET SELF PRIORITY IMPORTANT')
+        command('SPEAK')
+        command(('Another application must finish uninterrupted. ' * 250) + '\r\n.')
+        event(701)
+        selected.write_text('This long reading will be stopped. ' * 1500)
+        assert reading('--read-selection')['reading']
+        reading('--read-selection')
+        assert finished()['state'] == 'Reading stopped'
+        event(702)  # Stopping the reader must preserve this other client's speech.
+        selected.write_text('The next selection works after stopping.')
+        reading('--read-selection'); finished()
+        reading('--read-clipboard'); finished()
+        print('PASS: packaged resident selection read/stop/reset, explicit clipboard and another client unaffected', flush=True)
     finally:
         connection.close()
         daemon.terminate()

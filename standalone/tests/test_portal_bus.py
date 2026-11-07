@@ -55,7 +55,7 @@ class PortalBusTests(unittest.IsolatedAsyncioTestCase):
             @method()
             def Register(self, app_id: 's', options: 'a{sv}'):
                 from akousousin_app.desktop_identity import APP_ID
-                assert app_id == APP_ID
+                assert app_id in (APP_ID, APP_ID + '.ReadSelection')
                 assert (Path(owner.folder.name) / 'applications' / (app_id + '.desktop')).is_file()
                 owner.identity = app_id
         class Portal(ServiceInterface):
@@ -79,6 +79,27 @@ class PortalBusTests(unittest.IsolatedAsyncioTestCase):
                 owner.keys.append((symbol, state))
         self.server.export('/org/freedesktop/portal/desktop', Registry())
         self.server.export('/org/freedesktop/portal/desktop', Portal())
+        class ReadingPortal(ServiceInterface):
+            def __init__(self):
+                super().__init__('org.freedesktop.portal.GlobalShortcuts')
+            @method()
+            def CreateSession(self, options: 'a{sv}') -> 'o':
+                assert owner.identity == 'org.akousousin.Akousousin.ReadSelection'
+                return response(options, {'session_handle': Variant('s', '/session/reading')})
+            @method()
+            def BindShortcuts(self, session: 'o', shortcuts: 'a(sa{sv})', parent: 's', options: 'a{sv}') -> 'o':
+                assert session == '/session/reading'
+                assert {item[0] for item in shortcuts} == {'read-selection', 'read-clipboard'}
+                values = [[key, {'trigger_description': fields['preferred_trigger']}] for key, fields in shortcuts]
+                return response(options, {'shortcuts': Variant('a(sa{sv})', values)})
+            @signal()
+            def Activated(self, session, shortcut, timestamp, options) -> 'osta{sv}':
+                return [session, shortcut, timestamp, options]
+            @signal()
+            def Deactivated(self, session, shortcut, timestamp, options) -> 'osta{sv}':
+                return [session, shortcut, timestamp, options]
+        self.reading_portal = ReadingPortal()
+        self.server.export('/org/freedesktop/portal/desktop', self.reading_portal)
 
     async def asyncTearDown(self):
         self.desktop.bus.disconnect()
@@ -86,6 +107,37 @@ class PortalBusTests(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(.02)
         self.data_patch.stop()
         self.folder.cleanup()
+
+    async def test_reading_identity_binds_global_shortcuts_and_routes_real_signals(self):
+        from akousousin_app.selection_shortcuts import ReadingShortcuts
+        from akousousin_app.desktop_identity import APP_ID
+        activated = asyncio.Event()
+        calls = []
+        def read(clipboard):
+            calls.append(clipboard); activated.set()
+        reader = ReadingShortcuts(read, lambda: None)
+        reader.loop = asyncio.get_running_loop()
+        with patch.dict(os.environ, {'WAYLAND_DISPLAY': 'fixture-only'}):
+            try:
+                await self.desktop.register_identity()
+                await reader.setup()
+                self.assertTrue(reader.enabled)
+                self.assertNotEqual(reader.app_id, APP_ID)
+                self.assertTrue((Path(self.folder.name) / 'applications' / (APP_ID + '.desktop')).exists())
+                self.assertIn('CTRL+ALT+R', reader.status)
+                self.reading_portal.Activated('/session/reading', 'read-selection', 1, {})
+                await asyncio.wait_for(activated.wait(), 1)
+                self.assertEqual(calls, [False])
+                activated.clear()
+                self.reading_portal.Activated('/session/reading', 'read-selection', 2, {})
+                self.reading_portal.Deactivated('/session/reading', 'read-selection', 3, {})
+                self.reading_portal.Activated('/session/reading', 'read-clipboard', 4, {})
+                await asyncio.wait_for(activated.wait(), 1)
+                self.assertEqual(calls, [False, True])
+                self.assertEqual(self.keys, [], 'Reading shortcuts must not request keyboard injection')
+            finally:
+                reader.stopping.set()
+                await reader.cleanup()
 
     async def test_early_response_and_actual_keyboard_messages(self):
         from dbus_next import Variant

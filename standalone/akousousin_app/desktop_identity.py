@@ -24,12 +24,14 @@ def desktop_exec(arguments):
     return ' '.join(quoted).replace('\\', '\\\\')
 
 
-def ensure_desktop_entry(arguments=None, data_home=None):
+def ensure_desktop_entry(arguments=None, data_home=None, app_id=APP_ID, name='Akousousin'):
     from . import runtime, settings
     base = Path(data_home) if data_home is not None else settings.data_path().parent
     directory = base / 'applications'
     directory.mkdir(parents=True, exist_ok=True)
-    destination = directory / (APP_ID + '.desktop')
+    if not all(part and part.replace('_', '').isalnum() for part in app_id.split('.')):
+        raise ValueError('Invalid desktop application ID')
+    destination = directory / (app_id + '.desktop')
     if destination.is_symlink() or (destination.exists() and MARKER not in destination.read_text(encoding='utf-8')):
         # An existing user-installed launcher already supplies this identity.
         # Do not rewrite a custom launcher to make portal registration work.
@@ -41,7 +43,7 @@ def ensure_desktop_entry(arguments=None, data_home=None):
         if image and not os.access(image, os.X_OK):
             raise RuntimeError('The AppImage is not executable. Enable executable permission in its file Properties, then restart AKS.')
     invocation = runtime.command('--configure') if arguments is None else arguments
-    content = ('[Desktop Entry]\nType=Application\nName=Akousousin\n'
+    content = ('[Desktop Entry]\nType=Application\nName=' + name + '\n'
                'Comment=Local neural speech and dictation\nNoDisplay=true\nTerminal=false\n'
                'Exec=' + desktop_exec(invocation) + '\n' + MARKER + '\n')
     # Do not invalidate the desktop service's application cache on every attempt.
@@ -50,7 +52,7 @@ def ensure_desktop_entry(arguments=None, data_home=None):
     temporary = None
     try:
         with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=directory,
-                                         prefix='.' + APP_ID, delete=False) as output:
+                                         prefix='.' + app_id, delete=False) as output:
             temporary = Path(output.name)
             output.write(content)
         temporary.chmod(0o644)

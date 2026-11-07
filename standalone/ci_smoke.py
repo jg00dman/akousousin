@@ -201,6 +201,7 @@ finally:
 # Exercise Quit against a real panel process owned by the packaged controller.
 owned_panels = public('--configure')['panels']
 assert owned_panels, 'Configure did not register its panel with the controller'
+assert public('--configure')['panels'] == owned_panels, 'Configure opened a duplicate panel'
 time.sleep(2)
 public('--quit')
 import psutil

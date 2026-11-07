@@ -85,6 +85,14 @@ def environment():
     return value
 
 
+def host_environment():
+    value = environment()
+    for name in ('LD_LIBRARY_PATH', 'LD_LIBRARY_PATH_ORIG', 'LD_PRELOAD',
+                 'QT_PLUGIN_PATH', 'QT_QPA_PLATFORM_PLUGIN_PATH'):
+        value.pop(name, None)
+    return value
+
+
 def launch_controller(path):
     with log_path().open('ab') as output:
         options = {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == 'nt' else {
