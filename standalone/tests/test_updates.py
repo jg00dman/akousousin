@@ -113,6 +113,9 @@ class UpdateTests(unittest.TestCase):
         with patch('akousousin_app.__version__', '0.7.0'):
             self.assertFalse(settings.load(path)['update_betas'])
         with patch('akousousin_app.__version__', '0.7.0b2'):
+            path.write_text('{}')
+            updates.resources.bootstrap(path)
+            self.assertTrue(json.loads(path.read_text())['update_betas'])
             self.assertTrue(settings.load(path)['update_betas'])
             config = settings.load(path)
             config['update_betas'] = False

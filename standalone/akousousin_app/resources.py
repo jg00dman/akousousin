@@ -72,6 +72,7 @@ def bootstrap(path):
                 'name': 'LJSpeech', 'quality': 'medium'})
         except (OSError, KeyError, ValueError):
             pass
-    if not Path(path).exists():
+    stored = json.loads(Path(path).read_text(encoding='utf-8')) if Path(path).exists() else {}
+    if not Path(path).exists() or any(key not in stored for key in ('update_weekly', 'update_betas')):
         settings.save(path, config)
     return config
