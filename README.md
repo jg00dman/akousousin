@@ -13,6 +13,8 @@ SPDX-FileCopyrightText: 2026 John Goodman
 ![Akousousin 0.7.0b1 control panel showing the speech service, voice preview and desktop reading navigation](docs/images/control-panel.png)
 <!-- akousousin-screenshot:end -->
 
+[More screenshots: Voice Input, recording controls and Read selection](docs/SCREENSHOTS.md).
+
 Core speech output works through 64-bit SAPI (Wine and native Windows) and the
 native Linux Speech Dispatcher output module. On-demand startup, idle model
 unloading and control-panel update checks are included. Neither output interface
@@ -42,7 +44,10 @@ We report feature coverage rather than an invented percentage of the full APIs.
 
 Global selected-text reading is available on KDE Wayland through the Read selection
 page. It needs Speech Dispatcher and wl-clipboard; Wine applications may require
-the explicit copied-text fallback.
+the explicit copied-text fallback. Suggested global shortcuts are **Ctrl+Alt+R**
+(selected text / stop) and **Ctrl+Alt+Shift+R** (copied text / stop), subject to KDE
+approval. See the [setup guide](standalone/README.md#global-read-selected-text--stop)
+and [beta test checklist](standalone/BETA-TESTING.md).
 
 ## Try the beta
 
@@ -73,6 +78,9 @@ launcher lifecycle hooks. An optional session interface remains available to cli
 The standalone [engine](engine/) implements public Windows COM/SAPI interfaces.
 Those standard API names and contracts are unchanged by the project rebrand.
 The [control panel and controller](standalone/) manage voices and backend sessions.
+The panel uses Tkinter; the tray/controller uses PySide6 (Qt 6). Speech Dispatcher
+output for Orca does not establish control-panel accessibility; comprehensive
+Orca/AT-SPI support remains future work.
 [CI](.github/workflows/standalone.yml) cross-compiles the engine and tests packages
 on Wine and Windows without compiling Wine. The CI suite checks controller and recognition lifecycle, cancellation, actual GUI
 scrolling and recording actions, portal protocol behavior, packaged panel shutdown,

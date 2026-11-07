@@ -5,7 +5,14 @@ SPDX-FileCopyrightText: 2026 John Goodman
 
 # Prototype validation
 
-## Current Logos + Piper AppImage CI validation
+> **Historical evidence for the custom Wine prototype.** Current standalone
+> 0.7.0b1 Linux and Windows package checks passed in
+> [release run 42318174159](https://github.com/jg00dman/akousousin/actions/runs/42318174159).
+> See [current coverage](COMPATIBILITY.md) and the
+> [beta testing checklist](standalone/BETA-TESTING.md) for remaining desktop checks.
+> The earlier build results below are retained as historical evidence.
+
+## Historical Logos + Piper AppImage CI validation
 
 [Run 41372784570](https://github.com/jg00dman/akousousin/actions/runs/41372784570)
 succeeded for Akousousin commit `a43e304c12dc3b612f1a6d3b38fb72846def3bff` and

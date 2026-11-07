@@ -9,8 +9,13 @@ Use the direct `Akousousin-x86_64.AppImage` link in the beta or trial release, m
 executable and launch it. The AppImage is the only download needed for testing;
 matching sources and checksums are separate release assets, and diagnostic
 artifacts remain on the GitHub Actions run. Open
-**Voice Input**. This trial includes the current main-branch panel and Updates page.
+**Voice Input**. This guide covers the 0.7.0b1 beta panel and Updates page.
 It retains the existing TTS features; Whisper recognition is still experimental.
+
+![Voice Input model and desktop dictation setup](../docs/images/voice-input.png)
+
+The screenshot shows an unloaded model and disabled shortcuts in an isolated
+test profile. Microphone discovery requires the host audio utilities below.
 
 Whisper speech models are NOT bundled. They are retained in
 `~/.local/share/Akousousin/models/whisper/` (respecting `XDG_DATA_HOME`).
@@ -47,15 +52,18 @@ first, then choose Enable desktop shortcuts in Voice Input and approve KDE's
 shortcut and keyboard-control dialogs. Default mode is toggle; push-to-talk is
 also available. Test in a plain text editor. Switching windows retains the result;
 a switch during insertion may leave a partial result. Cancel is available in the
-panel and tray. Closing the panel leaves the shared worker/controller running.
-See recognition/DICTATION.md in the corresponding source for implementation,
+panel; tray Stop Dictation stops listening. Closing the panel leaves the shared
+worker/controller running.
+See [desktop dictation](DICTATION.md) for implementation,
 limitations and acceptance checks. SAPI recognition remains unimplemented.
 Microphone capture and dictation into Kate were confirmed on Kubuntu 26.04 Wayland
-on 5 November 2026. The ready cue was enabled but inaudible; use Test ready sound
-to check playback in the newer trial. Other desktop acceptance cases remain open.
+on 5 November 2026. The user subsequently heard the ready cue but found it quiet;
+the current 300 Hz cue uses the maximum clean PCM level. Use Test ready sound to
+check playback and routing. Other desktop acceptance cases remain open.
 Existing SAPI support is text-to-speech only. Full dependency licences and matching
 sources accompany the build as separate downloads. No Whisper model weights occur in the AppImage;
-the small bundled VAD asset and existing approved Piper starter voice remain.
+only the small VAD helper is bundled. Piper voices also download on demand;
+Overview offers the starter voice (about 64 MB) or a choice from Voice library.
 
 No configuration reset is required when updating from the trial that reported
 “An app id is required.” The updated controller registers its portal connection
@@ -76,7 +84,8 @@ can download Small in a cancellable worker. Desktop shortcuts still require KDE'
 permission setup once per AKS run. Start Dictation in the tray can open that setup.
 
 The tray menu is Start/Stop Speech, Start/Stop Dictation, Default Voice, Configure,
-Quit. A single left-click opens it; a double-click opens Configure. Closing a panel
+Quit. Left-click toggles dictation; right-click opens the menu. Configure reuses
+the existing panel. Closing a panel
 leaves the controller available. Quit closes all panels launched by that controller,
 microphone capture, recognition and speech workers and portal sessions.
 

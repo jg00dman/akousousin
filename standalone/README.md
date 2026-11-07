@@ -106,6 +106,11 @@ On desktops without a tray, the panel and command interface remain usable.
 "$IMAGE" --dictation-toggle                          # KDE dictation; starts permission setup if needed
 "$IMAGE" --dictation-cancel                          # discard pending dictation
 "$IMAGE" --dictation-status                          # shared voice-input status/transcripts
+"$IMAGE" --read-selection                            # read selected text, repeat to stop
+"$IMAGE" --read-clipboard                            # explicitly read copied text, repeat to stop
+"$IMAGE" --stop-reading                              # stop only the AKS reader
+"$IMAGE" --selection-status                          # reader and global-shortcut status
+"$IMAGE" --install-selection-action                  # optional manually bound desktop action
 ```
 
 Use a distinct random ID per application session; repeat acquisition is idempotent.
@@ -169,6 +174,18 @@ offered as updates. Each new release must increase the package version.
 
 ## Experimental Voice Input on Linux
 
+![Voice Input model and dictation setup](../docs/images/voice-input.png)
+
+This setup screenshot uses an isolated profile with the model unloaded. The
+[recording controls screenshot](../docs/images/voice-input-recording.png) shows
+the lower part of this scrollable page.
+
+Recognition uses **faster-whisper with CTranslate2**, CPU int8 and neural VAD.
+The original OpenAI Whisper Python package and PyTorch are not shipped. Small is
+multilingual; languages are selected within the model, not separate downloads.
+Turbo currently requires importing a converted local model; its download option
+is not implemented. If Turbo fails to load, recognition tries installed Small.
+
 Install `pulseaudio-utils` for `parec`/`paplay`; PipeWire remains your audio server
 through its PulseAudio-compatible service. Open Voice Input and select Small
 (default). Enable voice input downloads its pinned weights once if necessary and
@@ -207,6 +224,10 @@ licence notices; only the optional voice weights differ. Packaging clears staged
 resources so an earlier offline build cannot leak weights into a lean build.
 
 ## Global read selected text / Stop
+
+![Read selection setup and global shortcut controls](../docs/images/read-selection.png)
+
+The screenshot shows the setup page before enabling the shortcuts.
 
 On KDE Wayland, open Read selection and choose Enable global reading shortcuts.
 Approve or change the suggested Ctrl+Alt+R (selected text) and Ctrl+Alt+Shift+R

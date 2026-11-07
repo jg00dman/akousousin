@@ -3,7 +3,13 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
-# Akousousin Piper backend beta
+# Akousousin Piper backend
+
+The current user-facing package is the [0.7.0b1 standalone application](../standalone/README.md).
+It includes this backend and downloads voices on demand. The separate archive
+instructions below describe the earlier headless backend distribution; they are
+not the installation steps for the current AppImage. For speech input, see
+[recognition development](RECOGNITION.md).
 
 This is a separate GPL-3.0-or-later package, not part of the Wine AppImage or
 OuDedetai's MIT-licensed application. It contains Piper 1.8.0, a Waitress 3.0.2

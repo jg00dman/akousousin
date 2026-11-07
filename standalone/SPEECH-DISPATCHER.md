@@ -33,7 +33,7 @@ first-audio waiting for long text, but is not sample-by-sample streaming, and ch
 joins/prosody need listening tests. It does not generate estimated word timings.
 Accurate word events require enabling Piper’s optional phoneme alignments and
 mapping normalized speech back to original text offsets, including numbers and
-Unicode. This branch does not yet provide that mapping. Full pause/resume and word highlighting remain incomplete.
+Unicode. This beta does not yet provide that mapping. Full pause/resume and word highlighting remain incomplete.
 
 ## Install the Linux module
 
@@ -75,6 +75,27 @@ user speechd.conf and delete `~/.local/share/Akousousin/speech-dispatcher-module
 Use the Remove button or `--uninstall-speech-dispatcher` to restart the user
 service after removal. Other modules and Akousousin settings are retained.
 
+## Manual restart if registration was saved
+
+If the automatic restart fails, the panel offers a selectable command and Copy
+command button. Run this as your normal user, without sudo:
+
+```sh
+env -u LD_LIBRARY_PATH -u LD_PRELOAD systemctl --user restart speech-dispatcher.service
+```
+
+This also avoids AppImage libraries leaking into the host systemctl process.
+If your distribution has no user service with that name, restart the user daemon:
+
+```sh
+speech-dispatcher --kill
+speech-dispatcher --spawn
+```
+
+Then retry the `spd-say` test above. Restarting interrupts current speech. Use
+Show technical details / Copy details if it still fails; keep existing settings
+and models.
+
 ## Validation
 
 CI retains all original 13 integration and seven failure/recovery tests on Wine
@@ -82,7 +103,7 @@ and native Windows, plus long-fragment integrity, SAPI-triggered cold startup an
 idle reload tests. Unit checks cover module framing/escaping, voices, cancellation,
 idle expiry, backend recovery and preserving the user's dispatcher configuration.
 Real Piper WAV generation is distinct from audible playback. Desktop screen-reader
-and Logos listening checks are still required before promoting this branch.
+and Logos listening checks are still required before broader deployment.
 
 ## Kubuntu / Orca candidate
 

@@ -5,7 +5,7 @@ SPDX-FileCopyrightText: 2026 John Goodman
 
 # API coverage and implementation status
 
-Applies to main's **0.6.0b3 beta**, assessed on 5 November 2026.
+Applies to main's **0.7.0b1 beta**, reviewed on 7 November 2026.
 [Releases and downloads](https://github.com/jg00dman/akousousin/releases).
 
 **Core speech output works through SAPI and Speech Dispatcher; neither is a
@@ -90,7 +90,7 @@ Source: [output module](standalone/akousousin_app/speech_dispatcher.py),
 - Supported packages: Linux x86-64/glibc 2.35+ with existing 64-bit Wine prefixes,
   and native Windows x86-64. macOS deployment, 32-bit callers and full UI
   localization are not supported in this beta.
-- Published build [41949762674](https://github.com/jg00dman/akousousin/actions/runs/41949762674)
+- Earlier build [41949762674](https://github.com/jg00dman/akousousin/actions/runs/41949762674)
   passed 60 standalone tests and 8 backend tests on Linux; packaged validation on
   Wine and native Windows includes 14 deterministic integration and 7 failure tests,
   real Piper/SAPI audio generation, cold startup/idle reload, service/panel lifecycle,
@@ -134,6 +134,29 @@ in that test. These observations are not a language-conformance assessment.
 Push-to-talk, non-Latin insertion, focus changes, lock/unlock, speech feedback,
 physical device failures and fifth-generation i5 performance need broader desktop
 testing. See [dictation acceptance details](recognition/DICTATION.md).
+
+## Global reading and control panel
+
+The 0.7.0b1 release adds controller-owned selected/copied text reading through
+Speech Dispatcher. KDE Wayland portal shortcuts suggest Ctrl+Alt+R and
+Ctrl+Alt+Shift+R, with actual bindings approved by KDE. Reading works with the
+panel closed while AKS runs. Repeat-to-stop and Quit stop only the AKS reader;
+other clients are not globally cancelled. Wayland requires `wl-clipboard`; the
+optional X11 desktop action requires `xclip`. Wine applications may need the
+explicit copied-text action; there is no silent stale-clipboard fallback.
+
+Configure reuses a single panel. Tray left-click toggles dictation; right-click
+opens its menu. Copyable recovery commands and separate diagnostics are provided.
+The panel is Tkinter, while the tray/controller uses PySide6 (Qt 6). Output-module
+Orca support does not imply that Orca can read the panel; comprehensive panel
+accessibility remains future work.
+
+Release [42318174159](https://github.com/jg00dman/akousousin/actions/runs/42318174159)
+passed Linux and Windows package checks, including private SAPI registration and
+restoration, model-free packaging, real synthesis, panel reuse/shutdown, portal
+protocol checks and real Speech Dispatcher reading/cancellation. Native/Wine
+selection availability and global key dispatch still need target-desktop testing;
+see the [current beta checklist](standalone/BETA-TESTING.md).
 
 ## Private Wine SAPI compatibility installation
 

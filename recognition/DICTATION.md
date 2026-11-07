@@ -103,7 +103,9 @@ installed desktop entry launched successfully through `gtk-launch`, while the
 already-running portal initially reported “App info not found”. Restarting
 `xdg-desktop-portal.service` resolved registration and enabled working dictation.
 This validates that desktop path on that system; it does not establish all acceptance cases.
-The ready tones were enabled but inaudible and remain under investigation.
+The user later confirmed audible tones but found them quiet. Current feedback
+uses two 300 Hz tones at the maximum clean PCM level; Test ready sound checks
+playback separately. A listening check of this latest adjustment remains useful.
 
 Non-Latin insertion, focus changes, push-to-talk, lock/unlock, TTS feedback,
 physical-device failures and target-hardware performance remain acceptance tests. The project has no SAPI recognition engine yet; native Windows

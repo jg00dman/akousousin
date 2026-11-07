@@ -5,80 +5,91 @@ SPDX-FileCopyrightText: 2026 John Goodman
 
 # Whisper recognition development
 
-Status: experimental backend foundation on the `whisper` branch. This is not yet
-an installable SAPI recognition engine or desktop dictation feature. Existing
-release packages and the Piper service remain unchanged.
+The 0.7.0b1 beta includes experimental Linux recognition and KDE Wayland desktop
+dictation. It uses **faster-whisper and CTranslate2**, CPU int8, two inference
+threads, one worker, neural VAD and greedy decoding. It does not ship the original
+OpenAI Whisper Python package or PyTorch. SAPI recognition and native Windows live
+microphone capture remain unimplemented; Windows development supports WAV input.
 
-Install the development extra from the repository root:
+For user setup, use the [Voice Input guide](../recognition/PANEL-TESTING.md).
+For portal permissions, bounded capture, focus checks and acceptance evidence, see
+[desktop dictation development](../recognition/DICTATION.md).
 
-```sh
-python -m pip install './backend[recognition]'
-```
+## Development setup and model management
 
-Provision converted faster-whisper model assets explicitly before use. Inference
-never downloads files. Put the full CTranslate2 model directory at
-`$XDG_DATA_HOME/Akousousin/models/whisper/small` (default XDG data home is
-`~/.local/share`). Optional Turbo assets go in sibling directory `turbo`. On
-Windows the root is `%LOCALAPPDATA%/Akousousin/models/whisper`. These are complete
-multilingual models, not independently installable language modules.
-
-For example, an explicit development-time download with `huggingface_hub`:
-
-```python
-from huggingface_hub import snapshot_download
-from akousousin_backend.recognition import model_root
-snapshot_download('Systran/faster-whisper-small',
-                  revision='536b0662742c02347bc0e980a01041f333bce120',
-                  local_dir=model_root() / 'small')
-# Optional: snapshot_download('mobiuslabsgmbh/faster-whisper-large-v3-turbo',
-#                            local_dir=model_root() / 'turbo')
-```
-
-Model download management, immutable revisions, integrity checks, notices, and
-release packaging still need implementation before distribution.
+Install from the repository root:
 
 ```sh
+python -m pip install './backend[recognition]' './standalone[recognition]'
+```
+
+The default multilingual Small model is a one-time download of about 485 MB.
+The panel's Enable voice input or recording/dictation activation downloads it
+when needed; the ordinary inference API and WAV CLI do not download implicitly.
+The model manager uses pinned assets, staging, an install lock, integrity checks
+and retained model notices. Import existing model copies converted CTranslate2
+assets into the persistent cache. These are complete multilingual models, not
+independently installable language modules.
+
+- Linux: `$XDG_DATA_HOME/Akousousin/models/whisper/`, normally
+  `~/.local/share/Akousousin/models/whisper/`.
+- Windows: `%LOCALAPPDATA%/Akousousin/models/whisper/`.
+- Small and Turbo occupy `small` and `turbo` subdirectories. Turbo currently
+  supports local converted-model import only; its download is not implemented.
+
+The default application package contains no Whisper model weights; the small VAD
+helper is bundled. Downloads/imports survive application replacement and model
+unloading. Disable voice input frees model memory and retains files; idle
+unloading defaults to 300 seconds. An approved shortcut can enable/load it again.
+The resident controller owns the recognition worker, allowing reuse across
+recordings and panels. Quit closes its worker and capture/portal sessions.
+
+## Backend and diagnostic CLI
+
+```sh
+akousousin-whisper --help
+akousousin-whisper --download-model
+# Or: akousousin-whisper --import-model /path/to/converted/small
 akousousin-whisper --wav speech.wav
 akousousin-whisper --wav speech.wav --language de-DE
 akousousin-whisper --capture-seconds 5
 ```
 
-WAV input is mono 16 kHz signed 16-bit PCM, at most 30 seconds. The Linux developer
-capture adapter requires `parec` (usually `pulseaudio-utils`); it connects to the
-host PulseAudio-compatible server, including PipeWire's `pipewire-pulse`. Omit
-`--source` to use the default source, or pass an explicit source name. This is a
-fixed-duration diagnostic capture, not the eventual toggle-listening interface.
-Windows currently supports WAV input only.
+WAV input is mono 16 kHz signed 16-bit PCM, at most 30 seconds. The Linux diagnostic
+capture adapter requires `parec` from `pulseaudio-utils`; it connects to the host
+PulseAudio-compatible server, including PipeWire's `pipewire-pulse`. Omit `--source`
+to use the default source, or pass an explicit source name. This CLI capture has a
+fixed duration; the controller's desktop adapter provides toggle and push-to-talk.
+The panel waits for actual microphone audio and plays an optional pair of 300 Hz
+ready tones before accepting speech. It also provides a separate sound test.
 
-Inference runs in a separate spawn process with CPU int8, two CPU threads,
-one worker, VAD enabled and greedy decoding. An explicit application/user language
-is normalized and locked; omitted language requests Whisper detection. Host locale
-is not silently passed as a lock. Results preserve text, language, language
-probability, explicit/detected source, active model and any fallback warning.
-Language probability under a forced language is not independent detection evidence.
-Turbo loading failure falls back to Small; if Small also fails the request fails
+Inference runs in a separate spawn process. An explicit application/user language
+is normalized and locked, bypassing autodetection; omitted language requests
+Whisper detection. Host locale is not silently used as a lock. Results preserve
+text, language, language probability, explicit/detected source, active model and
+fallback warnings. Probability under a forced language is not independent
+detection evidence. The panel displays detected language separately from the
+user's automatic/fixed language choice.
+
+Turbo load failure falls back to Small; if Small also fails the request fails
 cleanly. Missing/corrupt assets are diagnosed by model loading, not merely folder
-presence. One inference is accepted at a time; a timeout or worker death closes the
-worker and the next request can restart it.
+presence. One inference is accepted at a time; timeout or worker death closes the
+worker and a later request can restart it. Desktop audio queues are bounded.
 
-## Remaining integration
+## Remaining work and validation limits
 
-1. Recognition-side COM/SAPI engine and registration for Wine and Windows. Accept
-   SAPI-provided audio streams; do not assume microphone input. Validate actual
-   recognition events/results with a SAPI test client before claiming compliance.
-2. Explicit model management and recognition settings in the existing panel;
-   integrate worker ownership with the shared service without loading Whisper for
-   TTS-only users.
-3. Continuous bounded capture/endpointing, device changes, cancellation, default
-   toggle and optional push-to-talk. Suspend standalone capture during AKS speech.
-4. KDE Wayland global shortcuts through supported desktop interfaces, with a
-   separately designed text insertion adapter and clear permission/error feedback.
-5. Application-aware language tagging. Changing keyboard layout does not reliably
-   set document proofing language. Broader native Linux speech framework is later.
-6. Windows/AppImage dependency and licence packaging; real small/Turbo inference,
-   silence/noise, multilingual, low-end CPU/RAM, microphone and SAPI validation.
+- Recognition-side COM/SAPI engine and registration for Wine and Windows. It must
+  accept application-provided audio and deliver verified recognition events/results
+  before claiming SAPI compliance.
+- Native Windows live capture and a broader native Linux input framework. The
+  current global dictation adapter targets KDE Wayland.
+- Spoken punctuation commands and document proofing-language tagging. Keyboard
+  layout changes alone do not reliably set document language.
+- Wider microphone, non-Latin, low-end CPU/RAM, focus-switching and desktop
+  acceptance. French worked in a reported user test; Hebrew and Greek did not in
+  that test. Whisper language support is not a per-language accuracy guarantee.
 
-Tests run without downloading models:
+Run backend tests without downloading models:
 
 ```sh
 PYTHONPATH=backend python -m unittest discover -s backend/tests -v
@@ -104,30 +115,3 @@ when supplied, its expected phrases are `Guten Morgen` and `deutschen Text`.
 See [validation evidence](WHISPER-VALIDATION.md) for the actual fixtures, versions,
 results and deployment gaps. Mock capture tests verify invocation, PCM formatting,
 timeout handling and forced cleanup; they do not validate a live audio server.
-
-## Voice Input development UI
-
-Install `./backend[recognition]` and `./standalone[recognition]` to enable the
-Voice Input page. Small downloads on the first prepare/record action; alternatively
-import the `models/small` directory from the original test bundle. Assets live at
-the approved XDG-aware `Akousousin/models/whisper` location, separately from builds.
-Downloads/imports stage complete files and record SHA256 hashes before publishing.
-Turbo currently supports local import only; a pinned download is pending.
-
-The page loads the worker before opening the microphone. Recording readiness is
-announced only after audio arrives; the optional double 250 Hz tone plays before
-accepted speech. Transcripts are displayed in the panel. The panel owns this
-diagnostic worker for now: integration into the shared controller, global hotkeys,
-text insertion, cancellation and SAPI recognition remain subsequent work. The
-control panel requires desktop validation; headless tests do not establish KDE
-Wayland compatibility. CLI test bundles no longer include speech model weights by
-default; use `--download-model` or `--import-model` once.
-
-## Controller-owned desktop dictation
-
-The panel now uses the resident controller's input commands, not a private worker.
-KDE Wayland portal shortcuts/insertion, focus guarding, streaming phrase capture,
-cancellation and idle unloading are implemented experimentally. See
-[desktop dictation development](../recognition/DICTATION.md) for current behavior,
-TTS playback timing limits and outstanding live acceptance. The older development
-notes above describe the initial diagnostic-only increment.

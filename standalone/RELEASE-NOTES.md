@@ -33,7 +33,7 @@ Voice input is not a SAPI recognition engine.
   guarded Unicode insertion. Toggle and push-to-talk are supported. Initial
   permission setup is still required; other compositors are not supported.
 - The tray menu is Start/Stop Speech, Start/Stop Dictation, Default Voice,
-  Configure, Quit. Single left-click opens the menu; double-click opens Configure.
+  Configure, Quit. Left-click toggles dictation; right-click opens the menu.
 - Normal Quit closes owned control panels, speech/input workers and portal
   sessions. The updater preserves its own panel only until replacement completes.
 - Voice Input and Settings gain wheel scrolling; the voice library exposes its
