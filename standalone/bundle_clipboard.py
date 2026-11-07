@@ -34,7 +34,14 @@ def bundle(package, sources, build, notices, fetch):
             source.extractall(checkout, filter='data')
         source = next(checkout.iterdir())
         if name == 'wl-clipboard':
-            commands = [['meson', 'setup', 'build', '--buildtype=release'],
+            protocol_path = Path(subprocess.check_output(
+                ['pkg-config', '--variable=pkgdatadir', 'wayland-protocols'], text=True).strip())
+            shutil.copytree(protocol_path, sources / 'wayland-protocols', dirs_exist_ok=True)
+            for dependency in ('wayland-protocols', 'autotools-dev'):
+                target = notices / 'clipboard' / dependency
+                target.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(Path('/usr/share/doc') / dependency / 'copyright', target / 'copyright')
+            commands = [['meson', 'setup', 'build', '--buildtype=release', '--wrap-mode=nofallback'],
                         ['ninja', '-C', 'build', 'src/wl-paste']]
             executable = source / 'build/src/wl-paste'
         else:
@@ -75,7 +82,8 @@ def bundle(package, sources, build, notices, fetch):
     (sources / 'clipboard-BUILD.txt').write_text(
         'Clipboard readers built from the accompanying immutable source snapshots.\n'
         'Build on Ubuntu 22.04 with a C compiler, pkg-config, meson, ninja-build,\n'
-        'autoconf, autotools-dev, libwayland-dev, libx11-dev, libxt-dev and libxmu-dev.\n'
+        'autoconf, autotools-dev, libwayland-dev, wayland-protocols, libx11-dev, libxt-dev and libxmu-dev.\n'
+        'Wayland protocol XML sources are included in wayland-protocols/.\n'
         'xclip uses the accompanying config.guess/config.sub from autotools-dev.\n'
         'Commands, commits, archive hashes and bundled-library hashes are recorded\n'
         'in clipboard-build.json. System glibc and the dynamic loader are not bundled.\n')
