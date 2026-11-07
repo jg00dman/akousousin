@@ -183,11 +183,15 @@ jobs:
           for directory in release-input/*/standalone-dist; do
             (cd "$directory" && tr -d '\r' < SHA256SUMS | sha256sum --check -)
             find "$directory" -maxdepth 1 -type f \( -name '*.AppImage' -o -name '*.zip' -o -name '*.tar.gz' \) -exec cp {} release-assets/ \;
+            if [ -f "$directory/../build/standalone-ci/control-panel.png" ]; then
+              cp "$directory/../build/standalone-ci/control-panel.png" release-assets/control-panel.png
+            fi
           done
+          test -f release-assets/control-panel.png
           sed 's#../COMPATIBILITY.md#COMPATIBILITY.md#g' standalone/README.md > release-assets/TESTING.md
           cp COMPATIBILITY.md release-assets/COMPATIBILITY.md
           cp patches/wine-piper.patch release-assets/wine-piper-original.patch
-          (cd release-assets && sha256sum -- *.AppImage *.zip *.tar.gz TESTING.md COMPATIBILITY.md *.patch > SHA256SUMS)
+          (cd release-assets && sha256sum -- *.AppImage *.zip *.tar.gz TESTING.md COMPATIBILITY.md *.patch *.png > SHA256SUMS)
       - name: Publish standalone beta with the selected voice option
         env:
           GH_TOKEN: ${{ github.token }}
@@ -202,6 +206,11 @@ jobs:
           gh release create "$tag" --verify-tag --repo "$GITHUB_REPOSITORY" \
             --prerelease --title "Akousousin standalone beta ${GITHUB_RUN_ID}" \
             --notes-file standalone/RELEASE-NOTES.md release-assets/*
+      - name: Show the released control panel on the repository homepage
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 standalone/publish_screenshot.py release-assets/control-panel.png
 
   whisper-test-build:
     if: ${{ !cancelled() && (github.ref == 'refs/heads/whisper' || github.ref == 'refs/heads/codex/private-sapi-probe' || github.ref == 'refs/heads/codex/on-demand-voices') && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish)) && (inputs.reuse_run_id != '' || needs.package.result == 'success') }}

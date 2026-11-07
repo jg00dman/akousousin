@@ -219,8 +219,15 @@ if not native:
     from akousousin_app.panel import Panel
     from PIL import ImageGrab
     panel = Panel(settings_path)
-    panel.root.update()
-    ImageGrab.grab().save(WORK / 'control-panel.png')
+    deadline = time.monotonic() + 4
+    while time.monotonic() < deadline:
+        panel.root.update()
+        if panel.server_status.get() != 'Checking service…':
+            break
+        time.sleep(.05)
+    panel.root.update_idletasks()
+    x, y = panel.root.winfo_rootx(), panel.root.winfo_rooty()
+    ImageGrab.grab(bbox=(x, y, x + panel.root.winfo_width(), y + panel.root.winfo_height())).save(WORK / 'control-panel.png')
     panel.root.destroy()
 # Updates reapply saved active registrations using the new package. Exercise
 # this against the initialized Wine/native Windows installation before rollback.
