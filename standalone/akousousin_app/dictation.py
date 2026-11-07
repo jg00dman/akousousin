@@ -7,7 +7,7 @@ import io
 import wave
 import time
 
-from . import settings
+from . import settings, speech_gate
 
 
 class Dictation:
@@ -110,6 +110,7 @@ class Dictation:
     def _run(self, record, target, seconds, config):
         timer = None
         pending = None
+        mute = None
         deferred = target is not None and config.get('stt_mode', 'toggle') == 'push-to-talk'
         try:
             from akousousin_backend.audio_input import Capture
@@ -117,10 +118,12 @@ class Dictation:
             self._ready(config)
             if not record or self.finished.is_set():
                 return
+            mute = speech_gate.Lease(self.path)
+            mute.acquire()
             self.change('Opening microphone…', 'opening')
             self.capture = (self.capture_factory or Capture)(
                 source=config['stt_source'] or None, cue=ready_cue if config['stt_beep'] else None,
-                paused=self.speaking, changed=self.capture_changed,
+                paused=lambda: False, changed=self.capture_changed,
                 threshold=config.get('stt_threshold', 250))
             self.capture.start()
             while True:
@@ -215,9 +218,13 @@ class Dictation:
         finally:
             if timer:
                 timer.cancel()
-            if self.capture:
-                self.capture.close()
-                self.capture = None
+            try:
+                if self.capture:
+                    self.capture.close()
+                    self.capture = None
+            finally:
+                if mute:
+                    mute.close()
             self.last_activity = time.monotonic()
 
     def finish(self):

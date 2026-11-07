@@ -20,7 +20,7 @@ import unicodedata
 import xml.etree.ElementTree as ET
 import shlex
 
-from . import runtime, settings
+from . import speech_gate, runtime, settings
 from .transport import fetch
 
 MAX_MESSAGE = 65536
@@ -104,6 +104,7 @@ class Module:
         self.request_id = ''
         self.audio_server = False
         self.busy = False
+        self.audio_pending = False
 
     def send(self, text):
         with self.lock:
@@ -182,12 +183,19 @@ class Module:
             self.task.start()
 
     def render(self, text, options, cancelled, request_id):
+        gate = speech_gate.snapshot(self.path)
         try:
             runtime.call(self.path, {'command': 'wake'})
             with self.lock:
                 if cancelled.is_set():
                     return
                 self.send('701 BEGIN\n')
+            if gate[0]:
+                with self.lock:
+                    if not cancelled.is_set():
+                        self.busy = False
+                        self.send('702 END\n')
+                return
             config = settings.load(self.path)
             voice = options.get('synthesis_voice')
             if voice in (None, 'NULL'):
@@ -239,11 +247,18 @@ class Module:
                     if not pcm or len(pcm) != wav.getnframes() * 2:
                         raise ValueError('Truncated audio')
                     sample_rate = wav.getframerate()
+                if speech_gate.suppressed(self.path, gate):
+                    self.stop()
+                    return
                 for start in range(0, len(pcm), 8192):
                     block = pcm[start:start + 8192]
                     with self.lock:
                         if cancelled.is_set():
                             return
+                        if speech_gate.suppressed(self.path, gate):
+                            self.stop()
+                            return
+                        self.audio_pending = True
                         header = (f'705-bits=16\n705-num_channels=1\n705-sample_rate={sample_rate}\n'
                                   f'705-num_samples={len(block)//2}\n705-big_endian=0\n705-AUDIO').encode()
                         self.output.write(header + b'\0' + escaped(block) + b'\n705 AUDIO\n')
@@ -259,11 +274,31 @@ class Module:
                     self.busy = False
                     self.send('703 STOP\n')
 
+    def watch_gate(self, stopped):
+        previous = speech_gate.snapshot(self.path)
+        while not stopped.wait(.025):
+            current = speech_gate.snapshot(self.path)
+            if current[0] and not previous[0] or current[1] != previous[1]:
+                with self.lock:
+                    busy = self.busy
+                    pending = self.audio_pending
+                    self.audio_pending = False
+                    if busy or pending:
+                        self.stop()
+                    if pending and not busy:
+                        # Flush audio handed to the server mixer, even if its
+                        # synthesis END notification has already been sent.
+                        self.send('703 STOP\n')
+            previous = current
+
     def run(self):
         if self.source.readline(MAX_MESSAGE) != b'INIT\n':
             self.send('399 ERR EXPECTED INIT\n')
             return
         self.send('299-Akousousin neural voice engine\n299 OK LOADED SUCCESSFULLY\n')
+        stopped = threading.Event()
+        watcher = threading.Thread(target=self.watch_gate, args=(stopped,), daemon=True)
+        watcher.start()
         try:
             while True:
                 line = self.source.readline(MAX_MESSAGE + 1)
@@ -306,6 +341,8 @@ class Module:
         except EOFError:
             return
         finally:
+            stopped.set()
+            watcher.join(1)
             self.stop()
 
 

@@ -65,6 +65,28 @@ class DictationTests(unittest.TestCase):
         self.manager = Dictation(self.path, recognizer_factory=Recognition, capture_factory=Audio)
         self.addCleanup(self.manager.close)
 
+    def test_dictation_mutes_speech_instead_of_pausing_capture(self):
+        from akousousin_app import speech_gate
+        self.manager.speaking = lambda: True
+        original = Audio.start
+        def start(capture):
+            self.assertTrue(speech_gate.snapshot(self.path)[0])
+            self.assertFalse(capture.options['paused']())
+            original(capture)
+        with patch.object(Audio, 'start', start):
+            self.manager.start()
+            self.wait()
+        self.assertFalse(speech_gate.snapshot(self.path)[0])
+        self.assertEqual(self.manager.status()['results'][0]['text'], 'Guten Morgen')
+
+    def test_microphone_failure_restores_speech(self):
+        from akousousin_app import speech_gate
+        with patch.object(Audio, 'start', side_effect=RuntimeError('Microphone failed')):
+            self.manager.start()
+            self.wait()
+        self.assertEqual(self.manager.status()['phase'], 'error')
+        self.assertFalse(speech_gate.snapshot(self.path)[0])
+
     def wait(self):
         self.manager.thread.join(2)
         self.assertFalse(self.manager.thread.is_alive())
@@ -102,11 +124,6 @@ class DictationTests(unittest.TestCase):
         self.manager.prepare(); self.wait()
         self.manager.unload()
         self.assertEqual(self.manager.status()['phase'], 'unloaded')
-
-    def test_tts_gate_is_passed_to_capture(self):
-        self.manager.speaking = Mock(return_value=True)
-        self.manager.start(); self.wait()
-        self.assertTrue(Audio.instances[-1].options['paused']())
 
     def test_failed_first_download_does_not_start_microphone(self):
         def fail(cancelled=None):

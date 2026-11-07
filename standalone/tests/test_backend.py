@@ -9,7 +9,7 @@ import unittest
 import wave
 from unittest.mock import patch
 
-from akousousin_app import settings
+from akousousin_app import settings, speech_gate
 from akousousin_app.backend import Router, application
 
 
@@ -56,6 +56,27 @@ class RoutingTests(unittest.TestCase):
         FakeSynth.instances.clear()
         self.router = Router(self.path)
         self.addCleanup(self.router.close)
+
+    def test_muted_requests_do_not_load_or_replace_piper(self):
+        self.router.synthesize({'text':'Warm up'})
+        synth = self.router.synth
+        count = len(synth.requests)
+        volume = self.config['volume']
+        lease = speech_gate.Lease(self.path)
+        lease.acquire()
+        try:
+            data = self.router.synthesize({'text':'Muted'})
+            with wave.open(io.BytesIO(data), 'rb') as sound:
+                self.assertEqual(set(sound.readframes(sound.getnframes())), {0})
+            self.assertIs(self.router.synth, synth)
+            self.assertEqual(len(synth.requests), count)
+            self.assertFalse(self.router.speaking())
+        finally:
+            lease.close()
+        self.router.synthesize({'text':'Audible again'})
+        self.assertEqual(len(synth.requests), count + 1)
+        from akousousin_app import settings
+        self.assertEqual(settings.load(self.path)['volume'], volume)
 
     def test_speech_activity_covers_synthesis_and_expected_playback(self):
         self.assertFalse(self.router.speaking())

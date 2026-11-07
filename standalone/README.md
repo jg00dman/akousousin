@@ -321,3 +321,12 @@ Configure reuses the existing control panel and requests activation of that wind
 
 The control-panel status bar is selectable: use Ctrl+A/Ctrl+C or its Copy button
 to include the full status in a support report.
+
+While dictation is recording, AKS suppresses new speech output instead of pausing
+microphone capture. This is temporary and profile-specific: saved volume and
+Piper service availability are unchanged. Ready tones bypass suppression.
+Speech requests received during recording are discarded without synthesis;
+requests spanning a recording session cannot resume afterwards. The Speech
+Dispatcher module cancels current AKS output, and previews stop their own player.
+Suppression is released after recording/transcription ends, cancellation, or an
+error; a terminated controller cannot leave a permanent mute behind.

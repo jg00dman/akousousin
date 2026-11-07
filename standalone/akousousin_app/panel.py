@@ -103,7 +103,10 @@ class Panel:
         self.downloads = DownloadView(self.root)
         footer = ttk.Frame(self.root, padding=(22, 12))
         footer.pack(fill='x')
-        self.status_field = ttk.Entry(footer, textvariable=self.status, state='readonly')
+        status_style = ttk.Style(self.root)
+        status_style.map('Status.TEntry', fieldbackground=[('readonly', '#e6e6e6')],
+                         foreground=[('readonly', '#222222')])
+        self.status_field = ttk.Entry(footer, textvariable=self.status, state='readonly', style='Status.TEntry')
         self.status_field.pack(side='left', fill='x', expand=True)
         def select_status(event):
             self.status_field.selection_range(0, 'end')
@@ -718,6 +721,10 @@ class Panel:
             return
         text = self.preview.get()
         def preview():
+            from . import speech_gate
+            gate = speech_gate.snapshot(self.path)
+            if gate[0]:
+                return 'Preview muted while dictation is active.'
             runtime.call(self.path, {'command': 'start'})
             request = urllib.request.Request(f'http://127.0.0.1:{self.config["port"]}/synthesize',
                         json.dumps({'text': text, 'voice': self.config['voice']}).encode(),
@@ -727,13 +734,46 @@ class Panel:
                 data = response.read()
             path = settings.data_path() / 'preview.wav'
             path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(data)
+            if speech_gate.suppressed(self.path, gate):
+                return 'Preview muted while dictation is active.'
             if os.name == 'nt':
                 import winsound
-                winsound.PlaySound(str(path), winsound.SND_FILENAME)
+                import io
+                import time
+                import wave
+                with wave.open(io.BytesIO(data), 'rb') as sound:
+                    duration = sound.getnframes() / sound.getframerate()
+                winsound.PlaySound(str(path), winsound.SND_FILENAME | winsound.SND_ASYNC)
+                deadline = time.monotonic() + duration
+                try:
+                    while time.monotonic() < deadline:
+                        if speech_gate.suppressed(self.path, gate):
+                            return 'Preview muted while dictation is active.'
+                        time.sleep(.025)
+                finally:
+                    winsound.PlaySound(None, 0)
             else:
                 player = next((shutil.which(name) for name in ('pw-play', 'paplay', 'aplay') if shutil.which(name)), None)
                 if player:
-                    subprocess.run([player, str(path)], check=True, timeout=120, env=runtime.host_environment())
+                    import time
+                    with subprocess.Popen([player, str(path)], env=runtime.host_environment()) as playback:
+                        deadline = time.monotonic() + 120
+                        try:
+                            while playback.poll() is None:
+                                if speech_gate.suppressed(self.path, gate):
+                                    return 'Preview muted while dictation is active.'
+                                if time.monotonic() >= deadline:
+                                    raise TimeoutError('Preview playback timed out')
+                                time.sleep(.025)
+                            if playback.returncode:
+                                raise RuntimeError('Preview playback failed')
+                        finally:
+                            if playback.poll() is None:
+                                playback.terminate()
+                                try:
+                                    playback.wait(2)
+                                except subprocess.TimeoutExpired:
+                                    playback.kill(); playback.wait()
                 else:
                     return f'Preview saved to {path}; no pw-play, paplay or aplay audio player was found.'
             return 'Preview complete.'

@@ -13,6 +13,7 @@ import sys
 import time
 import json
 import shlex
+from akousousin_app.speech_gate import Lease
 
 executable, settings_path = map(lambda p: Path(p).resolve(), sys.argv[1:3])
 work = settings_path.parent / 'speech-dispatcher'
@@ -184,6 +185,25 @@ with (work / 'daemon.log').open('wb') as log:
         assert any('0:5' in mark for mark in marks), marks
         command('SET SELF SSML_MODE off')
         print('PASS: real Speech Dispatcher voices, PCM, cancellation, recovery and Orca SSML marks', flush=True)
+        # Dictation must interrupt this module's real server-audio playback,
+        # then drain muted requests without shutting down the Piper service.
+        command('SPEAK')
+        command(('Speech must yield to dictation. ' * 50) + '\r\n.')
+        event(701)
+        mute = Lease(settings_path)
+        mute.acquire()
+        try:
+            event(703)
+            command('SPEAK')
+            command('This muted request must complete without playback.\r\n.')
+            event(702)
+        finally:
+            mute.close()
+        events.clear()
+        command('SPEAK')
+        command('Speech resumes after dictation.\r\n.')
+        event(702)
+        print('PASS: dictation suppression interrupts real dispatcher output and restores speech', flush=True)
         # Clipboard data is a fixture; the packaged resident controller, SSIP
         # connection, speech and cancellation are real. No compositor is used.
         def reading(*args):

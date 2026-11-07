@@ -13,7 +13,7 @@ import time
 import wave
 
 from akousousin_backend.server import Synthesizer, MAX_AUDIO, MAX_BODY
-from . import settings
+from . import settings, speech_gate
 
 
 def worker(pipe, model):
@@ -77,6 +77,8 @@ class Router:
         self.processing = False
 
     def speaking(self):
+        if speech_gate.snapshot(self.path)[0]:
+            return False
         with self.control_lock:
             return self.processing or time.monotonic() < self.speaking_until
 
@@ -184,6 +186,15 @@ class Router:
             self.playback.appendleft((None, first[1], second[2]))
 
     def synthesize(self, request, identifier=None):
+        gate = speech_gate.snapshot(self.path)
+        def silence():
+            output = io.BytesIO()
+            with wave.open(output, 'wb') as sound:
+                sound.setparams((1, 2, request.get('sample_rate', 22050), 0, 'NONE', ''))
+                sound.writeframes(b'\0\0' * 220)
+            return output.getvalue()
+        if gate[0]:
+            return silence()
         # Three synthesis callers maximum leave a WSGI thread for cancellation
         # and health. One worker/model is shared; waiting is bounded and cancellable.
         if not self.slots.acquire(False):
@@ -212,6 +223,8 @@ class Router:
                 self.processing = True
             if cancelled.is_set():
                 raise InterruptedError('Speech cancelled')
+            if speech_gate.suppressed(self.path, gate):
+                return silence()
             config = settings.load(self.path)
             self.select(self.choose(request, config), config, self.cancelled)
             options = {'text': request['text'], 'length_scale': request.get('length_scale', 1) / config['speed'],
@@ -220,6 +233,8 @@ class Router:
             audio = self.synth.synthesize(options, self.cancelled)
             rate = request.get('sample_rate', self.synth.rate)
             audio = resample(audio, rate)
+            if speech_gate.suppressed(self.path, gate):
+                return silence()
             with wave.open(io.BytesIO(audio), 'rb') as wav:
                 audio_duration = wav.getnframes() / wav.getframerate()
             return audio
