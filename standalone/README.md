@@ -253,14 +253,19 @@ resources so an earlier offline build cannot leak weights into a lean build.
 
 The screenshot shows the setup page before enabling the shortcuts.
 
-On KDE Wayland, open Read selection and choose Enable global reading shortcuts.
+On KDE Wayland, download/import a voice, open Read selection and choose Enable
+global reading shortcuts. This installs Speech Dispatcher support and selects
+AKS as its default engine first, then verifies the selected voice. Only after
+success does it request KDE shortcut permission; setup errors leave shortcuts
+disabled. Already-working support is verified without restarting the daemon.
 Approve or change the suggested Ctrl+Alt+R (selected text) and Ctrl+Alt+Shift+R
 (copied text) bindings in KDE. The panel shows the bindings KDE actually assigned.
 These shortcuts work while another application has focus and while the panel is
 closed, as long as AKS remains running in the tray. Enable the shortcut session
 again after quitting/restarting AKS; KDE retains the chosen key assignments.
 
-Install Speech Dispatcher support in Settings and download/import a voice first.
+Speech Dispatcher support can also be installed separately in Settings. eSpeak
+remains available, and removing AKS support restores the earlier default.
 Wayland needs `wl-clipboard` (`sudo apt install wl-clipboard` on Kubuntu); X11
 needs `xclip`. Highlight text and press the shortcut once to read, again to stop
 only that reader. Some Wine applications do not publish a primary selection;

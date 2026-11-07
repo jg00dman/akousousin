@@ -197,7 +197,7 @@ def refresh_registrations(path):
         from .speech_dispatcher import dispatcher_paths, install as register_dispatcher
         _, launcher, _ = dispatcher_paths()
         if launcher.is_file():
-            register_dispatcher(path)
+            register_dispatcher(path, set_default=False)
 
 
 WEEK = 7 * 24 * 60 * 60

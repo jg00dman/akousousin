@@ -48,7 +48,8 @@ SocketPath "{sockpath}"
 AudioOutputMethod "alsa"
 AudioALSADevice "null"
 AddModule "akousousin" "{launcher}" ""
-DefaultModule "akousousin"
+AddModule "espeak-ng" "sd_espeak-ng" "espeak-ng.conf"
+DefaultModule "espeak-ng"
 ''')
 # Regression: a user registration must add AKS to the real engine list without
 # hiding auto-discovered eSpeak. Use normal user-config lookup (no -C) here.
@@ -86,6 +87,16 @@ with (work / 'discovery.log').open('wb') as discovery_log:
             names = {line[4:].split()[0] for line in text.splitlines() if line[3:4] == '-'}
             assert {'akousousin', 'espeak-ng'} <= names, text
             print('PASS: real engine list retains eSpeak alongside AKS:', text, flush=True)
+            client.sendall(b'GET OUTPUT_MODULE\r\n')
+            default = []
+            while True:
+                line = stream.readline()
+                assert line, 'Dispatcher closed default-engine query'
+                default.append(line)
+                if line[3:4] == b' ':
+                    break
+            assert b'akousousin' in b''.join(default), default
+            print('PASS: installing support selects AKS as the real daemon default', flush=True)
     finally:
         discovery.terminate()
         try:

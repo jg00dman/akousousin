@@ -48,6 +48,8 @@ class Selection:
         self.cancelled.set()
 
     def enable(self):
+        from .speech_dispatcher import prepare_reading
+        prepare_reading(self.path)
         self.disable()
         from .selection_shortcuts import ReadingShortcuts
         self.shortcuts = ReadingShortcuts(self.toggle, self.stop)

@@ -63,8 +63,10 @@ tagging are not implemented. SAPI support remains text-to-speech only.
 
 ## Global reading
 
-1. Install/import a voice and install Speech Dispatcher support in Settings.
-   On Wayland install `wl-clipboard`; X11's optional desktop action uses `xclip`.
+1. Install/import a voice. Enabling reading shortcuts should automatically
+   install Speech Dispatcher support, select AKS and verify the voice before KDE
+   asks for shortcut permission. Test a missing voice or failed restart: shortcuts
+   should remain disabled with a useful recovery instruction. On Wayland install `wl-clipboard`; X11's optional desktop action uses `xclip`.
 2. In Read selection choose Enable global reading shortcuts. Approve or change
    Ctrl+Alt+R (selected text) and Ctrl+Alt+Shift+R (copied text) in KDE.
 3. Highlight text in Kate, focus the document and press the selected-text shortcut.

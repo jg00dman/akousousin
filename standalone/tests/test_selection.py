@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 import threading
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from akousousin_app import selection
 
@@ -18,6 +18,19 @@ class SelectionTests(unittest.TestCase):
         self.addCleanup(temp.cleanup)
         self.root = Path(temp.name)
         self.path = self.root / 'settings.json'
+
+    def test_reader_refuses_unexpected_espeak_selection_before_speaking(self):
+        client = selection.SpeechClient(Mock())
+        sent = []
+        def command(text, cancelled=None):
+            sent.append(text)
+            return ['250-espeak-ng', '250 OK'] if text == 'GET OUTPUT_MODULE' else ['200 OK']
+        client.command = command
+        with self.assertRaisesRegex(RuntimeError, 'did not select Akousousin'):
+            client.read('Read this with the selected AKS voice.', threading.Event())
+        self.assertIn('SET SELF OUTPUT_MODULE akousousin', sent)
+        self.assertNotIn('SPEAK', sent)
+        self.assertEqual(sent[-1], 'CANCEL SELF')
 
     def test_wayland_primary_and_explicit_clipboard_do_not_fall_back(self):
         def read(command, **kwargs):
@@ -78,7 +91,9 @@ class SelectionTests(unittest.TestCase):
             try:
                 while line := stream.readline():
                     commands.append(line)
-                    if line == b'SPEAK\r\n':
+                    if line == b'GET OUTPUT_MODULE\r\n':
+                        second.sendall(b'250-akousousin\r\n250 OK\r\n')
+                    elif line == b'SPEAK\r\n':
                         second.sendall(b'230 OK RECEIVING DATA\r\n')
                         data = []
                         while (line := stream.readline()) != b'.\r\n':

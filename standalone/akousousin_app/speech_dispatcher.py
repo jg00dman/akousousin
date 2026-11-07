@@ -311,6 +311,7 @@ class Module:
 SYSTEM_CONFIGS = ('/etc/speech-dispatcher/speechd.conf',
                   '/usr/local/etc/speech-dispatcher/speechd.conf')
 LAUNCHER_HEADER = '#!/bin/sh\n# Akousousin managed Speech Dispatcher module\n'
+DEFAULT_BLOCK = '\n# Akousousin default output module\nDefaultModule "akousousin"\n# End Akousousin default output module\n'
 
 
 def dispatcher_paths():
@@ -360,12 +361,16 @@ def explicit_modules(text, include_directory, seen=None):
     return False
 
 
-def install(path):
-    """Add an engine choice without disabling the daemon's other engines."""
+def install(path, set_default=True):
+    """Register AKS and optionally select it, retaining all other engine choices."""
     import os
     from pathlib import Path
     if os.name == 'nt':
         raise ValueError('Speech Dispatcher integration is for Linux')
+    if set_default:
+        preferences = settings.load(path)
+        if preferences['voice'] not in preferences['voices']:
+            raise RuntimeError('Download or import a voice in Voice library before installing Speech Dispatcher support.')
     config, launcher, discovered = dispatcher_paths()
     previous = config.read_text() if config.exists() else ''
     existing, owned = without_registration(previous, launcher)
@@ -375,6 +380,8 @@ def install(path):
     system = next((Path(name) for name in SYSTEM_CONFIGS if Path(name).is_file()), None)
     include_directory = system.parent if system else config.parent
     effective = existing if user_config else system.read_text() if system else ''
+    if set_default and not user_config and system:
+        existing = f'Include "{system}"\n'
     if discovered.exists() and not discovered.read_text().startswith(LAUNCHER_HEADER):
         raise ValueError('Another installation owns the discovered akousousin module; left unchanged')
     for file in (launcher, discovered):
@@ -386,12 +393,15 @@ def install(path):
             existing = f'Include "{system}"\n'
         registration = f'AddModule "akousousin" "{launcher}" ""'
         existing = existing.rstrip('\n') + '\n# Akousousin user speech module\n' + registration + '\n'
+    if set_default:
+        existing = existing.replace(DEFAULT_BLOCK, '')
+        existing += ('' if not existing or existing.endswith('\n') else '\n') + DEFAULT_BLOCK
     command = runtime.command('--speech-dispatcher', '--settings', str(Path(path).resolve()))
     for file in (launcher, discovered):
         file.parent.mkdir(parents=True, exist_ok=True)
         file.write_text(LAUNCHER_HEADER + 'exec ' + shlex.join(command) + '\n', encoding='utf-8')
         file.chmod(0o700)
-    if explicit or user_config:
+    if explicit or user_config or set_default:
         if existing != previous:
             config.parent.mkdir(parents=True, exist_ok=True)
             temporary = config.with_suffix('.tmp')
@@ -407,9 +417,11 @@ def uninstall(path):
     config, launcher, discovered = dispatcher_paths()
     previous = config.read_text() if config.exists() else ''
     kept, owned = without_registration(previous, launcher)
+    owned_default = DEFAULT_BLOCK in kept
+    kept = kept.replace(DEFAULT_BLOCK, '')
     if discovered.exists() and not discovered.read_text().startswith(LAUNCHER_HEADER):
         raise ValueError('Another installation owns the discovered akousousin module; left unchanged')
-    if owned and not kept.strip():
+    if (owned or owned_default) and not kept.strip():
         config.unlink()
     elif kept != previous:
         temporary = config.with_suffix('.tmp')
@@ -452,3 +464,39 @@ def configure(path, remove=False):
             detail = detail.decode(errors='replace')
         raise RestartError(detail.strip()) from error
     return config
+
+
+def verify_reading_engine(path):
+    """Check AKS and the selected Piper voice without speaking or using fallbacks."""
+    import socket
+    from .selection import SpeechClient, dispatcher_socket
+    config = settings.load(path)
+    if config['voice'] not in config['voices']:
+        raise RuntimeError('Download or import a voice in Voice library before enabling reading shortcuts.')
+    with socket.socket(socket.AF_UNIX) as connection:
+        connection.settimeout(5)
+        connection.connect(dispatcher_socket())
+        client = SpeechClient(connection)
+        modules = client.command('LIST OUTPUT_MODULES')
+        if not any(line[3:4] == '-' and line[4:].split()[0] == 'akousousin' for line in modules):
+            raise RuntimeError('Akousousin is not available in Speech Dispatcher; reading shortcuts remain disabled.')
+        client.command('SET SELF OUTPUT_MODULE akousousin')
+        voices = client.command('LIST SYNTHESIS_VOICES')
+        if not any(line[3:4] == '-' and line[4:].split()[0] == config['voice'] for line in voices):
+            raise RuntimeError('The selected Akousousin voice is unavailable in Speech Dispatcher. Reinstall speech support in Settings.')
+
+
+def prepare_reading(path):
+    """Ensure voice, installed support and a usable module before portal consent."""
+    config = settings.load(path)
+    if config['voice'] not in config['voices']:
+        raise RuntimeError('Download or import a voice in Voice library before enabling reading shortcuts.')
+    file, launcher, discovered = dispatcher_paths()
+    if file.is_file() and launcher.is_file() and discovered.is_file() and DEFAULT_BLOCK in file.read_text():
+        try:
+            verify_reading_engine(path)
+            return
+        except (OSError, RuntimeError):
+            pass  # Repair saved registration or a stopped daemon once.
+    configure(path)
+    verify_reading_engine(path)

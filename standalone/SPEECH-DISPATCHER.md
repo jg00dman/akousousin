@@ -48,7 +48,10 @@ This creates a user-owned launcher in `$XDG_DATA_HOME/Akousousin` (normally
 `~/.local/share/Akousousin`) and an automatically discovered `sd_akousousin`
 launcher in the sibling `libexec/speech-dispatcher-modules` directory (normally
 `~/.local/libexec/speech-dispatcher-modules`). It adds AKS as another engine choice;
-eSpeak and other existing engines remain available, and the default is unchanged.
+eSpeak and other existing engines remain available. Installation selects AKS as
+the default output engine, using the default voice selected in Voice library.
+The previous default declaration is retained and restored when support is removed.
+Later application updates preserve any subsequent manual default choice.
 
 Speech Dispatcher stops automatic engine discovery if any explicit `AddModule`
 exists. AKS therefore uses discovery when the current configuration does. For an
@@ -82,7 +85,8 @@ one caller must not stop another caller's synthesis. Synthesis sharing is bounde
 Use Settings → Remove Speech Dispatcher support or
 `--uninstall-speech-dispatcher` to remove the AKS discovery launcher, its private
 launcher and its explicit entry if present, then restart the user service.
-Other engines, defaults and Akousousin settings are retained. After installing a
+Other engines and Akousousin settings are retained. The managed AKS default
+override is removed, restoring the earlier default; later user changes are kept. After installing a
 build with this fix, choose Install Speech Dispatcher support again and reopen
 Orca preferences to refresh its list of engines.
 
@@ -123,8 +127,8 @@ AT-SPI2 2.60.4. Upstream source reviewed at Orca tag `50.3` and Speech
 Dispatcher tag `0.12.1`.
 
 Settings provides Install/Remove Speech Dispatcher support. Removal is also
-available with `--uninstall-speech-dispatcher`. Other modules and the default
-module are preserved. Install/remove restarts the systemd user dispatcher as the final step. Current
+available with `--uninstall-speech-dispatcher`. Other modules remain available; installing support selects AKS as the default.
+Removal restores the earlier default and retains later user changes. Install/remove restarts the systemd user dispatcher as the final step. Current
 speech is interrupted. If the user service is unavailable or fails, the app reports
 that registration was saved and a manual restart is needed.
 
@@ -144,6 +148,16 @@ At most three synthesis calls share one inference worker and loaded voice.
 Waiting is limited to ten seconds and cancellable by request id. A fourth HTTP
 worker remains available for control. This avoids parallel model memory overhead.
 Each interface owns its playback; no cross-interface ducking is introduced.
+
+### Reading-shortcut setup
+
+Enable global reading shortcuts installs support, selects AKS and verifies the
+engine and selected voice before requesting KDE shortcut permission. If the
+support is already working, it is verified without another daemon restart.
+Download/import a voice first; missing voices, failed restarts or an unavailable
+AKS engine leave the shortcuts disabled and report the recovery instruction.
+Existing Orca profiles explicitly set to eSpeak may still need AKS selected once
+in Orca preferences; the application does not rewrite Orca's personal settings.
 
 ### Desktop acceptance checklist
 

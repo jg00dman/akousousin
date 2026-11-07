@@ -115,6 +115,9 @@ class SpeechClient:
                 if not re.fullmatch(r'[A-Za-z0-9_-]+', voice):
                     raise ValueError('Invalid configured voice identifier')
                 self.command('SET SELF SYNTHESIS_VOICE ' + voice, cancelled)
+            active = self.command('GET OUTPUT_MODULE', cancelled)
+            if not any(line[3:4] == '-' and line[4:].strip() == 'akousousin' for line in active):
+                raise RuntimeError('Speech Dispatcher did not select Akousousin; reading was stopped.')
             # Keep even markup-expanded module messages bounded. Wait for each
             # message so cancellation never needs to affect another client's queue.
             for part in text_parts(text):

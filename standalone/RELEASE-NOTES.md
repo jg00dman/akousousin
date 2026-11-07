@@ -36,6 +36,17 @@ wider desktop behaviour remain beta testing items. Spoken punctuation commands,
 SAPI recognition and GNOME global shortcut integration are not added in this
 release.
 
+## Reading setup fixes on main after 0.7.0b3
+
+Installing Speech Dispatcher support selects AKS as the default engine while
+retaining eSpeak as an available choice. Removal restores the previous default;
+application updates preserve later manual choices. Enabling global reading
+shortcuts first installs and verifies speech support and the selected voice.
+Permission setup proceeds only after success, with clear recovery on failure.
+Readers explicitly select AKS and verify it before speaking; they do not silently
+continue with eSpeak. Existing Orca profiles may require their engine selection
+changed once in Orca preferences.
+
 See the [installation guide](https://github.com/jg00dman/akousousin/blob/main/standalone/README.md)
 and [beta checklist](https://github.com/jg00dman/akousousin/blob/main/standalone/BETA-TESTING.md).
 Licences, matching sources and checksums accompany the packages.

@@ -245,7 +245,7 @@ class UpdateTests(unittest.TestCase):
             launcher.parent.mkdir(parents=True, exist_ok=True)
             launcher.write_text('#!/bin/sh\nexec /old.AppImage --speech-dispatcher\n')
             updates.refresh_registrations(path)
-            register.assert_called_once_with(path)
+            register.assert_called_once_with(path, set_default=False)
 
     def test_refresh_does_not_reinstall_uninstalled_or_deleted_prefixes(self):
         active, removed = self.root / 'active', self.root / 'removed'

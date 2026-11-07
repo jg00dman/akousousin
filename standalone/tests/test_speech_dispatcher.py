@@ -9,7 +9,7 @@ import unittest
 from unittest.mock import patch
 
 from akousousin_app import settings
-from akousousin_app.speech_dispatcher import Module, chunks, escaped, install, uninstall, speech_parts, accessible_text
+from akousousin_app.speech_dispatcher import DEFAULT_BLOCK, Module, chunks, escaped, install, uninstall, speech_parts, accessible_text
 from test_backend import audio
 
 
@@ -123,7 +123,9 @@ class DispatcherTests(unittest.TestCase):
             config = install(self.path)
             _, launcher, discovered = dispatcher_paths()
             install(self.path)
-            self.assertFalse(config.exists(), 'A user config must not shadow the system config')
+            self.assertIn(f'Include "{system}"', config.read_text())
+            self.assertIn(DEFAULT_BLOCK, config.read_text())
+            self.assertNotIn('AddModule', config.read_text())
             self.assertEqual(system.read_text(), original)
             self.assertTrue(discovered.is_file())
             self.assertEqual(discovered, self.root / 'libexec/speech-dispatcher-modules/sd_akousousin')
@@ -140,7 +142,7 @@ class DispatcherTests(unittest.TestCase):
             original = '# User audio preferences\nDefaultModule "espeak-ng"\nDefaultRate 12\n'
             config.write_text(original)
             install(self.path)
-            self.assertEqual(config.read_text(), original)
+            self.assertEqual(config.read_text(), original + DEFAULT_BLOCK)
             uninstall(self.path)
             self.assertEqual(config.read_text(), original)
 
@@ -152,7 +154,8 @@ class DispatcherTests(unittest.TestCase):
             config.write_text('\n# Akousousin user speech module\n'
                               f'AddModule "akousousin" "{launcher}" ""\n')
             install(self.path)
-            self.assertFalse(config.exists())
+            self.assertIn(DEFAULT_BLOCK, config.read_text())
+            self.assertNotIn('AddModule', config.read_text())
             self.assertTrue(discovered.exists())
 
     def test_legacy_registration_repair_keeps_user_preferences(self):
@@ -164,7 +167,7 @@ class DispatcherTests(unittest.TestCase):
             config.write_text(original + '# Akousousin user speech module\n'
                               f'AddModule "akousousin" "{launcher}" ""\n')
             install(self.path)
-            self.assertEqual(config.read_text(), original)
+            self.assertEqual(config.read_text(), original + DEFAULT_BLOCK)
 
     def test_system_explicit_modules_and_includes_are_preserved(self):
         system = self.root / 'system/speechd.conf'
@@ -192,6 +195,74 @@ class DispatcherTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'another installation'):
                     action(self.path)
                 self.assertEqual(config.read_text(), original)
+
+    def test_install_selects_aks_but_refresh_and_uninstall_preserve_later_user_choices(self):
+        with self.registration_environment():
+            config = self.root / 'config/speech-dispatcher/speechd.conf'
+            config.parent.mkdir(parents=True)
+            original = 'DefaultModule "espeak-ng"\nDefaultRate 7\n'
+            config.write_text(original)
+            install(self.path)
+            self.assertTrue(config.read_text().endswith(DEFAULT_BLOCK))
+            config.write_text(config.read_text() + 'DefaultModule "pico"\n')
+            install(self.path, set_default=False)
+            self.assertTrue(config.read_text().endswith('DefaultModule "pico"\n'))
+            uninstall(self.path)
+            self.assertEqual(config.read_text(), original + 'DefaultModule "pico"\n')
+
+    def test_shortcut_setup_prepares_and_verifies_speech_before_requesting_portal(self):
+        from akousousin_app.selection_controller import Selection
+        events = []
+        with self.registration_environment(), \
+                patch('akousousin_app.speech_dispatcher.configure', side_effect=lambda p: events.append('install')), \
+                patch('akousousin_app.speech_dispatcher.verify_reading_engine', side_effect=lambda p: events.append('verify')), \
+                patch('akousousin_app.selection_shortcuts.ReadingShortcuts') as shortcuts:
+            shortcuts.return_value.start.side_effect = lambda: events.append('portal')
+            Selection(self.path).enable()
+        self.assertEqual(events, ['install', 'verify', 'portal'])
+
+    def test_failed_speech_setup_never_requests_shortcut_permission(self):
+        from akousousin_app.selection_controller import Selection
+        from akousousin_app.speech_dispatcher import RestartError
+        with self.registration_environment(), \
+                patch('akousousin_app.speech_dispatcher.configure', side_effect=RestartError('no service')), \
+                patch('akousousin_app.selection_shortcuts.ReadingShortcuts') as shortcuts:
+            with self.assertRaises(RestartError):
+                Selection(self.path).enable()
+            shortcuts.assert_not_called()
+
+    def test_missing_voice_does_not_change_dispatcher_or_enable_shortcuts(self):
+        from akousousin_app.selection_controller import Selection
+        settings.save(self.path, dict(settings.DEFAULTS))
+        with self.registration_environment(), \
+                patch('akousousin_app.speech_dispatcher.configure') as configure, \
+                patch('akousousin_app.selection_shortcuts.ReadingShortcuts') as shortcuts:
+            with self.assertRaisesRegex(RuntimeError, 'Voice library'):
+                Selection(self.path).enable()
+            configure.assert_not_called()
+            shortcuts.assert_not_called()
+
+    def test_ready_speech_is_verified_without_restarting_dispatcher(self):
+        from akousousin_app.speech_dispatcher import prepare_reading
+        with self.registration_environment():
+            install(self.path)
+            with patch('akousousin_app.speech_dispatcher.verify_reading_engine') as verify, \
+                    patch('akousousin_app.speech_dispatcher.configure') as configure:
+                prepare_reading(self.path)
+            verify.assert_called_once_with(self.path)
+            configure.assert_not_called()
+
+    def test_engine_verification_requires_aks_and_the_selected_voice(self):
+        from akousousin_app.speech_dispatcher import verify_reading_engine
+        with patch('socket.socket'), patch('akousousin_app.selection.SpeechClient') as client:
+            client.return_value.command.side_effect = [
+                ['216-espeak-ng', '216-akousousin', '216 OK'], ['200 OK'],
+                ['200-english en-US none', '200 OK']]
+            verify_reading_engine(self.path)
+            self.assertEqual(client.return_value.command.call_args_list[1].args[0], 'SET SELF OUTPUT_MODULE akousousin')
+            client.return_value.command.side_effect = [['216-espeak-ng', '216 OK']]
+            with self.assertRaisesRegex(RuntimeError, 'not available'):
+                verify_reading_engine(self.path)
 
     def test_orca_ssml_entities_and_marks_are_not_spoken(self):
         text = '<speak><mark name="0:5"/>Hello &amp; café.<mark name="__spd_0"/><mark name="14:19"/> Next.</speak>'

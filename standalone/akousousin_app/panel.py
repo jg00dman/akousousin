@@ -439,7 +439,7 @@ class Panel:
         ttk.Button(frame, text='Uninstall & restore', command=self.uninstall).pack(side='left', padx=4)
         if os.name != 'nt':
             frame = self.card(page, 'Native Linux speech — Speech Dispatcher')
-            ttk.Label(frame, text='Install your distribution’s Speech Dispatcher first. Registration preserves your default module. Installing or removing support restarts your user Speech Dispatcher and interrupts current speech. Then choose your voice in Orca.',
+            ttk.Label(frame, text='Install your distribution’s Speech Dispatcher first. Installation selects Akousousin as the default engine and keeps eSpeak available; removal restores the previous default. Installing or removing support restarts your user Speech Dispatcher and interrupts current speech. Then choose your voice in Orca.',
                       wraplength=780, style='Card.TLabel').pack(anchor='w', pady=8)
             ttk.Button(frame, text='Install Speech Dispatcher support', command=lambda: self.dispatcher_install(False)).pack(side='left', padx=4)
             ttk.Button(frame, text='Remove Speech Dispatcher support', command=lambda: self.dispatcher_install(True)).pack(side='left', padx=4)
@@ -535,7 +535,7 @@ class Panel:
         self.reading_scroll = ScrollArea(self.pages['Read selection'])
         self.reading_scroll.pack(fill='both', expand=True)
         frame = self.card(self.reading_scroll.inner, 'Read selected text / Stop')
-        ttk.Label(frame, text='Highlight text in an application, then press the global shortcut to read it. Press it again to stop only this reading. Speech Dispatcher support must be installed in Settings.',
+        ttk.Label(frame, text='Highlight text in an application, then press the global shortcut to read it. Press it again to stop only this reading. Enabling shortcuts sets up Speech Dispatcher support and selects Akousousin first. Download or import a voice before enabling. Setup may briefly interrupt current speech.',
                   style='Card.TLabel', wraplength=760).pack(anchor='w', pady=8)
         ttk.Label(frame, text='Enable the reading shortcuts below and approve them in KDE. Suggested keys: Ctrl+Alt+R for selected text and Ctrl+Alt+Shift+R for copied text. KDE lets you change them or resolve conflicts. No microphone or keyboard-injection permission is needed.',
                   style='Card.TLabel', wraplength=760).pack(anchor='w', pady=8)
@@ -545,7 +545,7 @@ class Panel:
             self.worker(lambda: runtime.call(self.path, {'command': name, **options}),
                         lambda result: self.reading_state.set(result['state']))
         row = ttk.Frame(frame, style='Card.TFrame'); row.pack(fill='x', pady=8)
-        ttk.Button(row, text='Enable global reading shortcuts', command=lambda: command('selection-shortcuts-enable')).pack(side='left', padx=3)
+        ttk.Button(row, text='Enable global reading shortcuts', command=self.enable_reading_shortcuts).pack(side='left', padx=3)
         ttk.Button(row, text='Disable shortcuts', command=lambda: command('selection-shortcuts-disable')).pack(side='left', padx=3)
         ttk.Label(frame, textvariable=self.reading_shortcuts, style='Card.TLabel', wraplength=760).pack(anchor='w', pady=8)
         row = ttk.Frame(frame, style='Card.TFrame'); row.pack(fill='x', pady=8)
@@ -559,6 +559,18 @@ class Panel:
             from .selection import install_action
             self.worker(lambda: install_action(self.path), lambda _: self.status.set('Desktop action installed. Assign its shortcut in Plasma Keyboard settings.'))
         ttk.Button(frame, text='Install optional desktop shortcut action', command=install_action).pack(anchor='w', pady=8)
+
+    def enable_reading_shortcuts(self):
+        from .speech_dispatcher import prepare_reading
+        if self.busy or not self.save():
+            return
+        self.reading_state.set('Preparing Akousousin speech support…')
+        def enable():
+            # Local preparation preserves copyable RestartError recovery details.
+            # The controller also checks prerequisites for non-panel callers.
+            prepare_reading(self.path)
+            return runtime.call(self.path, {'command': 'selection-shortcuts-enable'})
+        self.worker(enable, lambda result: self.reading_state.set(result['state']))
 
     def check_updates(self):
         if self.busy or not updates.is_appimage():
