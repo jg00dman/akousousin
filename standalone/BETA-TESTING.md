@@ -3,9 +3,9 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
-# Testing the 0.7.0b1 beta
+# Testing the 0.7.0b2 beta
 
-Download the [Linux AppImage or Windows ZIP](https://github.com/jg00dman/akousousin/releases/tag/standalone-beta-0.7.0b1-42318174159-1).
+Download the [Linux AppImage or Windows ZIP](https://github.com/jg00dman/akousousin/releases).
 Linux trial users need only the AppImage; source archives are separate downloads.
 Quit the previous instance from its tray, replace the application and launch it.
 Keep existing preferences and models; a configuration reset is not required.

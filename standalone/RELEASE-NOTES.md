@@ -3,76 +3,44 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
-# Akousousin 0.7.0b1 beta
+# Akousousin 0.7.0b2 beta
 
-This beta adds global Read selected text / Stop and explicit Read copied text
-shortcuts on KDE Wayland. Suggested keys are Ctrl+Alt+R and Ctrl+Alt+Shift+R; KDE
-asks for approval and handles conflicts. Reading is owned by the resident
-controller, stops without cancelling other clients, and continues with the panel
-closed. Configure now reuses a single control panel. Native/Wine selection
-availability remains a beta testing item.
+This beta fixes Speech Dispatcher registration hiding eSpeak and makes the final
+steps of an AppImage update visible. It adds optional weekly update checks and
+stable/beta selection for AppImage installations.
 
-It consolidates private Wine SAPI installation, on-demand voice downloads,
-byte-based download progress and the latest desktop control fixes. Left-click
-toggles dictation; right-click opens the tray menu. Speech Dispatcher restart uses
-host libraries, and panel errors provide selectable text, copyable recovery
-commands and separate diagnostics.
+- **Keep eSpeak available:** AKS joins Speech Dispatcher's discovered engine list
+  instead of disabling discovery with its own AddModule entry. Existing explicit
+  engine lists and defaults are preserved. After updating, choose **Settings →
+  Install Speech Dispatcher support** again to repair an earlier AKS-only
+  registration, then reopen Orca preferences. AKS and eSpeak should both appear.
+- **Clear update progress:** download percentages describe only the download.
+  Verification and installation show activity indicators, followed by an explicit
+  restarting warning for three seconds. The relaunched panel briefly confirms
+  the installed version. Failed registration still restores the previous image.
+- **Optional weekly checks:** the Updates page provides Check for updates weekly
+  and Show beta testing updates. Notifications offer Update now… (opens Updates
+  for review) and Remind me later (one week), and wait while AKS is speaking or
+  dictating. Nothing is installed automatically.
+- **Stable/beta selection:** beta installations initially include beta updates;
+  stable installations initially exclude them. Saved choices survive upgrades.
+  Turning betas off never downgrades an installed beta: it waits for a newer
+  stable release. Manual checks respect the same choice.
+- **AppImage-only self-updating:** controls require an AppImage package marker and
+  an executable APPIMAGE launch path. Other formats defer to their software
+  manager or installation source. Voice and Whisper downloads remain independent.
 
-It provides experimental local Whisper voice input on Linux while retaining
-SAPI speech output on Wine/native Windows and native Linux Speech Dispatcher.
-Voice input is not a SAPI recognition engine.
+The default AppImage contains runtimes but no Piper voice or Whisper model
+weights. Existing downloads, preferences and selected voices are retained. New
+users can download the starter voice (about 64 MB) or choose another voice;
+Whisper Small is a separate one-time download (about 485 MB).
 
-- Multilingual Small runs locally on CPU with int8 inference and neural VAD.
-  Model weights download once or can be imported, and remain in the XDG-aware
-  `~/.local/share/Akousousin/models/whisper/` cache across application updates.
-  The AppImage does not bundle Whisper model weights.
-- Voice Input provides named microphone selection, searchable language selection,
-  automatic language display, Enable/Disable voice input and diagnostic recording.
-  An approved shortcut can load recognition again after it was disabled.
-- KDE Wayland dictation uses desktop shortcut/keyboard permission portals and
-  guarded Unicode insertion. Toggle and push-to-talk are supported. Initial
-  permission setup is still required; other compositors are not supported.
-- The tray menu is Start/Stop Speech, Start/Stop Dictation, Default Voice,
-  Configure, Quit. Left-click toggles dictation; right-click opens the menu.
-- Normal Quit closes owned control panels, speech/input workers and portal
-  sessions. The updater preserves its own panel only until replacement completes.
-- Voice Input and Settings gain wheel scrolling; the voice library exposes its
-  scrollbars. Window sizing better accommodates smaller screens.
-- Ready feedback uses two 300 Hz tones at the maximum clean PCM level, plus a
-  separate sound test. The gain is about +10.3 dB over the earlier trial; a full
-  +12 dB at its former amplitude would clip.
+Global reading shortcuts, KDE Wayland dictation, private Wine SAPI installation,
+Linux Speech Dispatcher output and Windows SAPI output remain available. This is
+still a beta: native/Wine selection availability and wider desktop behaviour need
+user testing. SAPI recognition, Windows microphone capture and comprehensive
+control-panel accessibility are not implemented.
 
-Speech output, idle model unloading, the voice library and verified Linux AppImage
-updates remain available. The reviewed LJSpeech starter voice downloads on demand
-or can be included in an offline build. Licences, checksums and matching sources
-accompany the packages. Native Windows
-microphone capture and SAPI recognition are not implemented.
-
-Whisper may infer punctuation, but spoken commands such as “question mark” can
-remain literal. Automatic document proofing-language tagging is not implemented.
-Recognition accuracy, non-Latin insertion and wider desktop interactions still
-need testing. User testing confirmed microphone capture and insertion into Kate
-and a chat text field on Kubuntu 26.04 Wayland. See COMPATIBILITY.md and TESTING.md,
-and the [Voice Input guide](https://github.com/jg00dman/akousousin/blob/main/recognition/PANEL-TESTING.md).
-
-## Updates on main after 0.7.0b1
-
-AppImage launches provide optional weekly checking, stable/beta selection,
-Update now / Remind me later notifications and explicit verification, installation
-and restart progress. Disabling beta updates never downgrades an installed beta.
-Other distribution formats defer application updates to their package manager or
-installation source. Model downloads remain independent.
-
-Speech Dispatcher registration preserves automatic engine discovery, keeping
-eSpeak and AKS available together. Reinstall support to repair an earlier AKS-only
-registration, then reopen Orca preferences. Existing explicit engine lists and
-defaults are retained.
-
-## On-demand voice packaging
-
-Default builds download Piper voices on first use instead of bundling LJSpeech.
-Overview offers the reviewed starter voice or Voice library; existing downloads
-and voice choices survive upgrades. Optional offline builds can include LJSpeech.
-Voice, Whisper and AppImage downloads show byte-based progress in the panel and
-a download indicator with details in the tray. Unknown-size and verification
-stages show activity without a fabricated percentage.
+See the [beta checklist](https://github.com/jg00dman/akousousin/blob/main/standalone/BETA-TESTING.md)
+and [installation guide](https://github.com/jg00dman/akousousin/blob/main/standalone/README.md).
+Licences, matching sources and checksums accompany the packages.

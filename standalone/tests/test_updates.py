@@ -28,7 +28,7 @@ class UpdateTests(unittest.TestCase):
         resource_root = patch.object(updates.resources, 'root', return_value=self.root)
         resource_root.start(); self.addCleanup(resource_root.stop)
         self.payload = b'verified replacement image'
-        self.update = {'version': '0.7.0b1', 'url': updates.RELEASES + '/download/v0.7.0b1/Akousousin-x86_64.AppImage',
+        self.update = {'version': __version__, 'url': updates.RELEASES + '/download/v0.7.0b1/Akousousin-x86_64.AppImage',
                        'size': len(self.payload), 'sha256': hashlib.sha256(self.payload).hexdigest()}
 
     def release(self, tag, **options):

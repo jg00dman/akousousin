@@ -204,7 +204,7 @@ jobs:
             gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$tag" -f sha="$GITHUB_SHA"
           fi
           gh release create "$tag" --verify-tag --repo "$GITHUB_REPOSITORY" \
-            --prerelease --title "Akousousin standalone beta ${GITHUB_RUN_ID}" \
+            --prerelease --title "Akousousin ${version}" \
             --notes-file standalone/RELEASE-NOTES.md release-assets/*
       - name: Show the released control panel on the repository homepage
         if: github.ref == 'refs/heads/main'
