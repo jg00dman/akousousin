@@ -103,7 +103,16 @@ class Panel:
         self.downloads = DownloadView(self.root)
         footer = ttk.Frame(self.root, padding=(22, 12))
         footer.pack(fill='x')
-        ttk.Label(footer, textvariable=self.status, wraplength=760).pack(side='left')
+        self.status_field = ttk.Entry(footer, textvariable=self.status, state='readonly')
+        self.status_field.pack(side='left', fill='x', expand=True)
+        def select_status(event):
+            self.status_field.selection_range(0, 'end')
+            return 'break'
+        self.status_field.bind('<Control-a>', select_status)
+        self.status_field.bind('<Control-A>', select_status)
+        def copy_status():
+            self.root.clipboard_clear(); self.root.clipboard_append(self.status.get())
+        ttk.Button(footer, text='Copy', command=copy_status).pack(side='left', padx=8)
         self.progress = ttk.Progressbar(footer, mode='indeterminate', length=110)
         self.progress.pack(side='right')
         self.show('Overview')
@@ -605,7 +614,7 @@ class Panel:
         ttk.Button(row, text='Read copied text / Stop', command=lambda: command('selection-toggle', clipboard=True)).pack(side='left', padx=3)
         ttk.Button(row, text='Stop reading', command=lambda: command('selection-stop')).pack(side='left', padx=3)
         ttk.Label(frame, textvariable=self.reading_state, style='Card.TLabel', wraplength=760).pack(anchor='w', pady=8)
-        ttk.Label(frame, text='Wayland needs wl-clipboard; X11 needs xclip. Some Wine applications do not publish selected text: copy it and use Read copied text explicitly. AKS does not silently read a stale clipboard.',
+        ttk.Label(frame, text='The Linux AppImage bundles clipboard readers for Wayland and X11. Some Wine applications do not publish selected text: copy it and use Read copied text explicitly. AKS does not silently read a stale clipboard.',
                   style='Card.TLabel', wraplength=760).pack(anchor='w', pady=8)
         def install_action():
             from .selection import install_action

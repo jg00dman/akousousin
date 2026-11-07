@@ -19,6 +19,7 @@ which are licensed under **LGPL-2.1-or-later**.
 | Wine patches in `patches/` and `scripts/ci/previous-piper-http.patch` | Their existing Wine/source terms and notices apply |
 | Piper voice catalogue and its upstream catalogue notice in `standalone/resources/` | The retained upstream MIT declaration applies; individual models have their own terms |
 | Python, Whisper and AppImage runtime licence files | Their respective upstream terms and notices apply |
+| Bundled wl-clipboard and xclip readers in the Linux AppImage | Upstream GPL-3.0-or-later and GPL-2.0-or-later respectively; original COPYING files, pinned source snapshots and build instructions accompany the distribution |
 | External libraries, Wine, Piper, models and other downloaded dependencies | Their own upstream licences; see the notices accompanying each distribution |
 
 File-level SPDX identifiers identify the applicable licence for original source.

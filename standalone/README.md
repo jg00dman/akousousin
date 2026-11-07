@@ -7,7 +7,7 @@ SPDX-FileCopyrightText: 2026 John Goodman
 
 **akousousin:** *The unified neural speech engine for Linux, implementing Microsoft SAPI and Speech Dispatcher, based on Piper and Whisper.*
 
-The 0.7.0b5 beta implements SAPI text-to-speech using Piper, native Linux Speech
+The 0.7.0b6 beta implements SAPI text-to-speech using Piper, native Linux Speech
 Dispatcher output and experimental local Whisper voice input on Linux. SAPI
 recognition and native Windows microphone capture are not implemented. See the
 [compatibility table](../COMPATIBILITY.md) for the implemented capabilities.
@@ -304,8 +304,9 @@ again after quitting/restarting AKS; KDE retains the chosen key assignments.
 
 Speech Dispatcher support can also be installed separately in Settings. eSpeak
 remains available, and removing AKS support restores the earlier default.
-Wayland needs `wl-clipboard` (`sudo apt install wl-clipboard` on Kubuntu); X11
-needs `xclip`. Highlight text and press the shortcut once to read, again to stop
+The Linux AppImage bundles `wl-paste` (wl-clipboard) for Wayland and `xclip`
+for X11 with their private libraries; no system installation is needed on SteamOS.
+Source and distro packages need the corresponding system tools. Highlight text and press the shortcut once to read, again to stop
 only that reader. Some Wine applications do not publish a primary selection;
 copy their text and use the separate copied-text shortcut. There is no silent
 fallback to stale clipboard contents. Native and Wine/Logos selection availability
@@ -317,3 +318,6 @@ shortcut settings. It can start AKS when needed. `--read-selection`,
 `--read-clipboard`, `--stop-reading` and `--selection-status` control the same
 resident reader. Quit closes its shortcut session and stops its owned reading.
 Configure reuses the existing control panel and requests activation of that window.
+
+The control-panel status bar is selectable: use Ctrl+A/Ctrl+C or its Copy button
+to include the full status in a support report.

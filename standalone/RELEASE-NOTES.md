@@ -3,12 +3,18 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
-# Akousousin 0.7.0b5 beta
+# Akousousin 0.7.0b6 beta
 
-This trial adds voice deletion, simpler speed controls, cancellation improvements
-and per-phrase timing information for investigating the reported SteamOS delays.
+This trial bundles clipboard readers for SteamOS and makes status text copyable.
+It also includes the voice controls and speech timing improvements from beta 5.
 The reported Orca and dictation performance issues are not declared fully resolved.
 
+- **Bundled clipboard readers:** the Linux AppImage includes wl-paste and xclip
+  plus their private libraries. Host clipboard packages are no longer required.
+  X11 sessions use xclip even when an inherited Wayland socket is present. Desktop
+  clipboard permissions and application selection support still apply.
+- **Copyable status:** select the status text and press Ctrl+C, or use Copy.
+  Long messages can be copied in full.
 - **Delete installed voices:** select an installed entry in Voice library and
   choose Delete voice…. Confirmation is required. Managed downloaded files are
   deleted; imported originals are retained. Default/language preferences are

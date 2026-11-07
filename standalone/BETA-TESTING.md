@@ -3,7 +3,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
-# Testing the 0.7.0b5 beta
+# Testing the 0.7.0b6 beta
 
 Download the [Linux AppImage or Windows ZIP](https://github.com/jg00dman/akousousin/releases).
 Linux trial users need only the AppImage; source archives are separate downloads.
@@ -66,7 +66,7 @@ tagging are not implemented. SAPI support remains text-to-speech only.
 1. Install/import a voice. Enabling reading shortcuts should automatically
    install Speech Dispatcher support, select AKS and verify the voice before KDE
    asks for shortcut permission. Test a missing voice or failed restart: shortcuts
-   should remain disabled with a useful recovery instruction. On Wayland install `wl-clipboard`; X11's optional desktop action uses `xclip`.
+   should remain disabled with a useful recovery instruction. The AppImage bundles Wayland and X11 clipboard readers; test without installing host clipboard packages.
 2. In Read selection choose Enable global reading shortcuts. Approve or change
    Ctrl+Alt+R (selected text) and Ctrl+Alt+Shift+R (copied text) in KDE.
 3. Highlight text in Kate, focus the document and press the selected-text shortcut.
@@ -111,3 +111,6 @@ Report application version, OS/desktop, input/output device, assigned shortcut,
 steps and copyable technical details. Screenshots of the setup pages are in the
 [screenshot gallery](../docs/SCREENSHOTS.md). Broader control-panel accessibility
 and Orca compliance are future work; no accessibility redesign is included here.
+
+Check that long status messages can be selected and copied, including with the
+status bar’s Copy button. Test selected and copied Unicode text on the target desktop.

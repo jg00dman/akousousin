@@ -19,6 +19,40 @@ class SelectionTests(unittest.TestCase):
         self.root = Path(temp.name)
         self.path = self.root / 'settings.json'
 
+    def test_bundled_reader_is_used_when_steamos_has_no_host_package(self):
+        resource = self.root / 'resources'
+        helper = resource / 'helpers/wl-paste/bin/wl-paste'
+        helper.parent.mkdir(parents=True)
+        helper.write_text('#!/bin/sh\n'); helper.chmod(0o755)
+        calls = []
+        def read(command, **options):
+            calls.append((command, options['env']))
+            options['stdout'].write('Selected café'.encode())
+            return subprocess.CompletedProcess(command, 0)
+        with patch.dict(os.environ, {'WAYLAND_DISPLAY':'wayland-test', 'XDG_SESSION_TYPE':'wayland',
+                                     'LD_LIBRARY_PATH':'/appimage/python/libs', 'LD_PRELOAD':'/old/lib.so'}), \
+                patch.object(selection.resources, 'root', return_value=resource), \
+                patch.object(selection.shutil, 'which', return_value=None), \
+                patch.object(selection.subprocess, 'run', side_effect=read):
+            self.assertEqual(selection.selected_text(), 'Selected café')
+        self.assertEqual(calls[0][0][0], str(helper))
+        self.assertIn('--primary', calls[0][0])
+        self.assertEqual(calls[0][1]['LD_LIBRARY_PATH'], str(resource/'helpers/wl-paste/lib'))
+        self.assertNotIn('LD_PRELOAD', calls[0][1])
+
+    def test_x11_session_uses_xclip_even_with_inherited_wayland_display(self):
+        calls = []
+        def read(command, **options):
+            calls.append(command)
+            options['stdout'].write(b'Copied text')
+            return subprocess.CompletedProcess(command, 0)
+        with patch.dict(os.environ, {'WAYLAND_DISPLAY':'old-gamescope', 'DISPLAY':':0', 'XDG_SESSION_TYPE':'x11'}), \
+                patch.object(selection.shutil, 'which', return_value='/usr/bin/xclip') as which, \
+                patch.object(selection.subprocess, 'run', side_effect=read):
+            self.assertEqual(selection.selected_text(clipboard=True), 'Copied text')
+        which.assert_called_once_with('xclip')
+        self.assertEqual(calls[0], ['/usr/bin/xclip', '-selection', 'clipboard', '-o'])
+
     def test_reader_refuses_unexpected_espeak_selection_before_speaking(self):
         client = selection.SpeechClient(Mock())
         sent = []

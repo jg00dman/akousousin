@@ -146,6 +146,9 @@ if sys.platform != 'win32':
             for item in value:
                 system_notices(item)
     system_notices(analysis)
+    from bundle_clipboard import bundle as bundle_clipboard
+    for library in bundle_clipboard(PACKAGE, SOURCE, BUILD, notices, fetch):
+        system_notices(('clipboard helper dependency', library, 'BINARY'))
 
 # The tray uses PNG artwork, not Qt PDF rendering. Do not ship an unused
 # PDF plugin and its large Chromium-derived renderer.

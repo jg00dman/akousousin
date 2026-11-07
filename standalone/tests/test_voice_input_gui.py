@@ -40,6 +40,17 @@ class VoiceInputGuiTests(unittest.TestCase):
                 panel = Panel(path, offer_install=False)
                 try:
                     panel.root.update()
+                    status = 'A long diagnostic status — ready for copying.'
+                    panel.status.set(status)
+                    panel.root.update()
+                    panel.status_field.focus_force()
+                    panel.status_field.event_generate('<Control-a>'); panel.root.update()
+                    panel.status_field.event_generate('<Control-c>'); panel.root.update()
+                    self.assertEqual(panel.root.clipboard_get(), status)
+                    copy = next(child for child in panel.status_field.master.winfo_children()
+                                if isinstance(child, ttk.Button) and child.cget('text') == 'Copy')
+                    copy.invoke(); panel.root.update()
+                    self.assertEqual(panel.root.clipboard_get(), status)
                     self.assertEqual(panel.speed.get(), 1.25)
                     panel.speed_slider.set(2.123456)
                     panel.root.update()

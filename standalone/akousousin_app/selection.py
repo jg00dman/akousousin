@@ -13,7 +13,7 @@ import tempfile
 import threading
 import time
 
-from . import runtime, settings
+from . import runtime, settings, resources
 
 MAX_TEXT = 1024 * 1024
 
@@ -22,22 +22,32 @@ def host_environment():
     return runtime.host_environment()
 
 
+def clipboard_reader(name, package):
+    environment = host_environment()
+    tool = shutil.which(name)
+    if not tool:
+        folder = resources.root() / 'helpers' / name
+        bundled = folder / 'bin' / name
+        if bundled.is_file() and os.access(bundled, os.X_OK):
+            tool = str(bundled)
+            environment['LD_LIBRARY_PATH'] = str(folder / 'lib')
+    if not tool:
+        raise RuntimeError(f'Clipboard helper unavailable. Install {package} or use an AppImage that bundles it.')
+    return tool, environment
+
+
 def selected_text(clipboard=False):
-    if os.environ.get('WAYLAND_DISPLAY'):
-        tool = shutil.which('wl-paste')
-        if not tool:
-            raise RuntimeError('Install wl-clipboard to read selections on Wayland.')
+    if os.environ.get('WAYLAND_DISPLAY') and os.environ.get('XDG_SESSION_TYPE') != 'x11':
+        tool, environment = clipboard_reader('wl-paste', 'wl-clipboard')
         command = [tool, '--type', 'text', '--no-newline'] + ([] if clipboard else ['--primary'])
     elif os.environ.get('DISPLAY'):
-        tool = shutil.which('xclip')
-        if not tool:
-            raise RuntimeError('Install xclip to read selections on X11.')
+        tool, environment = clipboard_reader('xclip', 'xclip')
         command = [tool, '-selection', 'clipboard' if clipboard else 'primary', '-o']
     else:
         raise RuntimeError('Read selection requires a Wayland or X11 desktop session.')
     with tempfile.TemporaryFile() as output:
         result = subprocess.run(command, stdout=output, stderr=subprocess.PIPE,
-                                timeout=3, env=host_environment(), check=False)
+                                timeout=3, env=environment, check=False)
         output.seek(0, 2)
         if output.tell() > MAX_TEXT:
             raise ValueError('The selection is too large. Select a smaller passage.')
