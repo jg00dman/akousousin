@@ -68,3 +68,21 @@ class GateTests(unittest.TestCase):
         module.task.join(2)
         self.assertNotIn(b'705-AUDIO', module.output.getvalue())
         self.assertIn(b'703 STOP', module.output.getvalue())
+
+    @patch('akousousin_app.speech_dispatcher.runtime.call')
+    @patch('akousousin_app.speech_dispatcher.fetch')
+    def test_delayed_watcher_does_not_cancel_new_unmuted_request(self, fetch, wake):
+        fetch.return_value = audio(22050)
+        module = Module(self.path, output=io.BytesIO()); module.audio_server = True
+        stopped = threading.Event()
+        watcher = threading.Thread(target=module.watch_gate, args=(stopped,))
+        watcher.start()
+        try:
+            self.lease.acquire(); self.lease.close()
+            module.speak('New speech after unmuting')
+            module.task.join(2)
+            stopped.wait(.08)
+            self.assertIn(b'705-AUDIO', module.output.getvalue())
+            self.assertNotIn(b'703 STOP', module.output.getvalue())
+        finally:
+            stopped.set(); watcher.join(1)

@@ -105,6 +105,7 @@ class Module:
         self.audio_server = False
         self.busy = False
         self.audio_pending = False
+        self.request_gate = speech_gate.snapshot(path)
 
     def send(self, text):
         with self.lock:
@@ -177,13 +178,14 @@ class Module:
                 return
             self.cancelled = threading.Event()
             self.request_id = uuid.uuid4().hex
+            self.request_gate = speech_gate.snapshot(self.path)
+            self.audio_pending = False
             self.busy = True
             self.send('200 OK SPEAKING\n')
-            self.task = threading.Thread(target=self.render, args=(text, dict(self.options, character=character), self.cancelled, self.request_id), daemon=True)
+            self.task = threading.Thread(target=self.render, args=(text, dict(self.options, character=character), self.cancelled, self.request_id, self.request_gate), daemon=True)
             self.task.start()
 
-    def render(self, text, options, cancelled, request_id):
-        gate = speech_gate.snapshot(self.path)
+    def render(self, text, options, cancelled, request_id, gate):
         try:
             runtime.call(self.path, {'command': 'wake'})
             with self.lock:
@@ -280,6 +282,11 @@ class Module:
             current = speech_gate.snapshot(self.path)
             if current[0] and not previous[0] or current[1] != previous[1]:
                 with self.lock:
+                    # A watcher can observe a short session after it ended.
+                    # Never cancel speech accepted after that session.
+                    if not speech_gate.suppressed(self.path, self.request_gate) or self.request_gate[0]:
+                        previous = current
+                        continue
                     busy = self.busy
                     pending = self.audio_pending
                     self.audio_pending = False
