@@ -7,6 +7,8 @@ from . import selection
 
 class Selection:
     def __init__(self, path):
+        from .desktop_preferences import DesktopPreferences
+        self.preferences = DesktopPreferences(path)
         self.path = path
         self.lock = threading.RLock()
         self.thread = self.shortcuts = None
@@ -52,8 +54,10 @@ class Selection:
         prepare_reading(self.path)
         self.disable()
         from .selection_shortcuts import ReadingShortcuts
-        self.shortcuts = ReadingShortcuts(self.toggle, self.stop)
-        self.shortcuts.start()
+        shortcuts = ReadingShortcuts(self.toggle, self.stop, approved=lambda: self.preferences.update(
+            condition=lambda: not self.closed and not shortcuts.stopping.is_set(), reading_enabled=True))
+        self.shortcuts = shortcuts
+        shortcuts.start()
 
     def disable(self):
         if self.shortcuts:

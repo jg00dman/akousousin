@@ -209,6 +209,7 @@ class WarmupTests(unittest.TestCase):
         self.assertTrue(consumed)
         self.assertGreaterEqual(elapsed, 0)
         self.assertFalse(model.transcribe.call_args.kwargs['vad_filter'])
+        self.assertEqual(model.transcribe.call_args.kwargs['temperature'], 0.0)
         self.assertEqual(model.transcribe.call_args.kwargs['language'], 'en')
         self.assertEqual(float(model.transcribe.call_args.args[0].max()), 0)
 

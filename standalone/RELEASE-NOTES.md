@@ -3,6 +3,32 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
+# Akousousin 0.7.0b9 dictation trial
+
+- Use a single deterministic Whisper decoding attempt instead of retrying at
+  multiple temperatures. Noisy fixtures reproduce substantial retry overhead;
+  this does not guarantee accurate recognition of noise or a fixed response time.
+- Add speech-end-to-recognition and speech-end-to-first/last-key diagnostics.
+  Speech end is estimated from the last above-threshold captured frame. Key
+  timestamps measure KDE acknowledgements, not application rendering. Copy
+  transcript includes the new measurements. Reliable acknowledged delivery and
+  Stop cancellation are preserved; shortcut defaults and Orca STOP are unchanged.
+
+- Remember approved dictation and reading shortcut enablement across AKS restarts.
+  Quit closes the live sessions while preserving that preference; explicit Disable
+  prevents restoration. Startup restores shortcuts without starting recording.
+- Request persistent RemoteDesktop keyboard permission on portal version 2 and
+  save/rotate its restore token in a private settings sidecar. Desktop backends
+  without restoration support may still prompt. Existing users must enable once
+  after upgrading because earlier builds did not save this preference.
+
+Trial checks: quit the old instance, enable each desired shortcut once, then
+quit/relaunch and reboot. Verify shortcuts restore without opening the panel and
+without recording automatically. Test first and subsequent dictation phrases in
+Kate and the browser; copy all timings and compare with perceived delay. Stop
+while recognition is pending and confirm no later typing occurs. Desktop prompt
+restoration and visible text latency require testing on the target KDE system.
+
 # Akousousin 0.7.0b8 beta
 
 This trial addresses corrupted text, repeating keys and insertion continuing

@@ -15,6 +15,15 @@ QUIET = b'\0' * FRAME_BYTES
 
 
 class AudioInputTests(unittest.TestCase):
+    def test_capture_origin_is_last_voiced_frame_not_processing_time(self):
+        endpoint = Endpoint()
+        for index in range(25):
+            endpoint.feed(VOICE, captured_at=10 + index * .02)
+        for index in range(25):
+            endpoint.feed(QUIET, captured_at=10.5 + index * .02)
+        self.assertAlmostEqual(endpoint.last_metadata['speech_ended_at'], 10.48)
+        self.assertIsNone(endpoint.last_speech_at)
+
     def test_silence_is_bounded_and_emits_nothing(self):
         endpoint = Endpoint()
         for _ in range(5000):

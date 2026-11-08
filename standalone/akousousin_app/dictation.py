@@ -169,7 +169,7 @@ class Dictation:
                 def insert(text, destination, cancelled):
                     if self.insert is None:
                         raise RuntimeError('Keyboard session is unavailable')
-                    self.insert(text, destination, cancelled)
+                    return self.insert(text, destination, cancelled)
                 insertion = InsertionQueue(insert, insertion_cancelled, completed)
             mute = speech_gate.Lease(self.path)
             mute.acquire()
@@ -211,9 +211,12 @@ class Dictation:
                     else:
                         session_language = result['language']
                 endpoint = getattr(self.capture, 'segment_info', {}).pop(id(audio), {})
+                speech_ended_at = endpoint.pop('speech_ended_at', None)
                 result['timings'] = {**endpoint, 'audio_seconds': round(audio_seconds, 3),
                                      'queue_seconds': round(max(0, began - queued), 3),
                                      'recognition_seconds': round(time.monotonic() - began, 3)}
+                if speech_ended_at is not None:
+                    result['timings']['speech_end_to_recognition_seconds'] = round(max(0, time.monotonic() - speech_ended_at), 3)
                 if self.cancelled.is_set():
                     raise InterruptedError('Dictation cancelled')
                 if not result['text']:
@@ -237,7 +240,7 @@ class Dictation:
                 elif insertion:
                     item = self.store_result(result, 'queued')
                     try:
-                        insertion.submit(item, result['text'], target)
+                        insertion.submit(item, result['text'], target, speech_ended_at=speech_ended_at)
                     except InterruptedError:
                         self.update_result(item, output='retained', error='Dictation stopped before insertion')
                     except Exception as failure:

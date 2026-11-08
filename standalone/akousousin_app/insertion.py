@@ -15,8 +15,8 @@ class InsertionQueue:
         self.thread = threading.Thread(target=self._run, daemon=True)
         self.thread.start()
 
-    def submit(self, record, text, target):
-        item = (record, text, target, time.monotonic())
+    def submit(self, record, text, target, speech_ended_at=None):
+        item = (record, text, target, time.monotonic(), speech_ended_at)
         deadline = time.monotonic() + 30
         while True:
             if self.cancelled.is_set():
@@ -33,27 +33,33 @@ class InsertionQueue:
     def _run(self):
         while not self.stopping.is_set() or not self.queue.empty():
             try:
-                record, text, target, queued = self.queue.get(timeout=.05)
+                record, text, target, queued, speech_ended_at = self.queue.get(timeout=.05)
             except queue.Empty:
                 continue
             began = time.monotonic()
             error = self.error
             outcome = 'retained' if error else 'inserted'
+            delivery = None
             try:
                 if self.cancelled.is_set():
                     outcome = 'retained'
                     error = 'Dictation stopped before insertion'
                 elif not error:
-                    self.insert(text, target, self.cancelled)
+                    delivery = self.insert(text, target, self.cancelled)
             except Exception as failure:
                 error = str(failure)
                 if not self.cancelled.is_set():
                     self.error = error
                 outcome = 'retained'
             finally:
-                self.completed(record, outcome, error, {
+                timings = {
                     'insertion_queue_seconds': round(began - queued, 3),
-                    'insertion_seconds': round(time.monotonic() - began, 3)})
+                    'insertion_seconds': round(time.monotonic() - began, 3)}
+                if outcome == 'inserted' and speech_ended_at is not None and isinstance(delivery, dict):
+                    for key in ('first_key_at', 'last_key_at'):
+                        if key in delivery:
+                            timings['speech_end_to_' + key.replace('_at', '') + '_seconds'] = round(max(0, delivery[key] - speech_ended_at), 3)
+                self.completed(record, outcome, error, timings)
                 self.queue.task_done()
 
     def finish(self):

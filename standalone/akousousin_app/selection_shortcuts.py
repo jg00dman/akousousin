@@ -16,7 +16,8 @@ class ReadingShortcuts(PortalRequests):
     actions = {'read-selection': ('Read selected text / Stop', 'CTRL+ALT+R'),
                'read-clipboard': ('Read copied text / Stop', 'CTRL+ALT+SHIFT+R')}
 
-    def __init__(self, activate, cancel):
+    def __init__(self, activate, cancel, approved=lambda: None):
+        self.approved = approved
         self.activate, self.cancel = activate, cancel
         self.enabled = False
         self.status = 'Reading shortcuts are disabled'
@@ -79,10 +80,11 @@ class ReadingShortcuts(PortalRequests):
         actions = [[key, {'description': Variant('s', title), 'preferred_trigger': Variant('s', trigger)}]
                    for key, (title, trigger) in self.actions.items()]
         result = await self.request(interface, 'BindShortcuts', '', 'oa(sa{sv})s', [self.shortcuts, actions, ''])
-        if 'shortcuts' not in result:
+        if 'shortcuts' not in result or not any(key in self.actions for key, fields in result['shortcuts'].value):
             raise RuntimeError('No reading shortcuts were approved')
         self.bindings(result['shortcuts'].value)
         self.enabled = True
+        self.approved()
 
     def bindings(self, values):
         self.descriptions = {key: fields['trigger_description'].value or 'Unassigned'

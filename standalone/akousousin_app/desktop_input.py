@@ -155,7 +155,8 @@ class PortalRequests:
 
 
 class Desktop(PortalRequests):
-    def __init__(self, dictation, config, directory, identity):
+    def __init__(self, dictation, config, directory, identity, preferences=None):
+        self.preferences = preferences
         self.dictation, self.config = dictation, config
         self.directory = Path(directory)
         self.name = 'org.akousousin.Dictation.p' + identity
@@ -312,18 +313,39 @@ class Desktop(PortalRequests):
         if bindings is None or not any(item[0] == 'dictate' for item in bindings.value):
             raise RuntimeError('No dictation shortcut was approved')
         self.shortcut_description = bindings.value[0][1].get('trigger_description', Variant('s', 'Desktop shortcut')).value
-        self.status = 'Approve keyboard input in the desktop dialog…'
-        self.remote = await self.session('org.freedesktop.portal.RemoteDesktop')
-        await self.request('org.freedesktop.portal.RemoteDesktop', 'SelectDevices', '', 'o', [self.remote],
-                           {'types': Variant('u', 1)})
-        result = await self.request('org.freedesktop.portal.RemoteDesktop', 'Start', '', 'os', [self.remote, ''])
-        if not result.get('devices') or not result['devices'].value & 1:
-            raise RuntimeError('Keyboard permission was not granted')
+        await self.keyboard_permission()
         self.enabled = True
         self.status = 'Desktop dictation enabled — ' + self.shortcut_description
         if self.start_requested:
             self.start_requested = False
             await self.toggle_recording()
+
+    async def keyboard_permission(self):
+        from dbus_next import Variant
+        self.status = 'Approve keyboard input in the desktop dialog…'
+        self.remote = await self.session('org.freedesktop.portal.RemoteDesktop')
+        options = {'types': Variant('u', 1)}
+        if self.preferences is not None:
+            try:
+                version = (await self.call('org.freedesktop.portal.Desktop', '/org/freedesktop/portal/desktop',
+                    'org.freedesktop.DBus.Properties', 'Get', 'ss',
+                    ['org.freedesktop.portal.RemoteDesktop', 'version']))[0].value
+            except RuntimeError:
+                version = 1
+            if version >= 2:
+                options['persist_mode'] = Variant('u', 2)
+                token = self.preferences.load()['restore_token']
+                if token:
+                    # Restore tokens are single-use; Start supplies the replacement.
+                    self.preferences.update(restore_token='')
+                    options['restore_token'] = Variant('s', token)
+        await self.request('org.freedesktop.portal.RemoteDesktop', 'SelectDevices', '', 'o', [self.remote], options)
+        result = await self.request('org.freedesktop.portal.RemoteDesktop', 'Start', '', 'os', [self.remote, ''])
+        if not result.get('devices') or not result['devices'].value & 1:
+            raise RuntimeError('Keyboard permission was not granted')
+        if self.preferences is not None:
+            self.preferences.update(condition=lambda: not self.stopping.is_set(), dictation_enabled=True,
+                                    restore_token=result.get('restore_token', Variant('s', '')).value)
 
     async def confirm_focus(self, require_window=True):
         identifier = uuid.uuid4().hex
@@ -410,6 +432,7 @@ class Desktop(PortalRequests):
         await self.confirm_focus()
         self.guard.check(target)
         symbols = keysyms(text)
+        delivery = {}
         for index, symbol in enumerate(symbols):
             if cancelled.is_set():
                 raise InterruptedError('Text insertion cancelled')
@@ -421,6 +444,7 @@ class Desktop(PortalRequests):
                         raise InterruptedError('Text insertion stopped')
                     await asyncio.wait({press}, timeout=.02)
                 await press
+                delivery.setdefault('first_key_at', time.monotonic())
                 await asyncio.sleep(.005)
             finally:
                 if not press.done():
@@ -430,11 +454,13 @@ class Desktop(PortalRequests):
                 release = asyncio.create_task(self.release_keysym(symbol))
                 try:
                     await asyncio.shield(release)
+                    delivery['last_key_at'] = time.monotonic()
                 except asyncio.CancelledError:
                     await release
                     raise
             # Let the target consume the pair before another keysym remaps it.
             await asyncio.sleep(.010)
+        return delivery
 
     def insert(self, text, target, cancelled):
         if not self.loop or not self.enabled:

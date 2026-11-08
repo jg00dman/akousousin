@@ -265,12 +265,24 @@ WAV transcription retains neural VAD. The read-only transcript display retains u
 Ctrl+A selects its contents; Copy transcript includes measurements.
 Per-phrase timing shows voiced duration,
 endpoint wait, audio length, recognition queue wait, recognition time, insertion
-queue wait and insertion time. Recent transcripts stay in memory; numeric timings
+queue wait and insertion time. Timings also include estimated speech end to
+recognition and first/last acknowledged key.
+The speech end estimate uses the last above-threshold microphone frame; key
+acknowledgements cannot measure when another application renders its text.
+Recent transcripts stay in memory; numeric timings
 and outcomes are logged without dictated text. Spoken punctuation commands are
 not interpreted.
 
 On KDE Wayland, enable desktop shortcuts and approve KDE's shortcut and keyboard
 input dialogs. The proposed shortcut is Ctrl+Alt+Space, subject to KDE approval.
+After successful approval, AKS remembers that desktop dictation is enabled and
+restores its shortcut session when AKS next starts. This does not turn on the
+microphone or load the model. RemoteDesktop portal version 2 supports requesting
+persistent keyboard permission; AKS saves and rotates the returned restore token.
+The desktop may still ask again if it does not support restoration or permission
+has been revoked. Explicitly disabling desktop shortcuts clears that choice and
+the token; quitting AKS preserves them. State is kept in a private
+`settings.desktop.json` file beside `settings.json`.
 Toggle listening is the default; push-to-talk is also available. A registered
 shortcut can enable/load voice input again after it was disabled. Tray Start
 Dictation can initiate permission setup when necessary. Stop/Cancel controls remain
@@ -308,8 +320,10 @@ disabled. Already-working support is verified without restarting the daemon.
 Approve or change the suggested Ctrl+Alt+R (selected text) and Ctrl+Alt+Shift+R
 (copied text) bindings in KDE. The panel shows the bindings KDE actually assigned.
 These shortcuts work while another application has focus and while the panel is
-closed, as long as AKS remains running in the tray. Enable the shortcut session
-again after quitting/restarting AKS; KDE retains the chosen key assignments.
+closed, as long as AKS remains running in the tray. After successful approval AKS
+remembers enablement and restores the session on its next launch; KDE retains the
+chosen key assignments. Explicit Disable prevents automatic restoration. Builds
+that did not save enablement require enabling once after upgrading.
 
 Speech Dispatcher support can also be installed separately in Settings. eSpeak
 remains available, and removing AKS support restores the earlier default.

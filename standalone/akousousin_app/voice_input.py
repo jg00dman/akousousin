@@ -340,7 +340,10 @@ class VoiceInput:
                         names = [('speech_seconds', 'Speech'), ('endpoint_wait_seconds', 'endpoint'),
                                  ('audio_seconds', 'Audio'), ('queue_seconds', 'queued'),
                                  ('recognition_seconds', 'recognition'), ('insertion_queue_seconds', 'typing queued'),
-                                 ('insertion_seconds', 'insertion')]
+                                 ('insertion_seconds', 'insertion'),
+                                 ('speech_end_to_recognition_seconds', 'end → recognised'),
+                                 ('speech_end_to_first_key_seconds', 'end → first key'),
+                                 ('speech_end_to_last_key_seconds', 'end → last key')]
                         self.result.insert('end', ' · '.join(f"{label}: {item['timings'][key]:.2f}s"
                             for key, label in names if key in item['timings']) + '\n')
                     if item.get('error'):

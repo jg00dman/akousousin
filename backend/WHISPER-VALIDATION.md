@@ -204,3 +204,33 @@ timeout/death paths retain bounded termination and recovery.
 The cloud workspace lacks a running PipeWire microphone/KDE session, Wine and
 Windows. A passing backend suite must not be presented as validation of these
 platform behaviors. Remaining implementation is listed in RECOGNITION.md.
+
+## Bounded decoding trial (2026-11-08, cloud VM)
+
+Interactive decoding now uses temperature 0 only instead of the library's
+multi-temperature fallback schedule. This bounds repeated decoding attempts,
+not total inference time. Segment temperatures, log probabilities and compression
+ratios are logged without transcript text. Warm-up uses the same policy.
+
+On the same AMD EPYC cloud environment, CPU int8, two threads, three runs of
+the existing five-second fixtures gave these medians (seconds):
+
+| Fixture/model | Default fallback | Single temperature |
+| --- | ---: | ---: |
+| English / base.en | 0.663 | 0.662 |
+| German / base | 0.678 | 0.774 |
+
+Text was identical between policies on these two fixtures. These clean clips
+do not reproduce the reported 9.32-second repetitive result. There is no measured
+general speed improvement here; noisy-input accuracy and tail latency still need
+testing, as does speech-end-to-visible-text latency on SteamOS.
+
+Follow-up difficult-input check on the same VM used seed 20261108 to add Gaussian
+noise with RMS equal to each five-second fixture's RMS (0 dB SNR). One run per
+policy: English default 2.139 s versus single-temperature 0.588 s; German 2.923 s
+versus 0.711 s. Default output segments reported temperature 1.0, demonstrating
+fallback; bounded output used 0.0. English text was identical but incorrect in
+both. German text differed and was incorrect in both. Noise-only English produced
+the same hallucinated "You" with both policies (0.687/0.654 s); German noise-only
+was empty (0.581/0.613 s). This is a tail-latency probe, not an accuracy benchmark
+or evidence that the user's 9.32-second phrase had this particular cause.

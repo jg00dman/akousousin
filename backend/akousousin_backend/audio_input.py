@@ -47,12 +47,15 @@ class Endpoint:
         self.preroll = deque(maxlen=12)
         self.frames = []
         self.quiet = self.voiced = 0
+        self.last_speech_at = None
 
-    def feed(self, frame):
+    def feed(self, frame, captured_at=None):
         if len(frame) != FRAME_BYTES:
             raise ValueError('Expected a complete 20 ms frame')
         level = audioop.rms(frame, 2)
         speech = level >= max(self.threshold, self.noise_floor * 2 + 40)
+        if speech:
+            self.last_speech_at = time.monotonic() if captured_at is None else captured_at
         if not speech:
             self.noise_floor = .98 * self.noise_floor + .02 * level
         if not self.frames:
@@ -70,7 +73,8 @@ class Endpoint:
 
     def finish(self):
         metadata = {'speech_seconds': round(self.voiced * .02, 3),
-                    'endpoint_wait_seconds': round(self.quiet * .02, 3)}
+                    'endpoint_wait_seconds': round(self.quiet * .02, 3),
+                    'speech_ended_at': self.last_speech_at}
         trim = max(0, self.quiet - 5)
         frames = self.frames[:-trim] if trim else self.frames
         pcm = b''.join(frames) if self.voiced >= 10 else None
@@ -177,7 +181,9 @@ class Capture:
                     buffer.extend(data)
                     while len(buffer) >= FRAME_BYTES:
                         frame = bytes(buffer[:FRAME_BYTES]); del buffer[:FRAME_BYTES]
-                        self.put(self.endpoint.feed(frame))
+                        # Estimate frame arrival from the read timestamp and remaining PCM.
+                        captured_at = last_audio - len(buffer) / (RATE * 2)
+                        self.put(self.endpoint.feed(frame, captured_at))
                 if not self.cancelled.is_set() and not was_paused:
                     self.put(self.endpoint.finish())
         except Exception as error:

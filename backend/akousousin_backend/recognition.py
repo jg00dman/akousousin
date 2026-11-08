@@ -98,12 +98,22 @@ def prepare_model_assets(config):
                 models.install(selected, root=config['root'])
 
 
+def decode_options():
+    """One deterministic decoding attempt for interactive dictation.
+
+    The library default retries uncertain output at several temperatures, which
+    can multiply latency on noisy input. Keep warm-up and live decoding aligned.
+    """
+    return dict(task='transcribe', beam_size=1, temperature=0.0,
+                condition_on_previous_text=False)
+
+
 def warm_model(model):
     """Force lazy encoder/decoder initialization before announcing Ready."""
     import numpy as np
     began = time.monotonic()
     segments, _ = model.transcribe(np.zeros(RATE, dtype=np.float32), language='en',
-        task='transcribe', vad_filter=False, beam_size=1, condition_on_previous_text=False)
+        vad_filter=False, **decode_options())
     # faster-whisper evaluates lazily; construction alone is not a warm-up.
     for _ in segments:
         pass
@@ -128,10 +138,15 @@ def worker(pipe, config):
                 pipe.send((False, 'Unsupported language for selected model'))
                 continue
             samples = np.frombuffer(request['pcm'], dtype='<i2').astype(np.float32) / 32768.0
-            segments, info = model.transcribe(samples, language=language, task='transcribe',
-                                               vad_filter=not request.get('endpointed', False), beam_size=1,
-                                               condition_on_previous_text=False)
-            text = ''.join(segment.text for segment in segments).strip()
+            segments, info = model.transcribe(samples, language=language,
+                                               vad_filter=not request.get('endpointed', False),
+                                               **decode_options())
+            decoded = list(segments)
+            text = ''.join(segment.text for segment in decoded).strip()
+            logging.info('Whisper decoding model=%s segments=%d temperatures=%s log_probabilities=%s compression_ratios=%s',
+                         active, len(decoded), [segment.temperature for segment in decoded],
+                         [segment.avg_logprob for segment in decoded],
+                         [segment.compression_ratio for segment in decoded])
             pipe.send((True, {'text': text, 'language': info.language if text else None,
                               'language_probability': info.language_probability if text and not language else None,
                               'language_source': 'explicit' if language else 'detected',

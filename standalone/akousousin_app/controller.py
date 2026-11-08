@@ -15,6 +15,8 @@ from .service import Service
 
 class Sessions:
     def __init__(self, path):
+        from .desktop_preferences import DesktopPreferences
+        self.desktop_preferences = DesktopPreferences(path)
         self.path = path
         self.service = Service(path)
         self.owners = {}
@@ -34,6 +36,22 @@ class Sessions:
         self.input_owned = False
         self._speech_check = 0
         self._speaking = False
+
+    def restore_desktop_shortcuts(self):
+        """Restore opted-in sessions, never start microphone capture on launch."""
+        with self.lock:
+            try:
+                saved = self.desktop_preferences.load()
+            except Exception as error:
+                self.error = 'Could not restore desktop shortcuts: ' + str(error)
+                return
+            for key, command in (('dictation_enabled', 'stt-desktop-enable'),
+                                 ('reading_enabled', 'selection-shortcuts-enable')):
+                if saved[key] and not self.closed:
+                    try:
+                        self.request({'command': command})
+                    except Exception as error:
+                        self.error = 'Could not restore desktop shortcuts: ' + str(error)
 
     def speaking(self):
         now = time.monotonic()
@@ -72,7 +90,7 @@ class Sessions:
                 self.desktop.close()
             from .desktop_input import Desktop
             identity = runtime.name(self.path).split('/')[-1].replace('-', '_')
-            self.desktop = Desktop(self.input, lambda: settings.load(self.path), runtime.directory(), identity)
+            self.desktop = Desktop(self.input, lambda: settings.load(self.path), runtime.directory(), identity, preferences=self.desktop_preferences)
             self.input.insert = self.desktop.insert
             self.input_owned = True
             self.desktop.start(listen=request.get('listen', False))
@@ -90,6 +108,7 @@ class Sessions:
             if self.desktop:
                 self.desktop.close()
                 self.desktop = None
+            self.desktop_preferences.update(dictation_enabled=False, restore_token='')
             self.input.insert = None
             self.input.cancel()
         elif operation != 'stt-status':
@@ -121,6 +140,7 @@ class Sessions:
                     self.selection.enable()
                 elif operation == 'selection-shortcuts-disable':
                     self.selection.disable()
+                    self.desktop_preferences.update(reading_enabled=False)
                 elif operation != 'selection-status':
                     raise ValueError('Unknown reading command')
                 return self.selection.status()
@@ -455,6 +475,8 @@ def run(path):
     timer.timeout.connect(tick)
     timer.start(1500)
     tick()
+    if graphical and os.name != 'nt' and os.environ.get('WAYLAND_DISPLAY'):
+        QTimer.singleShot(0, lambda: threading.Thread(target=state.restore_desktop_shortcuts, daemon=True).start())
     try:
         app.exec()
     finally:
