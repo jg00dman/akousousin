@@ -266,8 +266,19 @@ class VoiceInputGuiTests(unittest.TestCase):
                 picker.choose()
                 self.assertEqual(page.language.get(), '')
                 page.shared({'busy': False, 'state': 'Ready', 'desktop': {'state': 'Disabled'}, 'sequence': 1,
-                             'results': [{'text': 'Guten Morgen', 'language': 'de', 'language_source': 'detected', 'output': 'displayed'}]})
+                             'results': [{'text': 'Guten Morgen', 'language': 'de', 'language_source': 'detected', 'output': 'displayed',
+                                          'timings': {'recognition_seconds': .67, 'insertion_seconds': .07}}]})
                 self.assertIn('German (de)', page.detected_language.get())
+                page.result.focus_force(); root.update()
+                page.result.event_generate('<Control-a>'); root.update()
+                self.assertEqual(page.result.get('sel.first', 'sel.last'), page.result.get('1.0', 'end-1c'))
+                before = page.result.get('1.0', 'end-1c')
+                page.result.insert('1.0', '888888')
+                self.assertEqual(page.result.get('1.0', 'end-1c'), before)
+                self.assertEqual(str(page.result.cget('state')), 'disabled')
+                page.copy()
+                self.assertIn('recognition: 0.67s', root.clipboard_get())
+                self.assertIn('insertion: 0.07s', root.clipboard_get())
                 self.assertEqual(page.language.get(), '', 'Detection must not silently lock the language')
                 with patch('akousousin_backend.recognition.ready_cue') as cue:
                     page.sound_button.invoke()

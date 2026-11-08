@@ -4,7 +4,7 @@ import queue
 import subprocess
 import sys
 import time
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 import unittest
 
 from akousousin_backend.audio_input import Capture, Endpoint, FRAME_BYTES
@@ -111,7 +111,8 @@ class StreamingProcessTests(unittest.TestCase):
         original = subprocess.Popen
         def launch(args, **kwargs):
             return original([sys.executable, '-c', 'import time; time.sleep(10)'], **kwargs)
-        capture = Capture()
+        ended = Mock()
+        capture = Capture(ended=ended)
         with patch('akousousin_backend.audio_input.subprocess.Popen', side_effect=launch):
             capture.start()
             time.sleep(.05)
@@ -119,4 +120,5 @@ class StreamingProcessTests(unittest.TestCase):
             capture.close()
         self.assertLess(time.monotonic() - start, 1)
         self.assertFalse(capture.ready.is_set())
+        ended.assert_called_once()
         self.assertTrue(capture.done.is_set())

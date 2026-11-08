@@ -98,13 +98,27 @@ def prepare_model_assets(config):
                 models.install(selected, root=config['root'])
 
 
+def warm_model(model):
+    """Force lazy encoder/decoder initialization before announcing Ready."""
+    import numpy as np
+    began = time.monotonic()
+    segments, _ = model.transcribe(np.zeros(RATE, dtype=np.float32), language='en',
+        task='transcribe', vad_filter=False, beam_size=1, condition_on_previous_text=False)
+    # faster-whisper evaluates lazily; construction alone is not a warm-up.
+    for _ in segments:
+        pass
+    return round(time.monotonic() - began, 3)
+
+
 def worker(pipe, config):
     try:
         import numpy as np
         from faster_whisper import WhisperModel
         prepare_model_assets(config)
         model, active, fallback = load_model(config['root'], config['model'], WhisperModel, config.get('cpu_threads'))
-        pipe.send((True, {'model': active, 'fallback': fallback}))
+        warmed = warm_model(model)
+        pipe.send((True, {'model': active, 'fallback': fallback, 'warmup_seconds': warmed,
+                          'cpu_threads': config.get('cpu_threads', cpu_threads())}))
         while True:
             request = pipe.recv()
             if request is None:
@@ -121,7 +135,8 @@ def worker(pipe, config):
             pipe.send((True, {'text': text, 'language': info.language if text else None,
                               'language_probability': info.language_probability if text and not language else None,
                               'language_source': 'explicit' if language else 'detected',
-                              'model': active, 'fallback': fallback}))
+                              'model': active, 'fallback': fallback,
+                              'cpu_threads': config.get('cpu_threads', cpu_threads())}))
     except (EOFError, BrokenPipeError):
         pass
     except Exception:
@@ -196,7 +211,7 @@ def cue_audio():
     """Cached waveform; independent of model and playback state."""
     output = io.BytesIO()
     samples = []
-    for duration, tone in ((.10, True), (.09, False), (.10, True)):
+    for duration, tone in ((.20, False), (.10, True), (.09, False), (.10, True)):
         count = int(RATE * duration)
         for index in range(count):
             envelope = min(1, index / 160, (count - index) / 160)
@@ -209,7 +224,7 @@ def cue_audio():
 
 
 def ready_cue():
-    """Two short 300 Hz tones through stdin/memory, before accepted audio."""
+    """Two 300 Hz tones with device-wake lead-in, before accepted audio."""
     data = cue_audio()
     if os.name == 'nt':
         import winsound
@@ -219,22 +234,36 @@ def ready_cue():
     if player is None:
         raise RuntimeError('Ready sound needs paplay or pw-play; disable the sound to continue')
     environment = host_environment()
+    arguments = [player]
     if Path(player).name == 'paplay':
-        arguments = [player, '--raw', '--format=s16le', '--rate=16000', '--channels=1',
-                     '--client-name=Akousousin', '--stream-name=Dictation ready', '--property=media.role=event']
+        arguments += ['--client-name=Akousousin', '--stream-name=Dictation ready',
+                      '--property=media.role=event']
+    # Seekable WAV avoids raw-stdin playback differences. On Linux this is an
+    # anonymous RAM file, with no temporary file left on disk.
+    memory = False
+    if hasattr(os, 'memfd_create'):
+        try:
+            sound = os.fdopen(os.memfd_create('akousousin-ready'), 'w+b')
+            memory = True
+        except OSError:
+            sound = tempfile.NamedTemporaryFile(suffix='.wav')
     else:
-        arguments = [player, '--format=s16', '--rate=16000', '--channels=1', '-']
-    try:
-        subprocess.run(arguments, input=read_wav(data), check=True, timeout=5,
-                       env=environment, capture_output=True)
-    except subprocess.CalledProcessError as error:
-        detail = error.stderr or ''
-        if isinstance(detail, bytes):
-            detail = detail.decode(errors='replace')
-        detail = detail.strip()[:400]
-        raise RuntimeError('Ready sound playback failed' + (': ' + detail if detail else '')) from error
-    except subprocess.TimeoutExpired as error:
-        raise RuntimeError('Ready sound playback timed out; check the system default output') from error
+        sound = tempfile.NamedTemporaryFile(suffix='.wav')
+    with sound:
+        sound.write(data); sound.flush(); sound.seek(0)
+        filename = '/proc/self/fd/' + str(sound.fileno()) if memory else sound.name
+        options = {'pass_fds': (sound.fileno(),)} if memory else {}
+        try:
+            subprocess.run([*arguments, filename], check=True, timeout=5,
+                           env=environment, capture_output=True, **options)
+        except subprocess.CalledProcessError as error:
+            detail = error.stderr or ''
+            if isinstance(detail, bytes):
+                detail = detail.decode(errors='replace')
+            detail = detail.strip()[:400]
+            raise RuntimeError('Ready sound playback failed' + (': ' + detail if detail else '')) from error
+        except subprocess.TimeoutExpired as error:
+            raise RuntimeError('Ready sound playback timed out; check the system default output') from error
 
 
 def capture(seconds, source=None, on_ready=None, cue=None):

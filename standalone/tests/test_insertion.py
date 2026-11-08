@@ -45,4 +45,4 @@ class InsertionTests(unittest.TestCase):
         worker.queue.put(({}, 'one', 'window', 0))
         worker.finish()
         self.assertEqual(calls, [])
-        self.assertEqual(results[0][1], 'cancelled')
+        self.assertEqual(results[0][1], 'retained')

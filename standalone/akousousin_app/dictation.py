@@ -36,6 +36,7 @@ class Dictation:
         self.lock = threading.RLock()
         self.cancelled = threading.Event()
         self.finished = threading.Event()
+        self.insertion_cancelled = threading.Event()
         self.state = 'Not loaded'
         self.phase = 'unloaded'
         self.sequence = 0
@@ -75,6 +76,7 @@ class Dictation:
                 raise BlockingIOError('Dictation is already active')
             self.cancelled = threading.Event()
             self.finished = threading.Event()
+            self.insertion_cancelled = threading.Event()
             config = settings.load(self.path)
             self.enabled = True
             self.change('Loading model…', 'loading')
@@ -102,6 +104,8 @@ class Dictation:
             if missing:
                 self.change('Downloading ' + model + ', then loading…', 'loading')
                 self.recognizer.startup_timeout = 900
+            if not missing:
+                self.change('Preparing recognition — please wait for Ready', 'loading')
             self.recognizer.start(self.cancelled)
             self.recognizer.model['download_missing'] = False
         if self.cancelled.is_set():
@@ -112,7 +116,9 @@ class Dictation:
     def capture_changed(self, text):
         with self.lock:
             if self.phase != 'error' and not self.cancelled.is_set():
-                self.change(text, 'listening')
+                if self.finished.is_set() and self.insertion_cancelled.is_set():
+                    return
+                self.change(text, 'transcribing' if text.startswith('Recording stopped:') else 'listening')
 
     def store_result(self, result, outcome, error=None):
         with self.lock:
@@ -120,14 +126,21 @@ class Dictation:
             record = dict(result, text=result['text'][:4000], sequence=self.sequence,
                           output=outcome, error=error)
             self.results.append(record)
-            self.results = self.results[-5:]
-            if outcome == 'displayed':
+            self.results = self.results[-200:]
+            self.trim_history()
+            if outcome in ('displayed', 'retained'):
                 log_timings(record)
             return record
+
+    def trim_history(self):
+        # Leave room for status metadata inside the existing 1 MiB IPC limit.
+        while len(json.dumps(self.results).encode('utf-8')) > 512 * 1024:
+            self.results.pop(0)
 
     def update_result(self, record, **values):
         with self.lock:
             record.update(values)
+            self.trim_history()
             self.sequence += 1
             if values.get('output') in ('inserted', 'retained', 'cancelled'):
                 log_timings(record)
@@ -137,6 +150,7 @@ class Dictation:
         pending = None
         mute = None
         insertion = None
+        insertion_cancelled = self.insertion_cancelled
         session_language = config['stt_language'] or None
         deferred = target is not None and config.get('stt_mode', 'toggle') == 'push-to-talk'
         try:
@@ -150,20 +164,20 @@ class Dictation:
                 def completed(item, outcome, error, timings):
                     self.update_result(item, output=outcome, error=error,
                                        timings={**item.get('timings', {}), **timings})
-                    if error and self.capture:
+                    if error and not insertion_cancelled.is_set() and insertion_cancelled is self.insertion_cancelled and self.capture:
                         self.capture.cancel()
                 def insert(text, destination, cancelled):
                     if self.insert is None:
                         raise RuntimeError('Keyboard session is unavailable')
                     self.insert(text, destination, cancelled)
-                insertion = InsertionQueue(insert, self.cancelled, completed)
+                insertion = InsertionQueue(insert, insertion_cancelled, completed)
             mute = speech_gate.Lease(self.path)
             mute.acquire()
             self.change('Opening microphone…', 'opening')
             self.capture = (self.capture_factory or Capture)(
                 source=config['stt_source'] or None, cue=ready_cue if config['stt_beep'] else None,
                 paused=lambda: False, changed=self.capture_changed,
-                threshold=config.get('stt_threshold', 250))
+                threshold=config.get('stt_threshold', 250), ended=mute.close)
             self.capture.start()
             while True:
                 if insertion and insertion.error:
@@ -218,10 +232,14 @@ class Dictation:
                             for key, value in result['timings'].items()})
                     self.last_activity = time.monotonic()
                     continue
-                if insertion:
+                if insertion and insertion_cancelled.is_set():
+                    self.store_result(result, 'retained', 'Dictation stopped before insertion')
+                elif insertion:
                     item = self.store_result(result, 'queued')
                     try:
                         insertion.submit(item, result['text'], target)
+                    except InterruptedError:
+                        self.update_result(item, output='retained', error='Dictation stopped before insertion')
                     except Exception as failure:
                         self.update_result(item, output='retained', error=str(failure))
                         raise
@@ -261,18 +279,24 @@ class Dictation:
         finally:
             if timer:
                 timer.cancel()
+            insertion_cancelled.set()
             try:
                 if self.capture:
                     self.capture.close()
                     self.capture = None
-                if insertion:
-                    insertion.finish()
             finally:
-                if mute:
-                    mute.close()
+                try:
+                    if insertion:
+                        insertion.finish()
+                finally:
+                    if mute:
+                        mute.close()
             self.last_activity = time.monotonic()
 
-    def finish(self):
+    def finish(self, cancel_insertion=False):
+        if cancel_insertion:
+            self.insertion_cancelled.set()
+            self.change('Recording stopped — remaining speech will only appear in the transcript', 'transcribing')
         if self.phase == 'loading':
             self.cancelled.set()
         self.finished.set()
@@ -280,6 +304,7 @@ class Dictation:
             self.capture.finish()
 
     def cancel(self):
+        self.insertion_cancelled.set()
         self.cancelled.set()
         self.finished.set()
         if self.capture:

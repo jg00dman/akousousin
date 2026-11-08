@@ -81,7 +81,8 @@ class Endpoint:
 
 class Capture:
     def __init__(self, source=None, cue=None, paused=lambda: False, changed=lambda state: None,
-                 threshold=250):
+                 threshold=250, ended=lambda: None):
+        self.ended = ended
         self.source, self.cue = source, cue
         self.paused, self.changed = paused, changed
         self.endpoint = Endpoint(threshold)
@@ -181,6 +182,7 @@ class Capture:
                     self.put(self.endpoint.finish())
         except Exception as error:
             self.error = str(error)
+            self.changed('Recording stopped: ' + self.error)
         finally:
             selector.close()
             if process is not None:
@@ -191,6 +193,10 @@ class Capture:
                     except subprocess.TimeoutExpired:
                         process.kill(); process.wait(timeout=2)
                 process.stdout.close()
+            try:
+                self.ended()
+            except Exception as error:
+                self.error = self.error or str(error)
             self.done.set()
 
     def close(self):

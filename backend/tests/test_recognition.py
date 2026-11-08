@@ -165,10 +165,12 @@ class RecognitionTests(unittest.TestCase):
 class ReadyCueTests(unittest.TestCase):
     def test_two_tones_use_host_libraries_and_identifiable_stream(self):
         def play(arguments, **options):
-            pcm = options['input']
-            self.assertIn('--rate=16000', arguments)
-            self.assertIn('--channels=1', arguments)
+            with wave.open(arguments[-1], 'rb') as sound:
+                self.assertEqual((sound.getframerate(), sound.getnchannels()), (16000, 1))
+                pcm = sound.readframes(sound.getnframes())
             samples = struct.unpack('<' + 'h' * (len(pcm) // 2), pcm)
+            self.assertEqual(set(samples[:3200]), {0})
+            samples = samples[3200:]
             self.assertGreater(max(samples[:1600]), 32000)
             self.assertLessEqual(max(samples), 32767)
             crossings = sum(samples[i] <= 0 < samples[i + 1] for i in range(1599))
@@ -192,6 +194,23 @@ class ReadyCueTests(unittest.TestCase):
         with patch('shutil.which', return_value=None):
             with self.assertRaisesRegex(RuntimeError, 'paplay or pw-play'):
                 ready_cue()
+
+
+class WarmupTests(unittest.TestCase):
+    def test_ready_warmup_consumes_lazy_inference_without_network_or_user_text(self):
+        from akousousin_backend.recognition import warm_model
+        model = Mock()
+        consumed = []
+        def segments():
+            consumed.append(True)
+            yield Mock(text='discard this warm-up output')
+        model.transcribe.return_value = (segments(), Mock())
+        elapsed = warm_model(model)
+        self.assertTrue(consumed)
+        self.assertGreaterEqual(elapsed, 0)
+        self.assertFalse(model.transcribe.call_args.kwargs['vad_filter'])
+        self.assertEqual(model.transcribe.call_args.kwargs['language'], 'en')
+        self.assertEqual(float(model.transcribe.call_args.args[0].max()), 0)
 
 
 class AssetActivationTests(unittest.TestCase):

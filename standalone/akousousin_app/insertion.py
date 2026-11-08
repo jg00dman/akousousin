@@ -41,11 +41,14 @@ class InsertionQueue:
             outcome = 'retained' if error else 'inserted'
             try:
                 if self.cancelled.is_set():
-                    outcome = 'cancelled'
+                    outcome = 'retained'
+                    error = 'Dictation stopped before insertion'
                 elif not error:
                     self.insert(text, target, self.cancelled)
             except Exception as failure:
-                error = self.error = str(failure)
+                error = str(failure)
+                if not self.cancelled.is_set():
+                    self.error = error
                 outcome = 'retained'
             finally:
                 self.completed(record, outcome, error, {

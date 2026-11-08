@@ -89,22 +89,63 @@ class InsertionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(desktop.notify_keysym.await_count, 2)
         self.assertEqual(desktop.notify_keysym.call_args.args[-1], 0)
 
-    async def test_keyboard_writes_are_ordered_with_one_final_reply(self):
-        from types import SimpleNamespace
-        from dbus_next import MessageFlag
+    async def test_keyboard_events_each_wait_for_portal_acknowledgement(self):
         desktop = self.desktop()
         desktop.notify_keysym = Desktop.notify_keysym.__get__(desktop)
-        desktop.bus = SimpleNamespace(send=AsyncMock())
         desktop.call = AsyncMock(return_value=[])
         await desktop.type_text('abc', desktop.guard.snapshot(), threading.Event())
         desktop.confirm_focus.assert_awaited_once()
-        self.assertEqual(desktop.bus.send.await_count, 7)
-        messages = [call.args[0] for call in desktop.bus.send.await_args_list]
-        self.assertTrue(all(message.flags & MessageFlag.NO_REPLY_EXPECTED for message in messages))
-        self.assertEqual([message.body[-2:] for message in messages],
-                         [[97,1], [97,0], [98,1], [98,0], [99,1], [99,0], [32,1]])
-        desktop.call.assert_awaited_once()
-        self.assertEqual(desktop.call.call_args.args[-1][-2:], [32,0])
+        self.assertEqual(desktop.call.await_count, 8)
+        self.assertEqual([call.args[-1][-2:] for call in desktop.call.await_args_list],
+                         [[97,1], [97,0], [98,1], [98,0], [99,1], [99,0], [32,1], [32,0]])
+
+    async def test_cancel_during_press_still_waits_for_release(self):
+        desktop = self.desktop()
+        pressed, released = asyncio.Event(), asyncio.Event()
+        async def notify(symbol, state, **kwargs):
+            if state:
+                pressed.set()
+                await asyncio.Event().wait()
+            else:
+                await asyncio.sleep(.01)
+                released.set()
+        desktop.notify_keysym = notify
+        task = asyncio.create_task(desktop.type_text('abc', desktop.guard.snapshot(), threading.Event()))
+        await pressed.wait()
+        task.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await task
+        self.assertTrue(released.is_set())
+
+    async def test_stop_event_interrupts_pending_press_and_releases_key(self):
+        desktop = self.desktop()
+        pressed, released = asyncio.Event(), asyncio.Event()
+        cancelled = threading.Event()
+        events = []
+        async def notify(symbol, state, **kwargs):
+            events.append((symbol, state))
+            if state:
+                pressed.set()
+                await asyncio.Event().wait()
+            else:
+                released.set()
+        desktop.notify_keysym = notify
+        task = asyncio.create_task(desktop.type_text('abc', desktop.guard.snapshot(), cancelled))
+        await pressed.wait()
+        cancelled.set()
+        with self.assertRaises(InterruptedError):
+            await asyncio.wait_for(task, 1)
+        self.assertTrue(released.is_set())
+        self.assertEqual(events, [(97,1), (97,0)])
+
+    async def test_release_failure_closes_keyboard_session(self):
+        desktop = self.desktop()
+        desktop.notify_keysym = AsyncMock(side_effect=[[], RuntimeError('release failed')])
+        desktop.call = AsyncMock(return_value=[])
+        with self.assertRaisesRegex(RuntimeError, 'desktop input disabled'):
+            await desktop.type_text('abc', desktop.guard.snapshot(), threading.Event())
+        self.assertFalse(desktop.enabled)
+        self.assertEqual(desktop.call.call_args.args[2:4], ('org.freedesktop.portal.Session', 'Close'))
 
     async def test_push_to_talk_release_finishes_without_a_second_activation(self):
         from unittest.mock import Mock
@@ -132,7 +173,7 @@ class InsertionTests(unittest.IsolatedAsyncioTestCase):
         desktop.dictation.finish.assert_not_called()
         desktop.dictation.status.return_value = {'busy': True}
         await desktop.shortcut(True)
-        desktop.dictation.finish.assert_called_once()
+        desktop.dictation.finish.assert_called_once_with(cancel_insertion=True)
 
 
 class IdentityStartupTests(unittest.IsolatedAsyncioTestCase):

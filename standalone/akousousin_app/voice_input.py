@@ -39,7 +39,6 @@ class VoiceInput:
         self.operation_lock = threading.Lock()
         self.action_cancelled = threading.Event()
         self.last_sequence = 0
-        self.latest_text = ''
         self.beep = tk.BooleanVar(value=config.get('stt_beep', True))
         self.state = tk.StringVar(value='Voice input is not loaded.')
         frame = panel.card(page, 'Voice input')
@@ -119,8 +118,18 @@ class VoiceInput:
         ttk.Button(row, text='Copy transcript', command=self.copy).pack(side='right')
         ttk.Label(frame, text='The recording test displays text below. The desktop shortcut inserts text into the original window. Wait for the ready tones before speaking.',
                   style='Card.TLabel', wraplength=760).pack(anchor='w')
-        self.result = tk.Text(frame, height=4, wrap='word')
-        self.result.pack(fill='x', pady=8)
+        ttk.Label(frame, text='Recent transcripts and timings (up to 200 phrases)', style='Card.TLabel').pack(anchor='w', pady=(8, 0))
+        history = ttk.Frame(frame); history.pack(fill='x', pady=8)
+        self.result = tk.Text(history, height=10, wrap='word', exportselection=False, state='disabled')
+        scrollbar = ttk.Scrollbar(history, orient='vertical', command=self.result.yview)
+        self.result.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side='right', fill='y')
+        self.result.pack(side='left', fill='both', expand=True)
+        def select_all(event):
+            self.result.tag_add('sel', '1.0', 'end-1c')
+            return 'break'
+        self.result.bind('<Control-a>', select_all)
+        self.result.bind('<Control-A>', select_all)
         panel.root.bind('<Destroy>', self.destroy, add='+')
         self.refresh_sources()
         panel.root.after(100, self.poll)
@@ -268,16 +277,17 @@ class VoiceInput:
             from akousousin_backend.recognition import ready_cue
             try:
                 ready_cue()
-                message = 'Playback completed. If silent, check the default output and AKS volume in KDE audio settings.'
+                message = 'Playback completed on the system default output. If no ready tones were audible, report this status.'
             except Exception as error:
                 message = str(error)
             self.events.put(('sound', message))
         threading.Thread(target=play, daemon=True).start()
 
     def copy(self):
-        if self.latest_text:
+        text = self.result.get('1.0', 'end-1c')
+        if text:
             self.panel.root.clipboard_clear()
-            self.panel.root.clipboard_append(self.latest_text)
+            self.panel.root.clipboard_append(text)
 
     def shared_poll(self):
         if self.shared_polling:
@@ -310,24 +320,42 @@ class VoiceInput:
         self.desktop_state.set(result['desktop']['state'])
         if result['sequence'] != self.last_sequence:
             self.last_sequence = result['sequence']
-            self.latest_text = ' '.join(item['text'] for item in result['results'])
             detected = next((item for item in reversed(result['results'])
                              if item.get('language_source') == 'detected' and item.get('text')), None)
             if detected:
                 self.detected_language.set('Last automatically detected: ' +
                     (language_caption(detected['language']) if detected.get('language') else 'mixed or undetermined'))
-            self.result.delete('1.0', 'end')
-            for item in result['results']:
-                self.result.insert('end', item['text'] + '\n[' + (item['language'] or 'unknown') + ' · ' + item['output'] + ']\n')
-                if item.get('timings'):
-                    names = [('speech_seconds', 'Speech'), ('endpoint_wait_seconds', 'endpoint'),
-                             ('audio_seconds', 'Audio'), ('queue_seconds', 'queued'),
-                             ('recognition_seconds', 'recognition'), ('insertion_queue_seconds', 'typing queued'),
-                             ('insertion_seconds', 'insertion')]
-                    self.result.insert('end', ' · '.join(f"{label}: {item['timings'][key]:.2f}s"
-                        for key, label in names if key in item['timings']) + '\n')
-                if item.get('error'):
-                    self.result.insert('end', item['error'] + '\n')
+            selection = self.result.tag_ranges('sel')
+            selected_all = bool(selection and str(selection[0]) == '1.0' and str(selection[-1]) == self.result.index('end-1c'))
+            view = self.result.yview()
+            self.result.configure(state='normal')
+            try:
+                self.result.delete('1.0', 'end')
+                for item in result['results']:
+                    detail = [item['language'] or 'unknown', item.get('model', ''),
+                              str(item['cpu_threads']) + ' threads' if item.get('cpu_threads') else '',
+                              item.get('language_source', ''), item['output']]
+                    self.result.insert('end', item['text'] + '\n[' + ' · '.join(part for part in detail if part) + ']\n')
+                    if item.get('timings'):
+                        names = [('speech_seconds', 'Speech'), ('endpoint_wait_seconds', 'endpoint'),
+                                 ('audio_seconds', 'Audio'), ('queue_seconds', 'queued'),
+                                 ('recognition_seconds', 'recognition'), ('insertion_queue_seconds', 'typing queued'),
+                                 ('insertion_seconds', 'insertion')]
+                        self.result.insert('end', ' · '.join(f"{label}: {item['timings'][key]:.2f}s"
+                            for key, label in names if key in item['timings']) + '\n')
+                    if item.get('error'):
+                        self.result.insert('end', item['error'] + '\n')
+            finally:
+                self.result.configure(state='disabled')
+            if selected_all:
+                self.result.tag_add('sel', '1.0', 'end-1c')
+            elif selection:
+                self.result.tag_add('sel', *selection)
+            if view[1] >= .99:
+                self.result.see('end')
+            else:
+                self.result.yview_moveto(view[0])
+            self.result.configure(state='disabled')
 
     def poll(self):
         if self.closed:
@@ -337,6 +365,7 @@ class VoiceInput:
                 kind, value = self.events.get_nowait()
                 if kind == 'sound':
                     self.sound_status.set(value)
+                    self.panel.status.set(value)
                     self.sound_testing = False
                     self.sound_button.configure(state='normal')
                 elif kind == 'devices':
@@ -346,16 +375,20 @@ class VoiceInput:
                 elif kind == 'control-error':
                     self.local_error = True
                     self.state.set(value)
+                    self.panel.status.set(value)
                 elif kind == 'status':
                     self.state.set(value)
                 elif kind == 'result':
+                    self.result.configure(state='normal')
                     self.result.delete('1.0', 'end')
                     self.result.insert('1.0', value['text'] or '(No speech detected)')
                     self.result.insert('end', '\n\nLanguage: ' + (value['language'] or 'none'))
+                    self.result.configure(state='disabled')
                 if kind in ('done', 'error'):
                     if kind == 'error':
                         self.local_error = True
                         self.state.set('Voice input: ' + value)
+                        self.panel.status.set('Voice input: ' + value)
                     self.busy = False
                     self.combo.configure(state='readonly')
                     for button in self.buttons:

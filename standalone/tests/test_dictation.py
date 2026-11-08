@@ -139,6 +139,42 @@ class DictationTests(unittest.TestCase):
         self.manager.unload()
         self.assertIsNone(self.manager.recognizer)
 
+    def test_history_retains_two_hundred_bounded_phrases(self):
+        for index in range(205):
+            self.manager.store_result({'text':str(index), 'language':'en'}, 'inserted')
+        self.assertEqual(len(self.manager.results), 200)
+        self.assertEqual(self.manager.results[0]['text'], '5')
+        self.assertEqual(self.manager.results[-1]['text'], '204')
+
+    def test_stop_prevents_late_recognition_from_typing_and_new_session_never_replays_it(self):
+        entered, release = threading.Event(), threading.Event()
+        class Delayed(Recognition):
+            calls = 0
+            def transcribe(recognizer, *args, **kwargs):
+                recognizer.calls += 1
+                if recognizer.calls == 1:
+                    entered.set(); release.wait(2)
+                    return {'text':'old delayed phrase', 'language':'en'}
+                return {'text':'new phrase', 'language':'en'}
+        self.manager.recognizer_factory = Delayed
+        self.manager.insert = Mock()
+        self.manager.start(target=('editor', 1))
+        self.assertTrue(entered.wait(1))
+        self.manager.finish(cancel_insertion=True)
+        release.set(); self.wait()
+        self.manager.insert.assert_not_called()
+        self.assertEqual(self.manager.results[-1]['output'], 'retained')
+        self.manager.start(target=('editor', 1)); self.wait()
+        self.assertEqual(self.manager.insert.call_count, 1)
+        self.assertEqual(self.manager.insert.call_args.args[0], 'new phrase')
+
+    def test_long_unicode_history_stays_within_ipc_budget(self):
+        import json
+        for _ in range(200):
+            self.manager.store_result({'text':'界' * 4000, 'language':'zh'}, 'inserted')
+        self.assertLessEqual(len(json.dumps(self.manager.status()).encode()), 600 * 1024)
+        self.assertGreater(len(self.manager.results), 5)
+
     def wait(self):
         self.manager.thread.join(2)
         self.assertFalse(self.manager.thread.is_alive())

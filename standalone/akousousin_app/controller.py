@@ -57,7 +57,7 @@ class Sessions:
         elif operation == 'stt-finish':
             if self.desktop:
                 self.desktop.start_requested = False
-            self.input.finish()
+            self.input.finish(cancel_insertion=True)
         elif operation == 'stt-cancel':
             if self.desktop:
                 self.desktop.start_requested = False
@@ -78,7 +78,7 @@ class Sessions:
             self.desktop.start(listen=request.get('listen', False))
         elif operation == 'stt-toggle':
             if self.input.status()['busy']:
-                self.input.finish()
+                self.input.finish(cancel_insertion=True)
             elif self.desktop and self.desktop.start_requested:
                 self.desktop.close()
                 self.desktop = None

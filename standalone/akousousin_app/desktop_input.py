@@ -341,7 +341,7 @@ class Desktop(PortalRequests):
     async def toggle_recording(self):
         try:
             if self.dictation.status()['busy']:
-                self.dictation.finish()
+                self.dictation.finish(cancel_insertion=True)
             else:
                 self.dictation.start(target=await self.confirm_focus())
         except Exception as error:
@@ -363,7 +363,7 @@ class Desktop(PortalRequests):
                 current = self.dictation.status()
                 if current['busy']:
                     if config.get('stt_mode', 'toggle') == 'toggle':
-                        self.dictation.finish()
+                        self.dictation.finish(cancel_insertion=True)
                     return
                 target = await self.confirm_focus()
                 # A quick PTT release during focus verification must not start a
@@ -376,23 +376,32 @@ class Desktop(PortalRequests):
         except Exception as error:
             self.status = str(error)
 
-    async def notify_keysym(self, symbol, state, reply=False):
-        # Portal keyboard notifications have no output values. D-Bus preserves
-        # send order on this connection; await transport writes, not each reply.
-        if reply:
-            return await self.call('org.freedesktop.portal.Desktop', '/org/freedesktop/portal/desktop',
-                'org.freedesktop.portal.RemoteDesktop', 'NotifyKeyboardKeysym', 'oa{sv}iu',
-                [self.remote, {}, symbol, state], timeout=3)
-        from dbus_next import Message, MessageFlag
-        message = Message(destination='org.freedesktop.portal.Desktop',
-            path='/org/freedesktop/portal/desktop', interface='org.freedesktop.portal.RemoteDesktop',
-            member='NotifyKeyboardKeysym', signature='oa{sv}iu',
-            body=[self.remote, {}, symbol, state], flags=MessageFlag.NO_REPLY_EXPECTED)
-        await asyncio.wait_for(self.bus.send(message), 3)
+    async def notify_keysym(self, symbol, state, reply=True):
+        # Delivery ordering alone does not guarantee KWin/client processing.
+        # Confirm every event; the compositor may reuse synthetic keycodes.
+        return await self.call('org.freedesktop.portal.Desktop', '/org/freedesktop/portal/desktop',
+            'org.freedesktop.portal.RemoteDesktop', 'NotifyKeyboardKeysym', 'oa{sv}iu',
+            [self.remote, {}, symbol, state], timeout=3)
+
+    async def release_keysym(self, symbol):
+        try:
+            await asyncio.wait_for(self.notify_keysym(symbol, 0), .25)
+        except Exception as error:
+            self.enabled = False
+            self.guard.invalidate()
+            self.status = 'Keyboard release failed; desktop input disabled'
+            try:
+                await self.call('org.freedesktop.portal.Desktop', self.remote,
+                                'org.freedesktop.portal.Session', 'Close', timeout=2)
+            except Exception:
+                pass
+            raise RuntimeError(self.status) from error
 
     async def type_text(self, text, target, cancelled):
         if not self.enabled:
             raise RuntimeError('Keyboard session closed')
+        if cancelled.is_set():
+            raise InterruptedError('Text insertion cancelled')
         deadline = time.monotonic() + 3
         while self.shortcut_down:
             if cancelled.is_set() or time.monotonic() >= deadline:
@@ -405,12 +414,27 @@ class Desktop(PortalRequests):
             if cancelled.is_set():
                 raise InterruptedError('Text insertion cancelled')
             self.guard.check(target)
+            press = asyncio.create_task(self.notify_keysym(symbol, 1))
             try:
-                await self.notify_keysym(symbol, 1)
+                while not press.done():
+                    if cancelled.is_set():
+                        raise InterruptedError('Text insertion stopped')
+                    await asyncio.wait({press}, timeout=.02)
+                await press
+                await asyncio.sleep(.005)
             finally:
-                await self.notify_keysym(symbol, 0, reply=index == len(symbols) - 1)
-            # Allow focus-change reports and cancellation between characters.
-            await asyncio.sleep(0)
+                if not press.done():
+                    press.cancel()
+                    await asyncio.gather(press, return_exceptions=True)
+                # Cancellation must not abandon a pressed key in the compositor.
+                release = asyncio.create_task(self.release_keysym(symbol))
+                try:
+                    await asyncio.shield(release)
+                except asyncio.CancelledError:
+                    await release
+                    raise
+            # Let the target consume the pair before another keysym remaps it.
+            await asyncio.sleep(.010)
 
     def insert(self, text, target, cancelled):
         if not self.loop or not self.enabled:

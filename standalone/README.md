@@ -7,7 +7,7 @@ SPDX-FileCopyrightText: 2026 John Goodman
 
 **akousousin:** *The unified neural speech engine for Linux, implementing Microsoft SAPI and Speech Dispatcher, based on Piper and Whisper.*
 
-The 0.7.0b7 beta implements SAPI text-to-speech using Piper, native Linux Speech
+The 0.7.0b8 beta implements SAPI text-to-speech using Piper, native Linux Speech
 Dispatcher output and experimental local Whisper voice input on Linux. SAPI
 recognition and native Windows microphone capture are not implemented. See the
 [compatibility table](../COMPATIBILITY.md) for the implemented capabilities.
@@ -251,7 +251,7 @@ through its PulseAudio-compatible service. Enable voice input downloads the
 selected pinned weights once if necessary and loads them. Disable stops
 recognition and frees model memory, retaining downloads. Wait for the ready state
 and two optional 300 Hz tones before speaking. Test ready sound checks playback
-separately. Tones use cached audio through memory/stdin.
+separately. Tones use cached, seekable WAV audio with a short device-wake lead-in.
 
 Choose a named microphone or System default, and a language from the searchable,
 scrollable picker. The initial language follows the supported system locale.
@@ -261,7 +261,9 @@ again. Start recording tests ten seconds and displays text.
 
 Capture uses an adaptive energy endpointer with approximately 500 ms silence and
 an 8-second cap. Endpointed input skips Whisper's redundant VAD pass; standalone
-WAV transcription retains neural VAD. Per-phrase timing shows voiced duration,
+WAV transcription retains neural VAD. The read-only transcript display retains up to 200 phrases within its size limit.
+Ctrl+A selects its contents; Copy transcript includes measurements.
+Per-phrase timing shows voiced duration,
 endpoint wait, audio length, recognition queue wait, recognition time, insertion
 queue wait and insertion time. Recent transcripts stay in memory; numeric timings
 and outcomes are logged without dictated text. Spoken punctuation commands are
@@ -352,3 +354,10 @@ are not always faster on CPU-limited systems; see the reproducible benchmark in
 `backend/tools/benchmark_recognition.py`. Timing logs contain numeric measurements
 and outcomes, never dictated text. Model cards accompany on-demand downloads;
 model files and their upstream licences are not bundled into the AppImage.
+
+Toggle-mode Stop cancels pending insertion immediately. Speech that finishes
+recognising afterwards is retained for copying, never automatically typed. A new
+session does not replay it. Push-to-talk submits on release. Keyboard events use
+acknowledgements and pacing; a failed key release closes the keyboard session.
+Recognition startup includes a real warm-up before Ready, so the initial prepare
+may take longer while subsequent phrases avoid that lazy initialization.

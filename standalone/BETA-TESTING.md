@@ -3,7 +3,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
-# Testing the 0.7.0b7 beta
+# Testing the 0.7.0b8 beta
 
 Download the [Linux AppImage or Windows ZIP](https://github.com/jg00dman/akousousin/releases).
 Linux trial users need only the AppImage; source archives are separate downloads.
@@ -11,19 +11,19 @@ Quit the previous instance from its tray, replace the application and launch it.
 Keep existing preferences and models; a configuration reset is not required.
 See [installation and storage](README.md#linux-installation-and-storage).
 
-## Beta 7 dictation checks on SteamOS
+## Beta 8 insertion and Stop regression checks
 
-1. Enable voice input explicitly; allow the one-time Base.en/Base download if
-   migration selected a compact model. Existing Small models remain cached.
-2. With Orca running, select Base.en and English. Start dictation, wait for Ready,
-   speak a five-second sentence and pause. AKS speech should yield to recording,
-   and resume after Stop without replaying suppressed announcements.
-3. Copy the transcript's speech, endpoint, queue, recognition and insertion timings.
-   Record the perceived shortcut-to-ready and end-of-speech-to-text delay too.
-4. Repeat using Base and Multilingual (auto); the first nonempty phrase should
-   determine the language for that session, with later phrases locked to it.
-5. Test Cancel, switching windows, and repeated start/stop. Wrong-window text must
-   remain in Voice Input. Saved playback volume must remain unchanged.
+1. Quit the old tray instance before launching. Choose Base.en, English and two
+   CPU threads. Enable the ready tones and check Test ready sound.
+2. Dictate a short sentence into Kate and LibreOffice. Compare it exactly with
+   Voice Input, including capital letters and punctuation. Watch for repeat keys.
+3. Stop with Ctrl+Alt+Space while recognition/insertion is pending. Move focus to
+   another text field. No new automatic text should appear after Stop; delayed
+   results must remain in the transcript. Restart and verify old text never replays.
+4. Check the enlarged read-only transcript: Ctrl+A/Ctrl+C and Copy transcript
+   should copy text, statuses and timings. Incoming keystrokes must not edit it.
+5. Verify the ready tones at first shortcut activation and repeated starts.
+   Initial model preparation now includes inference warm-up before Ready.
 
 ## AppImage installation and menu shortcut
 
