@@ -3,7 +3,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
-# Akousousin 0.7.0b9 dictation trial
+# Akousousin 0.7.0b9 beta
 
 - Use a single deterministic Whisper decoding attempt instead of retrying at
   multiple temperatures. Noisy fixtures reproduce substantial retry overhead;
