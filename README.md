@@ -10,7 +10,7 @@ SPDX-FileCopyrightText: 2026 John Goodman
 **Main version: 0.7.0b5 beta.** [Downloads and release notes](https://github.com/jg00dman/akousousin/releases).
 
 <!-- akousousin-screenshot:start -->
-![Akousousin 0.7.0b6 control panel showing the speech service, voice preview and desktop reading navigation](docs/images/control-panel.png)
+![Akousousin 0.7.0b7 control panel showing the speech service, voice preview and desktop reading navigation](docs/images/control-panel.png)
 <!-- akousousin-screenshot:end -->
 
 [More screenshots: Voice Input, recording controls and Read selection](docs/SCREENSHOTS.md).
