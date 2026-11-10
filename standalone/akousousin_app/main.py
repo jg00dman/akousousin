@@ -3,6 +3,7 @@
 """Akousousin control panel / installer entry point."""
 import argparse
 import multiprocessing
+import os
 import sys
 from pathlib import Path
 
@@ -57,7 +58,24 @@ def main():
     parser.add_argument('--instance', default='', help=argparse.SUPPRESS)
     parser.add_argument('--control-file', help=argparse.SUPPRESS)
     parser.add_argument('--smoke-test', action='store_true', help=argparse.SUPPRESS)
+    bundle = parser.add_mutually_exclusive_group()
+    bundle.add_argument('--install-bundle', type=Path, help='Install an extracted Linux tar bundle for this user')
+    bundle.add_argument('--uninstall-bundle', type=Path, help='Remove a tar installation, preserving models and settings')
+    parser.add_argument('--bundle-prefix', type=Path, help='Tar installation prefix (default: ~/.local)')
     args = parser.parse_args()
+    if args.install_bundle or args.uninstall_bundle:
+        if os.name != 'posix' or sys.platform != 'linux':
+            raise RuntimeError('Tar installation requires Linux')
+        if os.geteuid() == 0:
+            raise RuntimeError('Run this per-user installer without sudo')
+        if runtime.call(args.settings, {'command': 'status'}, launch=False):
+            raise RuntimeError('Quit AKS from its tray before installing or removing a bundle')
+        from .linux_bundle import install, uninstall
+        if args.install_bundle:
+            print('Installed: ' + str(install(args.install_bundle, args.bundle_prefix)))
+        else:
+            print(uninstall(args.uninstall_bundle))
+        return
     if args.protocol_version:
         print('2')
         return
@@ -125,7 +143,6 @@ def main():
         print(result.stdout)
         return
     import json
-    import os
     request = None
     if args.read_selection or args.read_clipboard or args.stop_reading or args.selection_status:
         request = {'command': 'selection-stop' if args.stop_reading else 'selection-status' if args.selection_status else 'selection-toggle'}

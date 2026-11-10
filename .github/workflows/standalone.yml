@@ -99,6 +99,9 @@ jobs:
       - name: Bundled clipboard readers without host clipboard packages
         if: runner.os == 'Linux'
         run: xvfb-run -a env PYTHONPATH=standalone:backend python standalone/ci_clipboard.py
+      - name: Standalone tar bundle install, upgrade and uninstall without FUSE
+        if: runner.os == 'Linux'
+        run: python standalone/ci_linux_bundle.py standalone-dist/Akousousin-Linux-x86_64.tar.gz
       - name: Packaged AppImage update and registration refresh
         if: runner.os == 'Linux'
         run: python standalone/ci_update.py standalone-dist/Akousousin-x86_64.AppImage

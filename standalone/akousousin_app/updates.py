@@ -240,9 +240,12 @@ def save_update_state(path, **values):
     return state
 
 
+def download_page(candidate):
+    page = candidate.get('page', '')
+    return page if isinstance(page, str) and page.startswith(RELEASES + '/tag/') else RELEASES
+
+
 def perform_check(path):
-    if not is_appimage():
-        return None
     config = settings.load(path)
     save_update_state(path, attempted_at=time.time())
     candidate = check(include_beta=config['update_betas'])
@@ -251,8 +254,6 @@ def perform_check(path):
 
 
 def available_update(path):
-    if not is_appimage():
-        return None
     candidate = update_state(path).get('available')
     if not isinstance(candidate, dict):
         return None
@@ -287,8 +288,6 @@ class UpdateMonitor:
         self.notified_at = 0
 
     def tick(self, quiet=False):
-        if not is_appimage():
-            return None
         config = settings.load(self.path)
         if not config['update_weekly']:
             return None

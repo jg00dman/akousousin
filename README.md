@@ -51,7 +51,10 @@ and [beta test checklist](standalone/BETA-TESTING.md).
 
 ## Try the beta
 
-Download the [Linux AppImage or Windows ZIP](https://github.com/jg00dman/akousousin/releases).
+Download the [Linux AppImage (recommended)](https://github.com/jg00dman/akousousin/releases).
+A [standalone Linux tar.gz](standalone/README.md#standalone-linux-tar-installation-no-appimage-runtime-or-fuse)
+with a per-user installer is available when AppImage/FUSE support is unavailable.
+The Windows ZIP is experimental; complete Windows support is forthcoming.
 [Installation and configuration instructions](standalone/README.md) cover paths,
 voices, Wine-prefix registration, launcher commands and rollback.
 

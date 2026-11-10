@@ -7,7 +7,7 @@ SPDX-FileCopyrightText: 2026 John Goodman
 
 **akousousin:** *The unified neural speech engine for Linux, implementing Microsoft SAPI and Speech Dispatcher, based on Piper and Whisper.*
 
-The 0.7.0b8 beta implements SAPI text-to-speech using Piper, native Linux Speech
+The 0.7.0b10 beta implements SAPI text-to-speech using Piper, native Linux Speech
 Dispatcher output and experimental local Whisper voice input on Linux. SAPI
 recognition and native Windows microphone capture are not implemented. See the
 [compatibility table](../COMPATIBILITY.md) for the implemented capabilities.
@@ -177,12 +177,56 @@ or every Logos desktop behavior; test in a backed-up prefix.
 
 ## Checking for application updates
 
-Application update controls are shown only when AKS is launched as an AppImage.
-Flatpak, distro packages, Windows ZIP and source installations use their software
-manager or installation source instead. Voice and Whisper model downloads remain
+Update checks and notifications are available in every format. Only an AppImage
+launch offers installation of application updates. Standalone tar, Flatpak,
+distro packages, Windows ZIP and source installations link to the release download
+page and use their installer or software manager instead. Voice/model downloads remain
 available independently in every format. Packaging records its distribution type
 in `resources/build.json`; AppImage controls also require a valid executable
 `APPIMAGE` path. A renamed executable alone does not enable self-updating.
+
+## Standalone Linux tar installation (no AppImage runtime or FUSE)
+
+AppImage remains the recommended/default Linux download. Alternatively download
+`Akousousin-Linux-x86_64.tar.gz` (not the corresponding-sources archive). The tar
+bundle includes the same application, Python runtime, private dependencies,
+clipboard helpers and GPL/LGPL/dependency licence notices. It does not include
+Wine or voice/model weights by default. It requires x86-64 Linux with glibc 2.35+
+and the same host audio/desktop capabilities as the AppImage.
+
+Quit AKS from its tray, then extract and install without sudo:
+
+```sh
+tar -xzf Akousousin-Linux-x86_64.tar.gz
+cd Akousousin
+./install.sh
+~/.local/bin/akousousin --configure
+```
+
+The per-user installer places executables/private libraries in
+`~/.local/lib/akousousin`, a launcher in `~/.local/bin`, and a menu entry and icon
+under `${XDG_DATA_HOME:-$HOME/.local/share}`. If `~/.local/bin` is not on PATH,
+use the full launcher path or application-menu entry. `./install.sh
+--bundle-prefix /absolute/path` changes the executable prefix; XDG_DATA_HOME still
+controls desktop integration. This is a per-user installer, not a system package
+installer; root execution is rejected. It uses its own bundled runtime and does
+not require system Python.
+
+For upgrades, quit AKS, extract the new archive separately and rerun its installer
+with the same prefix and XDG environment. Installation stages a complete copy,
+preserves the previous installation for rollback during replacement, and rejects
+unowned/conflicting launcher files. Voice/model caches and configuration retain
+their existing XDG locations. No speech registrations are changed automatically:
+use Settings for explicit Wine or Speech Dispatcher setup.
+
+Run `~/.local/lib/akousousin/uninstall.sh` to remove this application installation.
+It removes unchanged installer-owned launchers/icons and restores any previous
+managed AKS desktop entries. Modified external files, configuration, downloaded
+models/voices and speech registrations are preserved. If removing AKS entirely,
+first remove its Wine/Speech Dispatcher registrations using the existing Settings
+controls; bundle uninstall does not unregister them. Quit AKS before uninstall.
+The tar update notification opens the release page; rerun the new installer to
+upgrade. It cannot perform AppImage replacement.
 
 On the Updates page:
 

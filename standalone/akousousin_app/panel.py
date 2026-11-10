@@ -553,9 +553,8 @@ class Panel:
         ttk.Label(frame, text=f'Installed version: {__version__}', style='Card.TLabel').pack(anchor='w')
         self.update_status = tk.StringVar(value='Check for a newer release.')
         if not updates.is_appimage():
-            ttk.Label(frame, text='Updates are managed by your software manager or installation source.',
+            ttk.Label(frame, text='Updates are available from the download page. Install a new tar bundle with its installer, or use your package manager. This installation cannot replace itself.',
                       style='Card.TLabel', wraplength=760).pack(anchor='w', pady=12)
-            return
         self.weekly_updates = tk.BooleanVar(value=self.config['update_weekly'])
         self.beta_updates = tk.BooleanVar(value=self.config['update_betas'])
         ttk.Checkbutton(frame, text='Check for updates weekly', variable=self.weekly_updates,
@@ -566,7 +565,7 @@ class Panel:
                   style='Card.TLabel', wraplength=760).pack(anchor='w', pady=8)
         ttk.Label(frame, textvariable=self.update_status, wraplength=760, style='Card.TLabel').pack(anchor='w', pady=12)
         ttk.Button(frame, text='Check for updates', command=self.check_updates).pack(anchor='w')
-        self.install_update_button = ttk.Button(frame, text='Install available update…', command=self.install_available_update, state='disabled')
+        self.install_update_button = ttk.Button(frame, text='Install available update…' if updates.is_appimage() else 'Open update download page…', command=self.install_available_update, state='disabled')
         self.install_update_button.pack(anchor='w', pady=8)
         success = updates.completed_update(self.path)
         if success:
@@ -637,7 +636,7 @@ class Panel:
         self.worker(enable, lambda result: self.reading_state.set(result['state']))
 
     def check_updates(self):
-        if self.busy or not updates.is_appimage():
+        if self.busy:
             return
         self.update_status.set('Checking for updates…')
         def checked(update):
@@ -649,7 +648,13 @@ class Panel:
         self.worker(lambda: updates.perform_check(self.path), checked)
 
     def confirm_update(self, update):
-        if self.busy or self.updating or not updates.is_appimage():
+        if self.busy or self.updating:
+            return
+        if not updates.is_appimage():
+            if messagebox.askyesno('Akousousin update available',
+                    f'Akousousin {update["version"]} is available. Open its download page?\n\n'
+                    'Install the new tar bundle using its installer, or update through your package manager.', parent=self.root):
+                webbrowser.open(updates.download_page(update))
             return
         text = (f'Update from {__version__} to {update["version"]}?\n\n'
                 'Close Wine applications first. Speech will stop and the control panel will restart. '

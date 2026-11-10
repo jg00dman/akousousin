@@ -140,12 +140,28 @@ class UpdateTests(unittest.TestCase):
             self.assertTrue(updates.is_appimage())
             with patch.dict(os.environ, {'FLATPAK_ID': 'org.akousousin.Akousousin'}):
                 self.assertFalse(updates.is_appimage())
-            for distribution in ('flatpak', 'deb', 'source'):
+            for distribution in ('flatpak', 'deb', 'source', 'linux-tar'):
                 (self.root / 'build.json').write_text(json.dumps({'distribution': distribution}))
                 self.assertFalse(updates.is_appimage())
-                with patch.object(updates.urllib.request, 'urlopen') as network:
-                    self.assertIsNone(updates.perform_check(self.root / 'settings.json'))
-                    network.assert_not_called()
+                with self.assertRaisesRegex(RuntimeError, 'AppImage'):
+                    updates.install(self.update, self.root / 'settings.json')
+
+    def test_tar_can_check_and_notify_without_installing(self):
+        from akousousin_app import settings
+        path = self.root / 'settings.json'
+        settings.save(path, settings.DEFAULTS)
+        candidate = dict(self.update, version='99.0.0', page=updates.RELEASES + '/tag/v99.0.0')
+        def thread(**kwargs):
+            return Mock(start=kwargs['target'])
+        with patch.object(updates, 'is_appimage', return_value=False), \
+                patch.object(updates, 'check', return_value=candidate), \
+                patch.object(updates.threading, 'Thread', side_effect=thread), \
+                patch.object(updates, 'install') as install:
+            self.assertEqual(updates.perform_check(path), candidate)
+            self.assertEqual(updates.UpdateMonitor(path).tick(), candidate)
+            self.assertEqual(updates.download_page(candidate), candidate['page'])
+            self.assertEqual(updates.download_page({'page': 'https://example.org'}), updates.RELEASES)
+            install.assert_not_called()
 
     def test_weekly_check_persists_and_reminder_does_not_install(self):
         from akousousin_app import settings

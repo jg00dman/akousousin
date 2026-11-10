@@ -196,6 +196,17 @@ else:
         with (BUILD / 'app.squashfs').open('rb') as squash:
             shutil.copyfileobj(squash, output)
     (OUT / 'Akousousin-x86_64.AppImage').chmod(0o755)
+    # AppDir retains its AppImage marker. The unpacked package has a separate
+    # identity so it can notify about updates but never replace an AppImage.
+    marker = PACKAGE / 'resources/build.json'
+    build = json.loads(marker.read_text(encoding='utf-8'))
+    build['distribution'] = 'linux-tar'
+    marker.write_text(json.dumps(build, indent=2), encoding='utf-8')
+    for script, name in [('bundle-install.sh', 'install.sh'), ('bundle-uninstall.sh', 'uninstall.sh')]:
+        shutil.copy(ROOT / 'standalone' / script, PACKAGE / name)
+        (PACKAGE / name).chmod(0o755)
+    with tarfile.open(OUT / 'Akousousin-Linux-x86_64.tar.gz', 'w:gz') as archive:
+        archive.add(PACKAGE, arcname='Akousousin')
     # Corresponding sources for our DLL/panel and the separately bundled GPL backend.
     subprocess.run(['git', 'archive', '--format=tar.gz', '--output', str(SOURCE / 'akousousin-source.tar.gz'), 'HEAD'], check=True)
     fetch('https://github.com/OHF-Voice/piper1-gpl/archive/refs/tags/v1.8.0.tar.gz', SOURCE / 'piper-1.8.0.tar.gz')

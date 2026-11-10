@@ -390,15 +390,20 @@ def run(path):
         box.setAttribute(Qt.WA_ShowWithoutActivating)
         box.setWindowTitle('Akousousin update available')
         box.setText('Akousousin ' + candidate['version'] + ' is available.')
-        box.setInformativeText('Open Updates to review and install it when you are ready.')
-        now = box.addButton('Update now…', QMessageBox.AcceptRole)
+        box.setInformativeText('Open Updates to review and install it when you are ready.' if updates.is_appimage()
+                               else 'Open the release download page, or update through your package manager.')
+        now = box.addButton('Update now…' if updates.is_appimage() else 'Open download page…', QMessageBox.AcceptRole)
         later = box.addButton('Remind me later', QMessageBox.RejectRole)
         box.setDefaultButton(later)
         def finished(_):
             nonlocal update_dialog
             updates.remind_later(path)
             if box.clickedButton() == now:
-                submit({'command': 'configure', 'page': 'Updates'})
+                if updates.is_appimage():
+                    submit({'command': 'configure', 'page': 'Updates'})
+                else:
+                    import webbrowser
+                    webbrowser.open(updates.download_page(candidate))
             update_dialog = None
         box.finished.connect(finished)
         update_dialog = box

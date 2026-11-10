@@ -3,7 +3,15 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
-# Unreleased
+# Akousousin 0.7.0b10 beta
+
+- Add `Akousousin-Linux-x86_64.tar.gz` as a no-FUSE alternative. AppImage remains
+  the default. The tar includes a per-user installer/uninstaller, private runtime,
+  desktop/menu integration and matching bundled licence notices. Installation and
+  upgrades preserve shared settings/models; failed replacement rolls back.
+- Every format can check for updates and show notifications. Only an actual
+  AppImage launch offers self-installation; tar and other installations open the
+  release download page and use their installer or package manager.
 
 **Complete native Windows application support is forthcoming and is not yet
 working end to end.** The Windows ZIP is experimental: user testing found
@@ -15,7 +23,8 @@ See the [Windows work plan](WINDOWS-PLAN.md).
 
 - Fix model JSON reads to use UTF-8 rather than the Windows default code page.
 - Use unique settings staging files and bounded retries for Windows file locks.
-  These fixes are in source; they are not in the published 0.7.0b9 packages.
+  These fixes address failures reported in 0.7.0b9; Windows desktop retesting is
+  still required before claiming complete Windows support.
 
 # Akousousin 0.7.0b9 beta
 
