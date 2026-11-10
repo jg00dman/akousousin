@@ -262,13 +262,19 @@ class Installer:
             engine_path = r'C:\Program Files\Akousousin\akousousin-piper.dll' if self.prefix else str(engine)
             text = f'[{self.class_key.replace("HKCU", "HKEY_CURRENT_USER").replace("HKLM", "HKEY_LOCAL_MACHINE")}\\InprocServer32]\n@="{quote(engine_path)}"\n"ThreadingModel"="Both"\n\n'
             # Store an explicit launcher; never resolve an executable supplied by text
-            # or the HTTP caller. An AppImage must remain at this installed path.
+            # or the HTTP caller. The registered installation must stay at this path.
             invocation = runtime.command('--api-start', '--settings', str(settings_path or settings.config_path()))
             if self.prefix:
                 # Wine can CreateProcess a Unix executable directly (returning no
                 # Win32 process handle). Avoid ShellExecute's file associations
                 # and desktop dialogs. env supplies a native argv[0] for AppImage.
-                invocation = [self.windows('/usr/bin/env'), 'PYINSTALLER_RESET_ENVIRONMENT=1', *invocation]
+                # Wine can itself run from an AppImage. A tar launch must not
+                # inherit Wine's identity, Python state or private host libraries.
+                unset = ('APPIMAGE', 'APPDIR', 'AKOUSOUSIN_RESOURCES', 'LD_LIBRARY_PATH',
+                         'LD_LIBRARY_PATH_ORIG', 'LD_PRELOAD', 'QT_PLUGIN_PATH', 'QT_QPA_PLATFORM_PLUGIN_PATH')
+                invocation = [self.windows('/usr/bin/env'),
+                              *[argument for name in unset for argument in ('-u', name)],
+                              'PYINSTALLER_RESET_ENVIRONMENT=1', *invocation]
             launcher = subprocess.list2cmdline(invocation)
             if len(launcher) >= 4096:
                 raise ValueError('Launcher command is too long')

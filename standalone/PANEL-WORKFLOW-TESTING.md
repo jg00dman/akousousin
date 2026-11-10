@@ -75,3 +75,13 @@ is unchanged.
 - Apply an AppImage update/move with a stale Wine path: it should finish with a
   visible registration warning, not fail. The original download may be retained
   when a skipped registration could still depend on it.
+
+## CLI registration and standalone tar SAPI cold start
+
+See [CLI-REGISTRATION.md](CLI-REGISTRATION.md). Both installed tar and AppImage
+support `--wine-prefix ... --wine ... --install-only`; `--refresh-registrations`
+reapplies saved active registrations. The DLL reads a per-voice Launcher registry
+value pointing at that package, rather than searching default installation paths.
+Re-register using the new build to clear Wine's inherited AppImage/library
+environment during cold start. Test with AKS completely quit before asking Logos
+to speak. The beta 10 tar does not include this cold-start fix.

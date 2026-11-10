@@ -20,6 +20,11 @@ See [trial checks](PANEL-WORKFLOW-TESTING.md).
 
 ## Included post-beta-10 fixes
 
+- Fix standalone tar SAPI cold start under a Wine AppImage. Use the current AKS
+  package identity and clear inherited Wine AppImage/library variables in the
+  registered launcher. Reapply voice registration with this build. CLI registration
+  and refresh commands are documented in CLI-REGISTRATION.md.
+
 - A saved Wine executable/AppImage that no longer exists no longer blocks
   registration refresh, application updates or AppImage relocation. Skip only
   that registration, keep its record for repair, and show a persistent warning

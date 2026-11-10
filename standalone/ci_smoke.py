@@ -237,6 +237,35 @@ if not native:
     assert set(sapi_modules().values()) == {expected_private}, 'Update lost the private COM registration'
     assert wine_sapi_snapshot() == original_wine_files, 'Update changed Wine SAPI files'
 print('PASS: packaged refresh of saved active SAPI registrations', flush=True)
+if not native:
+    # SAPI must wake the installed tar executable too, even when Wine itself
+    # supplies an APPIMAGE identity. A warm backend would hide a bad Launcher.
+    import tarfile
+    public('--quit')
+    tar_root = WORK / 'tar-cold-start'
+    tar_root.mkdir(exist_ok=True)
+    with tarfile.open(ROOT / 'standalone-dist/Akousousin-Linux-x86_64.tar.gz') as archive:
+        archive.extractall(tar_root, filter='data')
+    tar_env = dict(env)
+    for variable in ('APPIMAGE', 'APPDIR', 'AKOUSOUSIN_RESOURCES', 'LD_LIBRARY_PATH', 'LD_LIBRARY_PATH_ORIG', 'LD_PRELOAD'):
+        tar_env.pop(variable, None)
+    tar_prefix = WORK / 'installed tar with spaces'
+    subprocess.run([str(tar_root / 'Akousousin/install.sh'), '--bundle-prefix', str(tar_prefix), '--settings', str(settings_path)],
+                   env=tar_env, check=True, timeout=120)
+    tar_executable = tar_prefix / 'lib/akousousin/akousousin'
+    tar_env['APPIMAGE'] = str(wine)  # Foreign executable, not AKS's AppImage.
+    tar_env['APPDIR'] = str(wine_dir)
+    subprocess.run([str(tar_executable), '--settings', str(settings_path), '--wine-prefix', str(prefix),
+                    '--wine', str(wine), '--wine-compat', '--install-only'], env=tar_env, check=True, timeout=180)
+    assert service.health(config['port']) is None, 'Cold-start test already has a backend'
+    tar_wav = WORK / 'tar-sapi-cold-start.wav'
+    subprocess.run([str(wine), str(resource / 'sapi-probe.exe'), 'Z:' + str(tar_wav.resolve()),
+                    '0', '100', 'The standalone tar backend started through SAPI.'], env=tar_env, check=True, timeout=100)
+    with wave.open(str(tar_wav), 'rb') as sound:
+        assert sound.getnframes() > 2205 and any(sound.readframes(sound.getnframes()))
+    assert service.health(config['port']), 'SAPI did not start the standalone tar backend'
+    subprocess.run([str(tar_executable), '--settings', str(settings_path), '--quit'], env=tar_env, check=True, timeout=90)
+    print('PASS: installed tar CLI registration and SAPI cold start with foreign APPIMAGE environment', flush=True)
 command = [str(executable), '--uninstall', '--settings', str(settings_path)]
 if not native:
     command += ['--wine-prefix', str(prefix), '--wine', str(wine)]
