@@ -5,6 +5,12 @@ SPDX-FileCopyrightText: 2026 John Goodman
 
 # Unreleased
 
+- Fix standalone tar SAPI cold start when Wine supplies a foreign APPIMAGE or
+  private-library environment. Registration stores the current package launcher
+  explicitly and clears inherited Wine environment variables. Reapply existing
+  voice registrations to update the launcher. CLI registration is documented in
+  [CLI-REGISTRATION.md](CLI-REGISTRATION.md). This is not in beta 10 downloads.
+
 - A saved Wine executable/AppImage that no longer exists no longer blocks
   registration refresh, application updates or AppImage relocation. Skip only
   that registration, keep its record for repair, and show a persistent warning

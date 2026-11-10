@@ -35,7 +35,10 @@ def command(*args):
     # No Python/Piper runtime is copied into the user's data directory.
     image = os.environ.get('APPIMAGE')
     if image and Path(image).is_file():
-        return [image, *args]
+        # Wine itself may be an AppImage. Its inherited APPIMAGE is not ours.
+        from .updates import is_appimage
+        if is_appimage():
+            return [image, *args]
     if getattr(sys, 'frozen', False):
         return [sys.executable, *args]
     return [sys.executable, '-m', 'akousousin_app.main', *args]

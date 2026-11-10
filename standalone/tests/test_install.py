@@ -2,6 +2,7 @@
 # SPDX-FileCopyrightText: 2026 John Goodman
 import copy
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -67,6 +68,38 @@ class FakeInstaller(Installer):
 
 
 class InstallTests(unittest.TestCase):
+    def test_tar_registration_uses_its_own_executable_not_inherited_wine_appimage(self):
+        from akousousin_app import runtime
+        foreign = self.resource / 'Wine.AppImage'; foreign.write_bytes(b'wine')
+        binary = self.resource / 'installed tar with spaces/akousousin'
+        (self.resource / 'build.json').write_text(json.dumps({'distribution':'linux-tar'}))
+        path = self.resource / 'settings with spaces.json'
+        with patch.dict(os.environ, {'APPIMAGE': str(foreign)}), \
+                patch.object(runtime.sys, 'frozen', True, create=True), \
+                patch.object(runtime.sys, 'executable', str(binary)), \
+                patch('akousousin_app.updates.resources.root', return_value=self.resource):
+            self.app.install(self.config, path)
+        token = VOICES + r'\Tokens\Akousousin-Piper-' + self.config['voice']
+        launcher = json.loads(self.app.reg[token]['Launcher'][1])
+        self.assertIn(str(binary), launcher)
+        self.assertNotIn(str(foreign), launcher)
+        self.assertIn('-u APPIMAGE', launcher)
+        self.assertIn('-u LD_LIBRARY_PATH', launcher)
+        self.assertIn('--api-start', launcher)
+        self.assertIn(str(path), launcher)
+
+    def test_appimage_registration_keeps_the_explicit_appimage_path(self):
+        from akousousin_app import runtime
+        image = self.resource / 'AKS.AppImage'; image.write_bytes(b'aks'); image.chmod(0o755)
+        (self.resource / 'build.json').write_text(json.dumps({'distribution':'appimage'}))
+        with patch.dict(os.environ, {'APPIMAGE': str(image)}), \
+                patch('akousousin_app.updates.resources.root', return_value=self.resource):
+            self.app.install(self.config)
+        token = VOICES + r'\Tokens\Akousousin-Piper-' + self.config['voice']
+        launcher = json.loads(self.app.reg[token]['Launcher'][1])
+        self.assertIn(str(image), launcher)
+        self.assertIn('--api-start', launcher)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
