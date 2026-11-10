@@ -8,6 +8,14 @@ from akousousin_app import playback
 
 
 class PlaybackTests(unittest.TestCase):
+    def test_pulse_compatible_player_is_preferred_when_both_tools_exist(self):
+        process = Mock(returncode=0)
+        process.poll.return_value = 0
+        with patch.object(playback.shutil, 'which', side_effect=lambda name: '/usr/bin/' + name), \
+                patch.object(playback.subprocess, 'Popen', return_value=process) as start:
+            self.assertTrue(playback.play_wav(Path('/tmp/preview.wav')))
+        self.assertEqual(start.call_args.args[0][0], '/usr/bin/paplay')
+
     def test_failure_reports_player_exit_error_and_copyable_command(self):
         process = Mock(returncode=1)
         process.poll.return_value = 1

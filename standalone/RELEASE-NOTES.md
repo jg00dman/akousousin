@@ -3,12 +3,19 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
-# Unreleased
+# Akousousin 0.7.0b11 beta
+
+The existing control panel is retained; the GUI workflow trial is parked.
+**Complete native Windows app support is forthcoming and not yet working end
+to end.** Windows capture/global shortcuts remain unimplemented; its ZIP is
+experimental despite component CI coverage.
 
 - Preview playback failures identify the selected audio player, exit status,
   captured error and saved WAV path. The existing selectable error dialog offers
-  Copy command and Copy details. Player choice is unchanged pending diagnosis of
-  the reported playback failure.
+  Copy command and Copy details. Prefer PulseAudio-compatible `paplay`, matching
+  ready tones and capture, rather than selecting an installed `pw-play` without
+  a usable PipeWire output node (the reported Manjaro failure). Retain `pw-play`
+  and `aplay` when the preferred tools are unavailable.
 
 - Keep the existing panel layout; the GUI workflow experiment is parked on its
   separate branch. Tar installation creates its menu entry by default and now

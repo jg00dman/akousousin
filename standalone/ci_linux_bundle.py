@@ -36,7 +36,8 @@ with tempfile.TemporaryDirectory(prefix='akousousin-tar-') as directory:
     dispatcher = root / 'data/Akousousin/speech-dispatcher-module'
     assert dispatcher.is_file() and str(installed / 'akousousin') in dispatcher.read_text()
     preferences = json.loads((root / 'config/Akousousin/settings.json').read_text())
-    assert preferences['speechd_setup_pending'], 'Model-free installation must retain the previous default until a voice is ready'
+    has_voice = preferences['voice'] in preferences['voices']
+    assert preferences['speechd_setup_pending'] == (not has_voice), 'Default selection must wait only while no voice is installed'
     run(str(source / 'install.sh'), '--bundle-prefix', str(prefix))
     run(str(installed / 'uninstall.sh'))
     assert not installed.exists()

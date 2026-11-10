@@ -27,7 +27,10 @@ class PlaybackError(RuntimeError):
 
 
 def play_wav(path, cancelled=lambda: False, timeout=120):
-    player = next((found for name in ('pw-play', 'paplay', 'aplay') if (found := shutil.which(name))), None)
+    # Match capture/ready tones: PulseAudio-compatible playback works with
+    # both PulseAudio and pipewire-pulse. Installed pw-play alone does not prove
+    # that a usable PipeWire output node exists (e.g. PulseAudio-only Manjaro).
+    player = next((found for name in ('paplay', 'pw-play', 'aplay') if (found := shutil.which(name))), None)
     if not player:
         raise RuntimeError('Preview audio was generated at ' + str(path) +
                            ', but no pw-play, paplay or aplay executable was found.')
