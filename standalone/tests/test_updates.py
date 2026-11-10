@@ -271,6 +271,7 @@ class UpdateTests(unittest.TestCase):
         records = [{'prefix': str(prefix), 'wine': 'wine64'}
                    for prefix in (active, removed, self.root / 'deleted')]
         current, uninstalled = Mock(), Mock()
+        current.wine = uninstalled.wine = None
         current.manifest.is_file.return_value = True
         uninstalled.manifest.is_file.return_value = False
         with patch.object(updates.settings, 'load', return_value={'registrations': records}), \
@@ -279,3 +280,57 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(installer.call_count, 2)
         current.install.assert_called_once()
         uninstalled.install.assert_not_called()
+
+    @unittest.skipIf(os.name == 'nt', 'Wine registration refresh is Linux-only')
+    def test_missing_saved_wine_warns_and_continues_without_deleting_record(self):
+        from akousousin_app import settings
+        path = self.root / 'settings.json'
+        prefixes = [self.root / 'stale', self.root / 'current']
+        for prefix in prefixes:
+            prefix.mkdir(); (prefix / 'system.reg').write_text('registry')
+        records = [{'prefix': str(prefixes[0]), 'wine': str(self.root / 'missing.AppImage')},
+                   {'prefix': str(prefixes[1]), 'wine': 'current-wine'}]
+        settings.save(path, dict(settings.DEFAULTS, registrations=records))
+        stale, current = Mock(), Mock()
+        stale.wine, current.wine = records[0]['wine'], records[1]['wine']
+        with patch('akousousin_app.install.Installer', side_effect=[stale, current]), \
+                patch.object(updates.shutil, 'which', return_value='/bin/current-wine'), \
+                patch('akousousin_app.speech_dispatcher.dispatcher_paths', return_value=(None, self.root / 'no-dispatcher', None)):
+            warnings = updates.refresh_registrations(path)
+        self.assertEqual(len(warnings), 1)
+        self.assertIn(records[0]['wine'], warnings[0])
+        stale.install.assert_not_called()
+        current.install.assert_called_once()
+        self.assertEqual(settings.load(path)['registrations'], records)
+        self.assertEqual(updates.registration_warnings(path), warnings)
+        self.assertIn('missing.AppImage', updates.completed_update(path))
+
+    @unittest.skipIf(os.name == 'nt', 'Wine registration refresh is Linux-only')
+    def test_existing_wine_refresh_failure_is_not_silently_skipped(self):
+        prefix = self.root / 'prefix'; prefix.mkdir()
+        (prefix / 'system.reg').write_text('registry')
+        installer = Mock(wine='current-wine')
+        installer.install.side_effect = FileNotFoundError('another required resource is missing')
+        with patch.object(updates.settings, 'load', return_value={'registrations': [{'prefix':str(prefix), 'wine':'current-wine'}]}), \
+                patch('akousousin_app.install.Installer', return_value=installer), \
+                patch.object(updates.shutil, 'which', return_value='/bin/current-wine'):
+            with self.assertRaisesRegex(FileNotFoundError, 'another required resource'):
+                updates.refresh_registrations(self.root / 'settings.json')
+
+    @patch.object(updates.runtime, 'call', return_value=None)
+    @patch.object(updates.subprocess, 'Popen')
+    @patch.object(updates.subprocess, 'run')
+    def test_update_completes_with_persisted_skipped_registration_warning(self, run, launch, call):
+        path = self.root / 'settings.json'
+        def refreshed(*args, **kwargs):
+            updates.save_update_state(path, registration_warnings=['Missing Wine AppImage: /old-wine.AppImage'])
+        run.side_effect = refreshed
+        with patch.dict(os.environ, {'APPIMAGE': str(self.image)}), \
+                patch.object(updates.urllib.request, 'urlopen', return_value=io.BytesIO(self.payload)), \
+                patch.object(updates.time, 'sleep'):
+            updates.install(self.update, path)
+        self.assertEqual(self.image.read_bytes(), self.payload)
+        launch.assert_called_once()
+        message = updates.completed_update(path)
+        self.assertIn('Updated successfully', message)
+        self.assertIn('/old-wine.AppImage', message)

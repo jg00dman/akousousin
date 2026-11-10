@@ -568,9 +568,14 @@ class Panel:
         self.install_update_button = ttk.Button(frame, text='Install available update…' if updates.is_appimage() else 'Open update download page…', command=self.install_available_update, state='disabled')
         self.install_update_button.pack(anchor='w', pady=8)
         success = updates.completed_update(self.path)
+        warnings = updates.registration_warnings(self.path)
+        if warnings:
+            ttk.Label(frame, text='Registration warnings:\n' + '\n'.join(warnings),
+                      style='Card.TLabel', wraplength=760).pack(anchor='w', pady=8)
         if success:
             self.status.set(success)
-            self.root.after(15000, lambda: self.status.set('Ready') if self.status.get() == success else None)
+            if not warnings:
+                self.root.after(15000, lambda: self.status.set('Ready') if self.status.get() == success else None)
         self.root.after(500, self.poll_updates)
 
     def save_update_preferences(self):

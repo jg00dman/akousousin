@@ -3,6 +3,15 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
+# Unreleased
+
+- A saved Wine executable/AppImage that no longer exists no longer blocks
+  registration refresh, application updates or AppImage relocation. Skip only
+  that registration, keep its record for repair, and show a persistent warning
+  in the panel status and Updates page. Other refresh failures still stop the
+  operation. Relocation retains the original AKS download when a skipped
+  registration may still use it. This fix is not in the beta 10 downloads.
+
 # Akousousin 0.7.0b10 beta
 
 - Add `Akousousin-Linux-x86_64.tar.gz` as a no-FUSE alternative. AppImage remains

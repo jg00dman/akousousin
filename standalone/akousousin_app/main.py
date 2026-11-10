@@ -104,7 +104,8 @@ def main():
         return
     if args.refresh_registrations:
         from .updates import refresh_registrations
-        refresh_registrations(args.settings)
+        for warning in refresh_registrations(args.settings):
+            print('Warning: ' + warning, file=sys.stderr)
         return
     if args.uninstall_speech_dispatcher:
         from .speech_dispatcher import configure

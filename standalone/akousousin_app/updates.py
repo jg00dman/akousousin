@@ -184,6 +184,7 @@ def refresh_registrations(path):
     """Refresh active installations only; respect prior uninstall/removal choices."""
     from .install import Installer
     config = settings.load(path)
+    warnings = []
     for registration in config.get('registrations', []):
         prefix = registration['prefix'] or None
         if os.name != 'nt' and (not prefix or not (Path(prefix).expanduser() / 'system.reg').is_file()):
@@ -192,6 +193,13 @@ def refresh_registrations(path):
             continue
         installer = Installer(resources.root(), prefix, registration['wine'] or None)
         if installer.manifest.is_file():
+            wine = installer.wine
+            if os.name != 'nt' and wine:
+                located = Path(wine).expanduser().exists() if '/' in str(wine) else shutil.which(wine)
+                if not located:
+                    warnings.append('Skipped Wine registration for ' + str(prefix) + ': Wine executable/AppImage is missing: '
+                                    + str(wine) + '. The saved registration was kept. Choose its current Wine executable in Settings and apply voice registration to repair it.')
+                    continue
             installer.install(config, path)
 
     if os.name != 'nt':
@@ -199,6 +207,8 @@ def refresh_registrations(path):
         _, launcher, _ = dispatcher_paths()
         if launcher.is_file():
             register_dispatcher(path, set_default=False)
+    save_update_state(path, registration_warnings=warnings)
+    return warnings
 
 
 WEEK = 7 * 24 * 60 * 60
@@ -272,11 +282,20 @@ def remind_later(path):
     save_update_state(path, remind_after=time.time() + WEEK)
 
 
+def registration_warnings(path):
+    value = update_state(path).get('registration_warnings', [])
+    return [item for item in value if isinstance(item, str)] if isinstance(value, list) else []
+
+
 def completed_update(path):
-    if update_state(path).get('installed_version') != __version__:
-        return None
-    save_update_state(path, installed_version=None)
-    return 'Updated successfully to ' + __version__
+    completed = update_state(path).get('installed_version') == __version__
+    warnings = registration_warnings(path)
+    if completed:
+        save_update_state(path, installed_version=None)
+    message = 'Updated successfully to ' + __version__ if completed else ''
+    if warnings:
+        message += ('\n' if message else '') + 'Registration warning: ' + '\n'.join(warnings)
+    return message or None
 
 
 class UpdateMonitor:

@@ -92,13 +92,17 @@ def _install(source, target, path):
             subprocess.run([str(target), '--settings', str(path), '--refresh-registrations'],
                            env=environment, capture_output=True, text=True, check=True, timeout=180)
             create_menu_entry(target)
+            warnings = updates.registration_warnings(path)
+            if warnings:
+                updates.save_update_state(path, registration_warnings=warnings + [
+                    'The original AKS AppImage was retained at ' + str(source) + ' because a skipped registration may still use it.'])
             progress.phase('Installation ready — restarting Akousousin…')
             time.sleep(3)
             subprocess.Popen([str(target), '--settings', str(path), '--configure'], env=environment,
                              stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             # Do not delete a download which was replaced while the dialog was open.
             try:
-                if source.is_file() and fingerprint(source) == original_hash:
+                if not warnings and source.is_file() and fingerprint(source) == original_hash:
                     source.unlink()
             except OSError:
                 pass  # A successful installation must not roll back over cleanup failure.

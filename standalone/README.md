@@ -177,6 +177,14 @@ or every Logos desktop behavior; test in a backed-up prefix.
 
 ## Checking for application updates
 
+If a saved Wine executable/AppImage has been removed, registration refresh skips
+that entry with a warning and continues updating other integrations. The warning
+appears in the panel status and Updates page; its saved registration is retained
+for repair in Settings. Other registration errors still fail the update. During
+relocation the original AKS download is retained if skipped registrations might
+still reference it. Correct the Wine path and apply registration for that prefix
+before removing the old download. This behaviour is in source after beta 10.
+
 Update checks and notifications are available in every format. Only an AppImage
 launch offers installation of application updates. Standalone tar, Flatpak,
 distro packages, Windows ZIP and source installations link to the release download

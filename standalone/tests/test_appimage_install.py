@@ -101,6 +101,22 @@ class AppImageInstallTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'AppImage launch'):
                 integration.install(self.config)
 
+    @patch.object(integration.time, 'sleep')
+    @patch.object(integration.subprocess, 'Popen')
+    @patch.object(integration.subprocess, 'run')
+    @patch.object(integration.runtime, 'call', return_value=None)
+    def test_skipped_registration_does_not_block_move_and_retains_original(self, call, run, launch, sleep):
+        def refreshed(*args, **kwargs):
+            updates.save_update_state(self.config, registration_warnings=['Wine executable/AppImage is missing: /old-wine.AppImage'])
+        run.side_effect = refreshed
+        target = integration.install(self.config)
+        self.assertEqual(target.read_bytes(), b'current AppImage')
+        self.assertTrue(self.source.is_file())
+        launch.assert_called_once()
+        warning = updates.completed_update(self.config)
+        self.assertIn('missing', warning)
+        self.assertIn(str(self.source), warning)
+
     def test_declining_prompt_keeps_application_and_menu_unchanged(self):
         from akousousin_app.panel import Panel
         panel = Panel.__new__(Panel)
