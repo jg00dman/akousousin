@@ -32,3 +32,27 @@ class CliRegistrationTests(unittest.TestCase):
             installer.install.assert_called_once()
             register.assert_called_once_with(path, prefix, wine)
             controller.assert_not_called()
+
+
+class BundleLaunchTests(unittest.TestCase):
+    def test_launch_prompt_quiet_and_noninteractive_installation(self):
+        target = Path('/custom prefix/lib/akousousin')
+        for quiet, tty, answer in ((True, True, 'yes'), (False, False, 'yes'),
+                                   (False, True, ''), (False, True, ' YES ')):
+            with self.subTest(quiet=quiet, tty=tty, answer=answer), \
+                    patch.object(main.sys, 'argv', ['akousousin', '--install-bundle', '/bundle'] +
+                                 (['--quiet'] if quiet else [])), \
+                    patch.object(main.os, 'geteuid', return_value=1000), \
+                    patch.object(main.runtime, 'call', return_value=None), \
+                    patch('akousousin_app.linux_bundle.install', return_value=target), \
+                    patch.object(main.sys, 'stdin', Mock(isatty=Mock(return_value=tty))), \
+                    patch('builtins.input', return_value=answer) as prompt, \
+                    patch.object(main.os, 'execve') as launch, contextlib.redirect_stdout(io.StringIO()):
+                main.main()
+                self.assertEqual(prompt.called, not quiet and tty)
+                if not quiet and tty and answer.strip().lower() == 'yes':
+                    executable = str(target / 'akousousin')
+                    self.assertEqual(launch.call_args.args[:2], (executable, [executable, '--configure']))
+                    self.assertEqual(launch.call_args.args[2]['PYINSTALLER_RESET_ENVIRONMENT'], '1')
+                else:
+                    launch.assert_not_called()

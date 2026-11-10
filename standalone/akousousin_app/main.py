@@ -62,6 +62,7 @@ def main():
     bundle.add_argument('--install-bundle', type=Path, help='Install an extracted Linux tar bundle for this user')
     bundle.add_argument('--uninstall-bundle', type=Path, help='Remove a tar installation, preserving models and settings')
     parser.add_argument('--bundle-prefix', type=Path, help='Tar installation prefix (default: ~/.local)')
+    parser.add_argument('--quiet', action='store_true', help='Do not offer to launch after installing a tar bundle')
     args = parser.parse_args()
     if args.install_bundle or args.uninstall_bundle:
         if os.name != 'posix' or sys.platform != 'linux':
@@ -72,7 +73,13 @@ def main():
             raise RuntimeError('Quit AKS from its tray before installing or removing a bundle')
         from .linux_bundle import install, uninstall
         if args.install_bundle:
-            print('Installed: ' + str(install(args.install_bundle, args.bundle_prefix)))
+            target = install(args.install_bundle, args.bundle_prefix)
+            print('Installed: ' + str(target))
+            if not args.quiet and sys.stdin.isatty():
+                answer = input('Launch Akousousin now? [y/N] ').strip().lower()
+                if answer in ('y', 'yes'):
+                    executable = str(target / 'akousousin')
+                    os.execve(executable, [executable, '--configure'], dict(os.environ, PYINSTALLER_RESET_ENVIRONMENT='1'))
         else:
             print(uninstall(args.uninstall_bundle))
         return
