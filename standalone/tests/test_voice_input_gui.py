@@ -17,6 +17,46 @@ from akousousin_app.voice_input import VoiceInput
 
 @unittest.skipUnless(os.environ.get('DISPLAY'), 'Run under xvfb-run for the GUI test')
 class VoiceInputGuiTests(unittest.TestCase):
+    def test_task_order_unified_shortcuts_and_live_microphone_state(self):
+        from akousousin_app.panel import Panel
+        from akousousin_app.panel_layout import PAGES
+        with tempfile.TemporaryDirectory() as folder, patch('akousousin_app.resources.bootstrap', return_value=copy.deepcopy(settings.DEFAULTS)), \
+                patch('akousousin_app.catalogue.catalogue', return_value={}), \
+                patch('akousousin_app.voice_input.discover_microphones', return_value=[('', 'System default')]), \
+                patch('akousousin_app.runtime.call', return_value=None):
+            panel = Panel(Path(folder) / 'settings.json', offer_install=False)
+            self.addCleanup(panel.root.destroy)
+            panel.root.geometry('760x480'); panel.root.update()
+            self.assertEqual(tuple(panel.nav_pages), PAGES)
+            def buttons(parent):
+                for child in parent.winfo_children():
+                    if isinstance(child, ttk.Button): yield child
+                    yield from buttons(child)
+            shortcut_labels = [button.cget('text') for button in buttons(panel.pages['Shortcuts'])]
+            self.assertIn('Change dictation shortcut…', shortcut_labels)
+            self.assertIn('Change reading shortcuts…', shortcut_labels)
+            self.assertFalse(any('shortcut' in str(button.cget('text')).lower()
+                                 for button in buttons(panel.pages['Dictation'])))
+            ready = {'state':'Recognition ready', 'loaded':True, 'phase':'ready', 'busy':False,
+                     'dictation_active':False, 'microphone_open':False}
+            panel.update_home({'reading':{}, 'dictation':ready})
+            self.assertIn('Microphone off', panel.dictation_status.get())
+            self.assertTrue(panel.home_stop_dictation.instate(['disabled']))
+            ready.update(phase='listening', busy=True, dictation_active=True, microphone_open=True)
+            panel.update_home({'reading':{}, 'dictation':ready})
+            self.assertIn('Microphone listening', panel.dictation_status.get())
+            self.assertFalse(panel.home_stop_dictation.instate(['disabled']))
+            panel.show('About'); panel.root.update()
+            copy_button = next(button for button in buttons(panel.pages['About']) if button.cget('text') == 'Copy diagnostics')
+            copy_button.invoke(); panel.root.update()
+            self.assertIn('Configuration:', panel.root.clipboard_get())
+            self.assertNotIn('restore_token', panel.root.clipboard_get())
+            for name in PAGES:
+                panel.show(name); panel.root.update()
+                self.assertTrue(panel.nav_pages[name].winfo_ismapped())
+                if name in panel.scrolls:
+                    self.assertTrue(panel.scrolls[name].scrollbar.winfo_ismapped())
+
     def setUp(self):
         self.callback_errors = []
         reporter = patch.object(tk.Tk, 'report_callback_exception', side_effect=lambda *args: self.callback_errors.append(args))
@@ -310,9 +350,10 @@ class VoiceInputGuiTests(unittest.TestCase):
             for number in range(50):
                 label = ttk.Label(area.inner, text='Row ' + str(number), padding=10)
                 label.pack()
-            labels.append(label)
+                if number == 0:
+                    labels.append(label)
         root.update()
-        labels[0].event_generate('<Button-5>'); root.update()
+        labels[0].event_generate('<MouseWheel>', delta=-120); root.update()
         self.assertGreater(first.canvas.yview()[0], 0)
         before = first.canvas.yview()
         first.pack_forget(); second.pack(fill='both', expand=True); root.update()
@@ -344,7 +385,7 @@ class VoiceInputGuiTests(unittest.TestCase):
             panel.show('Voice Input'); panel.root.update()
             page = panel.voice_input
             page.shared({'busy': False, 'loaded': True, 'enabled': True, 'state': 'Ready', 'desktop': {'state': 'Disabled'}, 'sequence': 0, 'results': []})
-            self.assertEqual(page.model_button.cget('text'), 'Disable voice input')
+            self.assertEqual(page.model_button.cget('text'), 'Unload recognition model')
             with patch.object(page, 'unload') as unload:
                 page.model_button.invoke()
                 unload.assert_called_once()

@@ -172,6 +172,16 @@ class Router:
                 self.speaking_until = max(now + .1, remaining[-1][2] if remaining else 0)
             return found
 
+    def stop_speaking(self):
+        """Cancel current requests/playback without explicitly unloading the voice."""
+        with self.control_lock:
+            self.cancelled.set()
+            for event in self.waiters.values():
+                event.set()
+            self.playback.clear()
+            self.speaking_until = 0
+            self.processing = False
+
     def record_playback(self, identifier, duration):
         # Called with control_lock held. Preserve conservative serial playback
         # timing but retain request ownership so STOP can remove cancelled audio.
@@ -269,6 +279,12 @@ def application(router, instance, control="", stopping=None):
                     timer.daemon = True
                     timer.start()
                     body = b'{"stopping":true}'
+            elif env['PATH_INFO'] == '/stop-speaking' and env['REQUEST_METHOD'] == 'POST':
+                if not control or not hmac.compare_digest(env.get('HTTP_X_AKOUSOUSIN_CONTROL', ''), control):
+                    status, body = '403 Forbidden', b'{"error":"Not owned by this panel"}'
+                else:
+                    router.stop_speaking()
+                    body = b'{"stopped":true}'
             elif env['PATH_INFO'] == '/cancel' and env['REQUEST_METHOD'] == 'POST':
                 cancelled = router.cancel(env.get('HTTP_X_AKOUSOUSIN_REQUEST', ''))
                 status = '200 OK' if cancelled else '404 Not Found'

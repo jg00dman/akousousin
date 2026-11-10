@@ -98,6 +98,7 @@ class Capture:
         self.ready = threading.Event()
         self.done = threading.Event()
         self.error = None
+        self.input_level = 0
         self.thread = None
 
     def start(self):
@@ -155,6 +156,8 @@ class Capture:
                     if not data:
                         raise RuntimeError('Microphone stream ended')
                     last_audio = time.monotonic()
+                    if len(data) >= 2:
+                        self.input_level = min(100, round(audioop.rms(data[:len(data) // 2 * 2], 2) / 4096 * 100))
                     if first:
                         self.endpoint.calibrate(data)
                         if self.cue:

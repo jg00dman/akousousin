@@ -205,6 +205,9 @@ class DictationTests(unittest.TestCase):
         self.assertEqual(status['results'][-1]['output'], 'retained')
 
     def test_idle_unload_and_explicit_unload_preserve_models(self):
+        config = settings.load(self.path)
+        config['stt_idle_timeout'] = 3600
+        settings.save(self.path, config)
         self.manager.prepare(); self.wait()
         self.manager.last_activity = time.monotonic() - 3601
         self.manager.expire()
@@ -212,6 +215,22 @@ class DictationTests(unittest.TestCase):
         self.manager.prepare(); self.wait()
         self.manager.unload()
         self.assertEqual(self.manager.status()['phase'], 'unloaded')
+
+    def test_startup_prepare_with_missing_model_never_downloads_or_captures(self):
+        with patch('akousousin_backend.models.installed', return_value=False), \
+                patch('akousousin_backend.models.install') as download:
+            self.manager.prepare(allow_download=False); self.wait()
+        self.assertEqual(self.manager.status()['phase'], 'error')
+        download.assert_not_called()
+        self.assertIsNone(self.manager.capture)
+        self.assertEqual(Audio.instances, [])
+
+    def test_never_timeout_keeps_idle_model_without_recording(self):
+        self.manager.prepare(); self.wait()
+        self.manager.last_activity = time.monotonic() - 100000
+        self.manager.expire()
+        self.assertTrue(self.manager.status()['loaded'])
+        self.assertIsNone(self.manager.capture)
 
     def test_failed_first_download_does_not_start_microphone(self):
         def fail(cancelled=None):

@@ -42,6 +42,7 @@ class VoiceInputTests(unittest.TestCase):
         page.local_error = False
         page.state = Mock()
         page.desktop_state = Mock()
+        page.input_level = Mock()
         page.last_sequence = 0
         page.shared({'busy': False, 'state': 'Not loaded', 'desktop': {'state': 'Disabled'}, 'sequence': 0})
         page.state.set.assert_not_called()

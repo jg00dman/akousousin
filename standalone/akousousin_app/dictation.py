@@ -46,12 +46,16 @@ class Dictation:
         self.enabled = False
         self.closed = False
         self.unloading = False
+        self.recording_requested = False
 
     def status(self):
         with self.lock:
             return {'enabled': self.enabled, 'state': self.state, 'phase': self.phase,
                     'busy': self.thread is not None and self.thread.is_alive(),
+                    'dictation_active': self.recording_requested and self.thread is not None and self.thread.is_alive(),
                     'loaded': self.recognizer is not None and self.recognizer.process is not None and self.recognizer.process.is_alive(),
+                    'input_level': getattr(self.capture, 'input_level', 0),
+                    'microphone_open': bool(self.capture and not self.capture.done.is_set()),
                     'sequence': self.sequence, 'results': [dict(item) for item in self.results]}
 
     def change(self, state, phase=None):
@@ -60,15 +64,15 @@ class Dictation:
             if phase:
                 self.phase = phase
 
-    def prepare(self):
-        self._launch(False, None)
+    def prepare(self, allow_download=True):
+        self._launch(False, None, allow_download=allow_download)
         return self.status()
 
     def start(self, target=None, seconds=None):
         self._launch(True, target, seconds)
         return self.status()
 
-    def _launch(self, record, target, seconds=None):
+    def _launch(self, record, target, seconds=None, allow_download=True):
         with self.lock:
             if self.closed or self.unloading:
                 raise RuntimeError('Dictation is closed')
@@ -78,7 +82,9 @@ class Dictation:
             self.finished = threading.Event()
             self.insertion_cancelled = threading.Event()
             config = settings.load(self.path)
+            config['_allow_model_download'] = allow_download
             self.enabled = True
+            self.recording_requested = record
             self.change('Loading model…', 'loading')
             self.thread = threading.Thread(target=self._run, args=(record, target, seconds, config), daemon=True)
             self.thread.start()
@@ -90,6 +96,8 @@ class Dictation:
         if model.endswith('.en') and config['stt_language'] != 'en':
             raise ValueError('English-only models require English; select Base or Small for other languages or auto detection')
         missing = not models.installed(model) and not (model == 'turbo' and models.installed('small'))
+        if missing and not config.get('_allow_model_download', True):
+            raise RuntimeError('Recognition model is missing. Load it explicitly from Dictation to download it.')
         if self.recognizer and self.recognizer.model['model'] != model:
             self.recognizer.close()
             self.recognizer = None

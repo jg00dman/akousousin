@@ -5,6 +5,11 @@ SPDX-FileCopyrightText: 2026 John Goodman
 
 # Akousousin — Neural Voice Engine
 
+**This branch is the panel workflow trial (`codex/panel-workflow`), not a beta
+release.** Use the [trial guide](PANEL-WORKFLOW-TESTING.md) for the new page order,
+tray actions and model-lifetime behaviour. The beta 10 reference below retains
+its original page names. Trial downloads are separate from the normal updater.
+
 **akousousin:** *The unified neural speech engine for Linux, implementing Microsoft SAPI and Speech Dispatcher, based on Piper and Whisper.*
 
 The 0.7.0b10 beta implements SAPI text-to-speech using Piper, native Linux Speech

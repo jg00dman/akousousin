@@ -41,7 +41,27 @@ class VoiceInput:
         self.last_sequence = 0
         self.beep = tk.BooleanVar(value=config.get('stt_beep', True))
         self.state = tk.StringVar(value='Voice input is not loaded.')
-        frame = panel.card(page, 'Voice input')
+        self.desktop_state = tk.StringVar(value='Desktop dictation is disabled')
+        self.threads = tk.IntVar(value=config['stt_cpu_threads'])
+        self.keep_loaded = tk.BooleanVar(value=config['stt_keep_loaded'])
+        self.idle_timeout = tk.IntVar(value=config['stt_idle_timeout'])
+        frame = panel.card(page, 'Microphone and language')
+        ttk.Label(frame, text='Microphone', style='Card.TLabel').pack(anchor='w')
+        row = ttk.Frame(frame, style='Card.TFrame'); row.pack(fill='x', pady=5)
+        self.source_combo = ttk.Combobox(row, textvariable=self.source_caption, values=['System default'], state='readonly', height=12)
+        self.source_combo.pack(side='left', fill='x', expand=True)
+        self.source_combo.bind('<<ComboboxSelected>>', lambda event: self.select_source())
+        ttk.Button(row, text='Refresh', command=self.refresh_sources).pack(side='right', padx=(6, 0))
+        ttk.Label(frame, textvariable=self.device_status, style='Card.TLabel', wraplength=760).pack(anchor='w')
+        ttk.Label(frame, text='Dictation language', style='Card.TLabel').pack(anchor='w', pady=(6, 0))
+        self.language_picker = LanguagePicker(frame, self.language, changed=self.save)
+        self.language_picker.pack(fill='x', pady=5)
+        ttk.Label(frame, textvariable=self.detected_language, style='Card.TLabel', wraplength=760).pack(anchor='w')
+        ttk.Label(frame, text='Selections apply to the next recording.', style='Card.TLabel').pack(anchor='w')
+        self.input_level = tk.DoubleVar(value=0)
+        ttk.Label(frame, text='Live input level (during recording)', style='Card.TLabel').pack(anchor='w', pady=(6, 0))
+        ttk.Progressbar(frame, variable=self.input_level, maximum=100).pack(fill='x', pady=5)
+        frame = panel.card(page, 'Recognition model')
         ttk.Label(frame, text='Local Whisper recognition · model downloads are retained between upgrades',
                   style='Card.TLabel').pack(anchor='w')
         from akousousin_backend.recognition import model_root
@@ -52,9 +72,16 @@ class VoiceInput:
         self.combo.pack(side='left', padx=12)
         ttk.Label(frame, text='Base: faster CPU dictation. Base.en: English only. Small / Small.en: higher quality. Turbo: local import, large encoder; not a CPU speed option.',
                   style='Card.TLabel', wraplength=760).pack(anchor='w')
-        self.threads = tk.IntVar(value=config['stt_cpu_threads'])
-        self.keep_loaded = tk.BooleanVar(value=config['stt_keep_loaded'])
-        self.idle_timeout = tk.IntVar(value=config['stt_idle_timeout'])
+        self.buttons = []
+        row = ttk.Frame(frame, style='Card.TFrame'); row.pack(fill='x', pady=10)
+        self.model_button = ttk.Button(row, text='Load recognition model', command=self.toggle_input)
+        self.model_button.pack(side='left', padx=3)
+        ttk.Button(row, text='Import existing model…', command=self.import_model).pack(side='left', padx=3)
+        ttk.Label(frame, text='Load downloads the selected model if needed, then prepares recognition. Unload releases memory. Neither action starts the microphone; downloaded files stay.',
+                  style='Card.TLabel', wraplength=760).pack(anchor='w', pady=5)
+        ttk.Label(frame, textvariable=self.state, style='Card.TLabel', wraplength=760).pack(anchor='w', pady=8)
+        from .panel_layout import Disclosure
+        frame = Disclosure(page, 'Advanced recognition settings').content
         row = ttk.Frame(frame, style='Card.TFrame'); row.pack(fill='x', pady=5)
         ttk.Label(row, text='Recognition CPU threads', style='Card.TLabel').pack(side='left')
         threads = ttk.Spinbox(row, from_=1, to=max(64, config['stt_cpu_threads']), textvariable=self.threads, width=6, command=self.save)
@@ -68,39 +95,7 @@ class VoiceInput:
         timeout = ttk.Spinbox(row, from_=0, to=86400, increment=300, textvariable=self.idle_timeout, width=7, command=self.save)
         timeout.pack(side='left', padx=8)
         timeout.bind('<Return>', lambda event: self.save())
-        self.buttons = []
-        row = ttk.Frame(frame, style='Card.TFrame'); row.pack(fill='x', pady=10)
-        self.model_button = ttk.Button(row, text='Enable voice input', command=self.toggle_input)
-        self.model_button.pack(side='left', padx=3)
-        ttk.Button(row, text='Import existing model…', command=self.import_model).pack(side='left', padx=3)
-        ttk.Label(frame, text='Enable downloads the model once if needed and loads it. Disable stops dictation and frees model memory; downloaded files stay.',
-                  style='Card.TLabel', wraplength=760).pack(anchor='w', pady=5)
-        ttk.Label(frame, textvariable=self.state, style='Card.TLabel', wraplength=760).pack(anchor='w', pady=8)
-        frame = panel.card(page, 'Desktop dictation — KDE Wayland')
-        row = ttk.Frame(frame, style='Card.TFrame'); row.pack(fill='x')
-        ttk.Label(row, text='Activation', style='Card.TLabel').pack(side='left')
-        mode = ttk.Combobox(row, textvariable=self.mode, values=['toggle', 'push-to-talk'], state='readonly', width=18)
-        mode.pack(side='left', padx=10)
-        mode.bind('<<ComboboxSelected>>', lambda event: self.save())
-        ttk.Button(row, text='Enable desktop shortcuts', command=self.enable_desktop).pack(side='left', padx=3)
-        ttk.Button(row, text='Disable', command=lambda: self.command('stt-desktop-disable')).pack(side='left')
-        self.desktop_state = tk.StringVar(value='Desktop dictation is disabled')
-        ttk.Label(frame, textvariable=self.desktop_state, style='Card.TLabel', wraplength=760).pack(anchor='w', pady=5)
-        ttk.Label(frame, text='KDE asks you to approve shortcuts and keyboard input. Default shortcut: Ctrl+Alt+Space. Switching windows holds the transcript instead of inserting it.',
-                  style='Card.TLabel', wraplength=760).pack(anchor='w')
-        frame = panel.card(page, 'Recording and transcripts')
-        ttk.Label(frame, text='Microphone', style='Card.TLabel').pack(anchor='w')
-        row = ttk.Frame(frame, style='Card.TFrame'); row.pack(fill='x', pady=5)
-        self.source_combo = ttk.Combobox(row, textvariable=self.source_caption, values=['System default'], state='readonly', height=12)
-        self.source_combo.pack(side='left', fill='x', expand=True)
-        self.source_combo.bind('<<ComboboxSelected>>', lambda event: self.select_source())
-        ttk.Button(row, text='Refresh', command=self.refresh_sources).pack(side='right', padx=(6, 0))
-        ttk.Label(frame, textvariable=self.device_status, style='Card.TLabel', wraplength=760).pack(anchor='w')
-        ttk.Label(frame, text='Dictation language', style='Card.TLabel').pack(anchor='w', pady=(6, 0))
-        self.language_picker = LanguagePicker(frame, self.language, changed=self.save)
-        self.language_picker.pack(fill='x', pady=5)
-        ttk.Label(frame, textvariable=self.detected_language, style='Card.TLabel', wraplength=760).pack(anchor='w')
-        ttk.Label(frame, text='Selections apply to the next recording.', style='Card.TLabel').pack(anchor='w')
+        frame = panel.card(page, 'Ready sound')
         row = ttk.Frame(frame, style='Card.TFrame'); row.pack(fill='x', pady=6)
         ttk.Checkbutton(row, text='Play two short ready tones (300 Hz)', variable=self.beep,
                         command=self.save).pack(side='left')
@@ -109,6 +104,7 @@ class VoiceInput:
         self.sound_status = tk.StringVar(value='Sound uses the system default playback device.')
         self.sound_testing = False
         ttk.Label(frame, textvariable=self.sound_status, style='Card.TLabel', wraplength=760).pack(anchor='w')
+        frame = panel.card(page, 'Test dictation and recent transcripts')
         row = ttk.Frame(frame, style='Card.TFrame'); row.pack(fill='x')
         self.record_button = ttk.Button(row, text='Start recording (10 seconds)', command=self.record)
         self.record_button.pack(side='left', pady=5)
@@ -133,6 +129,19 @@ class VoiceInput:
         panel.root.bind('<Destroy>', self.destroy, add='+')
         self.refresh_sources()
         panel.root.after(100, self.poll)
+
+    def build_shortcuts(self, frame):
+        row = ttk.Frame(frame, style='Card.TFrame'); row.pack(fill='x')
+        ttk.Label(row, text='Activation', style='Card.TLabel').pack(side='left')
+        mode = ttk.Combobox(row, textvariable=self.mode, values=['toggle', 'push-to-talk'], state='readonly', width=18)
+        mode.pack(side='left', padx=10)
+        mode.bind('<<ComboboxSelected>>', lambda event: self.save())
+        ttk.Button(row, text='Enable desktop shortcuts', command=self.enable_desktop).pack(side='left', padx=3)
+        ttk.Button(row, text='Disable', command=lambda: self.command('stt-desktop-disable')).pack(side='left')
+        ttk.Button(frame, text='Change dictation shortcut…', command=lambda: self.command('stt-shortcuts-configure')).pack(anchor='w', pady=5)
+        ttk.Label(frame, textvariable=self.desktop_state, style='Card.TLabel', wraplength=760).pack(anchor='w', pady=5)
+        ttk.Label(frame, text='KDE asks you to approve shortcuts and keyboard input. Default shortcut: Ctrl+Alt+Space. Switching windows holds the transcript instead of inserting it.',
+                  style='Card.TLabel', wraplength=760).pack(anchor='w')
 
     def select_source(self):
         self.source.set(self.source_options[self.source_caption.get()])
@@ -309,9 +318,10 @@ class VoiceInput:
         if not result:
             return
         self.shared_busy = result['busy']
+        self.input_level.set(result.get('input_level', 0))
         self.input_enabled = result.get('enabled', result.get('loaded', False))
         if hasattr(self, 'model_button'):
-            self.model_button.configure(text='Disable voice input' if self.input_enabled else 'Enable voice input')
+            self.model_button.configure(text='Unload recognition model' if self.input_enabled else 'Load recognition model')
         if not self.local_error and not self.busy:
             changed = self.state.get() != result['state']
             self.state.set(result['state'])

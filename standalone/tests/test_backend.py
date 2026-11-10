@@ -168,6 +168,8 @@ class RoutingTests(unittest.TestCase):
         self.assertTrue(stopping.wait(1))
 
     def test_idle_unloads_and_next_request_reloads(self):
+        self.config['idle_timeout'] = 300
+        settings.save(self.path, self.config)
         self.router.synthesize({'text': 'Hello'})
         previous = self.router.synth
         # Keep exact boundary checks independent of host uptime/float rounding.
@@ -178,6 +180,15 @@ class RoutingTests(unittest.TestCase):
         self.assertIsNone(self.router.synth)
         self.router.synthesize({'text': 'Again'})
         self.assertIsNot(self.router.synth, previous)
+
+    def test_stop_speaking_clears_playback_and_preserves_loaded_voice(self):
+        self.router.synthesize({'text': 'Hello'})
+        model = self.router.synth
+        self.router.stop_speaking()
+        self.assertIs(self.router.synth, model)
+        self.assertFalse(model.closed)
+        self.assertFalse(self.router.speaking())
+        self.assertEqual(list(self.router.playback), [])
 
     def test_idle_can_be_disabled_and_health_does_not_keep_model_alive(self):
         self.router.start()

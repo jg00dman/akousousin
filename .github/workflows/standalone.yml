@@ -17,7 +17,7 @@ on:
         type: boolean
         default: false
   push:
-    branches: [main, whisper, codex/read-selection, codex/on-demand-voices, codex/private-sapi-probe, codex/project-licensing, codex/standalone-control-panel, codex/speech-dispatcher-on-demand, codex/linux-speech-dispatcher, codex/control-panel-updates]
+    branches: [main, whisper, codex/panel-workflow, codex/read-selection, codex/on-demand-voices, codex/private-sapi-probe, codex/project-licensing, codex/standalone-control-panel, codex/speech-dispatcher-on-demand, codex/linux-speech-dispatcher, codex/control-panel-updates]
     paths: [engine/**, standalone/**, backend/**, tests/**, .github/workflows/standalone.yml]
 permissions:
   contents: read
@@ -50,7 +50,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJSON(github.ref == 'refs/heads/whisper' && '["ubuntu-22.04"]' || '["ubuntu-22.04", "windows-2022"]') }}
+        os: ${{ fromJSON((github.ref == 'refs/heads/whisper' || github.ref == 'refs/heads/codex/panel-workflow') && '["ubuntu-22.04"]' || '["ubuntu-22.04", "windows-2022"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 35
     steps:
@@ -219,7 +219,7 @@ jobs:
         run: python3 standalone/publish_screenshot.py release-assets/control-panel.png
 
   whisper-test-build:
-    if: ${{ !cancelled() && (github.ref == 'refs/heads/whisper' || github.ref == 'refs/heads/codex/private-sapi-probe' || github.ref == 'refs/heads/codex/on-demand-voices') && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish)) && (inputs.reuse_run_id != '' || needs.package.result == 'success') }}
+    if: ${{ !cancelled() && (github.ref == 'refs/heads/whisper' || github.ref == 'refs/heads/codex/private-sapi-probe' || github.ref == 'refs/heads/codex/on-demand-voices' || github.ref == 'refs/heads/codex/panel-workflow') && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish)) && (inputs.reuse_run_id != '' || needs.package.result == 'success') }}
     needs: [engine, package]
     runs-on: ubuntu-22.04
     permissions:
@@ -242,7 +242,7 @@ jobs:
           def get(path):
               return json.loads(subprocess.check_output(['gh', 'api', 'repos/' + repository + path], text=True))
           metadata = get('/actions/runs/' + run)
-          assert metadata['head_branch'] in ('whisper', 'codex/private-sapi-probe', 'codex/on-demand-voices')
+          assert metadata['head_branch'] in ('whisper', 'codex/private-sapi-probe', 'codex/on-demand-voices', 'codex/panel-workflow')
           assert metadata['path'] == '.github/workflows/standalone.yml'
           jobs = get('/actions/runs/' + run + '/jobs')['jobs']
           for name in ('engine', 'package (ubuntu-22.04)'):
@@ -276,10 +276,11 @@ jobs:
                   shutil.copy2(file, target / file.name)
           private_sapi = os.environ['BUILT_BRANCH'] == 'codex/private-sapi-probe'
           on_demand = os.environ['BUILT_BRANCH'] == 'codex/on-demand-voices'
-          guide = 'standalone/ON-DEMAND-TESTING.md' if on_demand else 'standalone/PRIVATE-SAPI-TESTING.md' if private_sapi else 'recognition/PANEL-TESTING.md'
+          panel_trial = os.environ['BUILT_BRANCH'] == 'codex/panel-workflow'
+          guide = 'standalone/PANEL-WORKFLOW-TESTING.md' if panel_trial else 'standalone/ON-DEMAND-TESTING.md' if on_demand else 'standalone/PRIVATE-SAPI-TESTING.md' if private_sapi else 'recognition/PANEL-TESTING.md'
           shutil.copy2(guide, target / 'TESTING.md')
           repository = os.environ['GITHUB_REPOSITORY']
-          tag = ('on-demand-trial-' if on_demand else 'private-sapi-trial-' if private_sapi else 'whisper-trial-') + os.environ['GITHUB_RUN_ID'] + '-' + os.environ['GITHUB_RUN_ATTEMPT']
+          tag = ('panel-trial-' if panel_trial else 'on-demand-trial-' if on_demand else 'private-sapi-trial-' if private_sapi else 'whisper-trial-') + os.environ['GITHUB_RUN_ID'] + '-' + os.environ['GITHUB_RUN_ATTEMPT']
           base_url = 'https://github.com/' + repository
           download = base_url + '/releases/download/' + tag + '/Akousousin-x86_64.AppImage'
           evidence = base_url + '/actions/runs/' + os.environ['GITHUB_RUN_ID']
@@ -294,7 +295,7 @@ jobs:
                           '-f', 'ref=refs/tags/' + tag, '-f', 'sha=' + os.environ['BUILT_SHA']], check=True)
           subprocess.run(['gh', 'release', 'create', tag, '--verify-tag',
                           '--repo', repository, '--latest=false',
-                          '--prerelease', '--title', ('On-demand voice trial ' if on_demand else 'Private SAPI trial ' if private_sapi else 'Whisper control panel trial ') + os.environ['BUILT_SHA'][:8],
+                          '--prerelease', '--title', ('Panel workflow trial ' if panel_trial else 'On-demand voice trial ' if on_demand else 'Private SAPI trial ' if private_sapi else 'Whisper control panel trial ') + os.environ['BUILT_SHA'][:8],
                           '--notes-file', str(notes),
                           *map(str, target.iterdir())], check=True)
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:

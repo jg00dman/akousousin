@@ -8,7 +8,8 @@ import threading
 import uuid
 
 _LOCK = threading.RLock()
-DEFAULTS = {'dictation_enabled': False, 'reading_enabled': False, 'restore_token': ''}
+DEFAULTS = {'dictation_enabled': False, 'reading_enabled': False, 'restore_token': '',
+            'speech_model_enabled': False, 'recognition_model_enabled': False}
 
 
 class DesktopPreferences:
@@ -23,7 +24,7 @@ class DesktopPreferences:
             except FileNotFoundError:
                 stored = {}
             result = dict(DEFAULTS, **stored)
-            if any(not isinstance(result[key], bool) for key in ('dictation_enabled', 'reading_enabled')):
+            if any(not isinstance(result[key], bool) for key in DEFAULTS if key != 'restore_token'):
                 raise ValueError('Invalid saved shortcut preference')
             if not isinstance(result['restore_token'], str) or len(result['restore_token']) > 4096:
                 raise ValueError('Invalid saved desktop permission')

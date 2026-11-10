@@ -79,6 +79,26 @@ poll();
 
 class PortalRequests:
     """Shared portal RPC/identity handling; sessions retain their own lifecycle."""
+    async def edit_shortcuts(self):
+        if not self.enabled:
+            raise RuntimeError('Enable these shortcuts before changing their bindings')
+        version = (await self.call('org.freedesktop.portal.Desktop', '/org/freedesktop/portal/desktop',
+            'org.freedesktop.DBus.Properties', 'Get', 'ss', ['org.freedesktop.portal.GlobalShortcuts', 'version']))[0].value
+        if version < 2:
+            raise RuntimeError('This desktop portal cannot open the shortcut editor. Use System Settings → Keyboard → Shortcuts to change the Akousousin bindings.')
+        await self.call('org.freedesktop.portal.Desktop', '/org/freedesktop/portal/desktop',
+                        'org.freedesktop.portal.GlobalShortcuts', 'ConfigureShortcuts', 'osa{sv}', [self.shortcuts, '', {}])
+
+    def configure_shortcuts(self):
+        if not self.loop or not self.loop.is_running():
+            raise RuntimeError('Enable these shortcuts before changing their bindings')
+        future = asyncio.run_coroutine_threadsafe(self.edit_shortcuts(), self.loop)
+        try:
+            return future.result(timeout=15)
+        except concurrent.futures.TimeoutError:
+            future.cancel()
+            raise TimeoutError('Desktop shortcut editor did not respond')
+
     async def call(self, service, path, interface, member, signature='', body=None, timeout=10):
         from dbus_next import Message, MessageType
         reply = await asyncio.wait_for(self.bus.call(Message(destination=service, path=path,
@@ -238,6 +258,12 @@ class Desktop(PortalRequests):
                 self.dictation.cancel()
                 self.status = 'Desktop permission session closed; enable dictation again'
         elif message.interface == 'org.freedesktop.portal.GlobalShortcuts':
+            if message.member == 'ShortcutsChanged' and message.body[0] == getattr(self, 'shortcuts', None):
+                for key, fields in message.body[1]:
+                    if key == 'dictate' and fields.get('trigger_description'):
+                        self.shortcut_description = fields['trigger_description'].value
+                        self.status = 'Desktop dictation enabled — ' + self.shortcut_description
+                return
             session, shortcut = message.body[:2]
             if session == getattr(self, 'shortcuts', None) and shortcut == 'dictate' and self.enabled:
                 active = message.member == 'Activated'
@@ -360,17 +386,24 @@ class Desktop(PortalRequests):
         finally:
             self.focus_waiters.pop(identifier, None)
 
-    async def toggle_recording(self):
+    async def toggle_recording(self, expected_window=None):
         try:
             if self.dictation.status()['busy']:
+                if not self.dictation.status().get('dictation_active', True):
+                    raise RuntimeError('Recognition is loading. Wait for Ready before starting dictation.')
                 self.dictation.finish(cancel_insertion=True)
             else:
-                self.dictation.start(target=await self.confirm_focus())
+                if getattr(self, 'preferences', None):
+                    self.preferences.update(recognition_model_enabled=True)
+                target = await self.confirm_focus()
+                if expected_window and target[0] != expected_window:
+                    raise RuntimeError('The editor changed while the tray menu was open')
+                self.dictation.start(target=target)
         except Exception as error:
             self.status = str(error)
 
-    def trigger(self):
-        self.loop.call_soon_threadsafe(lambda: self.loop.create_task(self.toggle_recording()))
+    def trigger(self, expected_window=None):
+        self.loop.call_soon_threadsafe(lambda: self.loop.create_task(self.toggle_recording(expected_window)))
 
     async def shortcut(self, active):
         if not hasattr(self, '_shortcut_lock'):
@@ -384,6 +417,9 @@ class Desktop(PortalRequests):
             if active:
                 current = self.dictation.status()
                 if current['busy']:
+                    if not current.get('dictation_active', True):
+                        self.status = 'Recognition is loading. Wait for Ready before starting dictation.'
+                        return
                     if config.get('stt_mode', 'toggle') == 'toggle':
                         self.dictation.finish(cancel_insertion=True)
                     return
@@ -392,6 +428,8 @@ class Desktop(PortalRequests):
                 # recording after the user has already let go.
                 if config.get('stt_mode', 'toggle') == 'push-to-talk' and not self.shortcut_down:
                     return
+                if getattr(self, 'preferences', None):
+                    self.preferences.update(recognition_model_enabled=True)
                 self.dictation.start(target=target)
             elif config.get('stt_mode', 'toggle') == 'push-to-talk':
                 self.dictation.finish()

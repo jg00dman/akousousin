@@ -14,6 +14,21 @@ from test_backend import audio
 
 
 class GateTests(unittest.TestCase):
+    def test_stop_invalidates_existing_playback_without_muting_new_speech(self):
+        before = speech_gate.snapshot(self.path)
+        speech_gate.stop_speaking(self.path)
+        self.assertTrue(speech_gate.suppressed(self.path, before))
+        self.assertFalse(speech_gate.snapshot(self.path)[0])
+        fresh = speech_gate.snapshot(self.path)
+        self.assertFalse(speech_gate.suppressed(self.path, fresh))
+
+    def test_stop_during_dictation_preserves_the_microphone_mute_lease(self):
+        self.lease.acquire()
+        before = speech_gate.snapshot(self.path)
+        speech_gate.stop_speaking(self.path)
+        self.assertEqual(speech_gate.snapshot(self.path), before)
+        self.lease.close()
+        self.assertFalse(speech_gate.snapshot(self.path)[0])
     def setUp(self):
         folder = tempfile.TemporaryDirectory()
         self.addCleanup(folder.cleanup)

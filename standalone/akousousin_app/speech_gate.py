@@ -5,9 +5,22 @@ import json
 import os
 from pathlib import Path
 import uuid
+import threading
 
 import psutil
 from . import runtime
+
+_LOCK = threading.RLock()
+
+
+def stop_speaking(path):
+    """Invalidate existing AKS playback without muting future speech or dictation."""
+    with _LOCK:
+        if snapshot(path)[0]:
+            return  # Dictation already suppresses playback; preserve its lease.
+        lease = Lease(path)
+        lease.value['active'] = False
+        lease.write()
 
 
 def location(path):
@@ -46,9 +59,11 @@ class Lease:
             temporary.unlink(missing_ok=True)
 
     def acquire(self):
-        self.write()
+        with _LOCK:
+            self.write()
 
     def close(self):
-        if snapshot(self.path)[1] == self.value['generation']:
-            self.value['active'] = False
-            self.write()
+        with _LOCK:
+            if snapshot(self.path)[1] == self.value['generation']:
+                self.value['active'] = False
+                self.write()

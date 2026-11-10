@@ -71,6 +71,19 @@ class Service:
         self.stop(port)
         raise RuntimeError(f'Server did not become ready. See {self.log}')
 
+    def stop_speaking(self, port):
+        health = self.health(port)
+        if not health:
+            return False
+        record = json.loads(self.record.read_text())
+        if record['instance'] != health.get('instance') or health.get('settings') != str(self.settings.resolve()):
+            raise RuntimeError('Cannot stop speech owned by another profile')
+        request = urllib.request.Request(f'http://127.0.0.1:{port}/stop-speaking', data=b'',
+                                          headers={'X-Akousousin-Control': self.control.read_text()})
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        with opener.open(request, timeout=5):
+            return True
+
     def stop(self, port):
         if self.record.exists():
             record = json.loads(self.record.read_text())

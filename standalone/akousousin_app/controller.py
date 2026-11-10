@@ -3,6 +3,7 @@
 """Shared controller, tray and application sessions; all resources remain in the package."""
 import json
 import os
+from pathlib import Path
 import subprocess
 import threading
 import time
@@ -53,6 +54,21 @@ class Sessions:
                     except Exception as error:
                         self.error = 'Could not restore desktop shortcuts: ' + str(error)
 
+    def restore_models(self):
+        """Warm only previously enabled, installed models. Never capture/download."""
+        saved = self.desktop_preferences.load()
+        for enabled, command in (('speech_model_enabled', 'start'), ('recognition_model_enabled', 'stt-prepare')):
+            if saved[enabled] and not self.closed:
+                try:
+                    if command == 'start':
+                        config = settings.load(self.path)
+                        voice = config['voices'].get(config['voice'])
+                        if not voice or not Path(voice['path']).is_file():
+                            continue
+                    self.request({'command': command, 'allow_download': False})
+                except Exception as error:
+                    self.error = 'Could not restore model: ' + str(error)
+
     def speaking(self):
         now = time.monotonic()
         if now >= self._speech_check:
@@ -64,9 +80,11 @@ class Sessions:
     def input_request(self, request):
         operation = request['command']
         if operation == 'stt-prepare':
+            self.desktop_preferences.update(recognition_model_enabled=True)
             self.input_owned = True
-            self.input.prepare()
+            self.input.prepare(allow_download=request.get('allow_download', True))
         elif operation == 'stt-start':
+            self.desktop_preferences.update(recognition_model_enabled=True)
             seconds = request.get('seconds')
             if seconds is not None and (isinstance(seconds, bool) or not isinstance(seconds, int) or not 1 <= seconds <= 30):
                 raise ValueError('Recording test must be 1–30 seconds')
@@ -81,6 +99,7 @@ class Sessions:
                 self.desktop.start_requested = False
             self.input.cancel()
         elif operation == 'stt-unload':
+            self.desktop_preferences.update(recognition_model_enabled=False)
             if self.desktop:
                 self.desktop.start_requested = False
             self.input.unload()
@@ -96,6 +115,8 @@ class Sessions:
             self.desktop.start(listen=request.get('listen', False))
         elif operation == 'stt-toggle':
             if self.input.status()['busy']:
+                if not self.input.status().get('dictation_active', True):
+                    raise RuntimeError('Recognition is loading. Wait for Ready before starting dictation.')
                 self.input.finish(cancel_insertion=True)
             elif self.desktop and self.desktop.start_requested:
                 self.desktop.close()
@@ -103,7 +124,8 @@ class Sessions:
             elif not self.desktop or not self.desktop.enabled:
                 self.input_request({'command': 'stt-desktop-enable', 'listen': True})
             else:
-                self.desktop.trigger()
+                self.desktop_preferences.update(recognition_model_enabled=True)
+                self.desktop.trigger(expected_window=request.get('expected_window'))
         elif operation == 'stt-desktop-disable':
             if self.desktop:
                 self.desktop.close()
@@ -111,6 +133,10 @@ class Sessions:
             self.desktop_preferences.update(dictation_enabled=False, restore_token='')
             self.input.insert = None
             self.input.cancel()
+        elif operation == 'stt-shortcuts-configure':
+            if not self.desktop:
+                raise RuntimeError('Enable dictation shortcuts first')
+            self.desktop.configure_shortcuts()
         elif operation != 'stt-status':
             raise ValueError('Unknown voice input command')
         result = self.input.status()
@@ -130,6 +156,9 @@ class Sessions:
                 if os.name == 'nt':
                     raise RuntimeError('Selection reading is currently for Linux desktops')
                 if operation == 'selection-toggle':
+                    if request.get('expected_window') and self.desktop:
+                        if self.desktop.guard.snapshot()[0] != request['expected_window']:
+                            raise RuntimeError('The editor changed while the tray menu was open')
                     clipboard = request.get('clipboard', False)
                     if not isinstance(clipboard, bool):
                         raise ValueError('Invalid clipboard selection')
@@ -141,15 +170,22 @@ class Sessions:
                 elif operation == 'selection-shortcuts-disable':
                     self.selection.disable()
                     self.desktop_preferences.update(reading_enabled=False)
+                elif operation == 'selection-shortcuts-configure':
+                    if not self.selection.shortcuts:
+                        raise RuntimeError('Enable reading shortcuts first')
+                    self.selection.shortcuts.configure_shortcuts()
                 elif operation != 'selection-status':
                     raise ValueError('Unknown reading command')
                 return self.selection.status()
             if operation == 'panel-status':
-                return {'activation': self.panel_activation, 'page': self.panel_page, 'reading': self.selection.status()}
+                return {'activation': self.panel_activation, 'page': self.panel_page,
+                        'reading': self.selection.status(), 'dictation': self.input_request({'command':'stt-status'}),
+                        'error': self.error}
             if operation in ('start', 'acquire', 'stop', 'wake'):
                 self.error = None
             port = settings.load(self.path)['port']
             if operation == 'acquire':
+                self.desktop_preferences.update(speech_model_enabled=True)
                 owner = psutil.Process(int(request['pid']))
                 self.service.start(port)
                 self.owners[request['session']] = (owner.pid, owner.create_time())
@@ -158,24 +194,32 @@ class Sessions:
                 if previous and not self.owners and not self.independent and not self.on_demand and not self.input_owned and not self.panels and not self.selection.shortcuts and not self.selection.status()['reading']:
                     self.quit()
             elif operation == 'wake':
+                self.desktop_preferences.update(speech_model_enabled=True)
                 self.service.start(port)
                 self.on_demand = True
             elif operation == 'start':
+                self.desktop_preferences.update(speech_model_enabled=True)
                 self.service.start(port)
                 self.independent = True
             elif operation == 'stop':
+                self.desktop_preferences.update(speech_model_enabled=False)
                 self.service.stop(port)
+            elif operation == 'speech-stop':
+                from .speech_gate import stop_speaking
+                self.selection.stop()
+                stop_speaking(self.path)
+                self.service.stop_speaking(port)
             elif operation == 'quit':
                 self.quit(update_pid=request.get('update_pid'))
             elif operation == 'configure':
                 self.independent |= request.get('independent', False)
                 self.panels = [panel for panel in self.panels if panel.poll() is None]
-                self.panel_page = 'Updates' if request.get('page') == 'Updates' else None
+                self.panel_page = request.get('page') if request.get('page') in ('Updates', 'Application', 'Shortcuts', 'Status & setup') else None
                 self.panel_activation += 1
                 if not self.panels:
                     self.panels.append(subprocess.Popen(runtime.command('--panel', '--settings', str(self.path)), env=runtime.environment()))
             elif operation == 'voice':
-                pending = settings.select_voice(self.path, request['voice'])
+                pending = settings.select_voice(self.path, request['voice'], set_language=request.get('set_language', True))
                 return {'pending_registration': pending}
             elif operation != 'status':
                 raise ValueError('Unknown Akousousin command')
@@ -343,11 +387,29 @@ def run(path):
         tray.setToolTip('Akousousin — Neural Voice Engine')
         tray.setIcon(QIcon(str(resources.root() / 'akousousin.png')))
         menu = QMenu()
-        toggle = menu.addAction('Start Speech')
-        toggle.triggered.connect(lambda: submit({'command': 'stop' if toggle.text() == 'Stop Speech' else 'start'}))
-        dictation_toggle = menu.addAction('Start Dictation')
-        dictation_toggle.triggered.connect(lambda: submit({'command': 'stt-toggle'}))
-        voices = menu.addMenu('Default Voice')
+        tray_target = {'window': None}
+        def remember_target():
+            tray_target['window'] = None
+            if state.desktop and state.desktop.enabled:
+                try: tray_target['window'] = state.desktop.guard.snapshot()[0]
+                except RuntimeError: pass
+        menu.aboutToShow.connect(remember_target)
+        def tray_command(command, **options):
+            if command in ('stt-toggle', 'selection-toggle'):
+                options['expected_window'] = tray_target['window']
+            # Let the touch/mouse popup close before querying selection/focus.
+            QTimer.singleShot(150, lambda: submit({'command':command, **options}))
+        read_selected = menu.addAction('Read selected text', lambda: tray_command('selection-toggle', clipboard=False))
+        read_copied = menu.addAction('Read copied text', lambda: tray_command('selection-toggle', clipboard=True))
+        stop_speaking = menu.addAction('Stop speaking', lambda: tray_command('speech-stop'))
+        read_selected.setEnabled(os.name != 'nt')
+        read_copied.setEnabled(os.name != 'nt')
+        menu.addSeparator()
+        dictation_toggle = menu.addAction('Start dictation')
+        dictation_toggle.triggered.connect(lambda: tray_command('stt-toggle'))
+        dictation_toggle.setEnabled(os.name != 'nt')
+        menu.addSeparator()
+        voices = menu.addMenu('Voice')
         def populate():
             voices.clear()
             config = settings.load(path)
@@ -360,14 +422,14 @@ def run(path):
                 action = group.addAction(voice['name'])
                 action.setCheckable(True)
                 action.setChecked(identifier == config['voice'])
-                action.triggered.connect(lambda checked=False, key=identifier: submit({'command': 'voice', 'voice': key}))
+                action.triggered.connect(lambda checked=False, key=identifier: submit({'command': 'voice', 'voice': key, 'set_language': False}))
         voices.aboutToShow.connect(populate)
         downloads_action = menu.addAction('No downloads')
         downloads_action.setEnabled(False)
         downloads_action.setVisible(False)
         update_action = menu.addAction('Update available…', lambda: submit({'command': 'configure', 'page': 'Updates'}))
         update_action.setVisible(False)
-        menu.addAction('Configure', lambda: submit({'command': 'configure'}))
+        menu.addAction('Open control panel', lambda: submit({'command': 'configure'}))
         def quit_requested():
             if (state.owners or state.service.health(settings.load(path)['port'])) and QMessageBox.question(None, 'Quit Akousousin?',
                     'Speech is in use. Quit and stop Piper, interrupting speech?') != QMessageBox.Yes:
@@ -474,12 +536,16 @@ def run(path):
             downloads_action.setVisible(bool(downloads))
             downloads_action.setText(detail or 'No downloads')
             pending_input = bool(state.desktop and state.desktop.start_requested)
-            dictation_toggle.setText('Stop Dictation' if input_status['busy'] or pending_input else 'Start Dictation')
-            toggle.setText('Stop Speech' if running else 'Start Speech')
+            dictation_toggle.setText('Stop dictation' if input_status.get('dictation_active') or pending_input else 'Start dictation')
+            dictation_toggle.setEnabled(os.name != 'nt' and (not input_status['busy'] or input_status.get('dictation_active', False)))
+            read_selected.setText('Stop reading' if reading['reading'] and not reading.get('clipboard') else 'Read selected text')
+            read_copied.setText('Stop reading' if reading['reading'] and reading.get('clipboard') else 'Read copied text')
     timer = QTimer()
     timer.timeout.connect(tick)
     timer.start(1500)
     tick()
+    if graphical:
+        QTimer.singleShot(0, lambda: threading.Thread(target=state.restore_models, daemon=True).start())
     if graphical and os.name != 'nt' and os.environ.get('WAYLAND_DISPLAY'):
         QTimer.singleShot(0, lambda: threading.Thread(target=state.restore_desktop_shortcuts, daemon=True).start())
     try:

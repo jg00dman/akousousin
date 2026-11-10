@@ -10,6 +10,23 @@ from akousousin_app.controller import Sessions
 
 
 class SessionsTests(unittest.TestCase):
+    def test_stop_speaking_does_not_unload_or_disable_the_model(self):
+        self.state.request({'command':'start'})
+        with patch('akousousin_app.speech_gate.stop_speaking') as stop:
+            self.state.request({'command':'speech-stop'})
+        stop.assert_called_once_with(self.path)
+        self.state.service.stop_speaking.assert_called_once_with(5000)
+        self.state.service.stop.assert_not_called()
+        self.assertTrue(self.state.desktop_preferences.load()['speech_model_enabled'])
+
+    def test_explicit_model_unload_prevents_startup_restoration(self):
+        self.state.desktop_preferences.update(recognition_model_enabled=True, speech_model_enabled=True)
+        self.state.request({'command':'stt-unload'})
+        self.state.request({'command':'stop'})
+        saved = self.state.desktop_preferences.load()
+        self.assertFalse(saved['recognition_model_enabled'])
+        self.assertFalse(saved['speech_model_enabled'])
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)

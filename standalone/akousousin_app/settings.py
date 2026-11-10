@@ -12,10 +12,11 @@ from akousousin_backend.recognition_config import system_language, default_model
 DEFAULTS = {'version': 1, 'voice': 'en_US-ljspeech-medium', 'speed': 1.0, 'volume': 0.8,
             'noise_scale': 0.667, 'noise_w_scale': 0.8, 'book_language': '',
             'language_voices': {}, 'voices': {}, 'wine_prefix': '', 'wine': '', 'port': 5000,
-            'idle_timeout': 300, 'stt_model': default_model(system_language()), 'stt_language': system_language(),
+            'idle_timeout': 0, 'stt_model': default_model(system_language()), 'stt_language': system_language(),
             'stt_source': '', 'stt_beep': True, 'stt_mode': 'toggle',
-            'stt_idle_timeout': 3600, 'stt_threshold': 250, 'stt_cpu_threads': cpu_threads(),
-            'stt_keep_loaded': True, 'stt_config_version': 2, 'update_weekly': True, 'update_betas': True}
+            'stt_idle_timeout': 0, 'stt_threshold': 250, 'stt_cpu_threads': cpu_threads(),
+            'stt_keep_loaded': True, 'stt_config_version': 2, 'model_lifetime_version': 1,
+            'update_weekly': True, 'update_betas': True}
 
 
 def config_path():
@@ -41,6 +42,12 @@ def load(path):
         if stored.get('stt_idle_timeout', 300) == 300:
             value['stt_idle_timeout'] = 3600
         value['stt_config_version'] = 2
+    if stored and stored.get('model_lifetime_version', 0) < 1:
+        if stored.get('idle_timeout', 300) == 300:
+            value['idle_timeout'] = 0
+        if stored.get('stt_idle_timeout', 3600) in (300, 3600):
+            value['stt_idle_timeout'] = 0
+        value['model_lifetime_version'] = 1
     value.pop('runtime', None)
     if 'update_betas' not in stored:
         from packaging.version import Version
@@ -124,11 +131,12 @@ def register(path, prefix, wine):
     save(path, value)
 
 
-def select_voice(path, identifier):
+def select_voice(path, identifier, set_language=True):
     value = load(path)
     voice = value['voices'][identifier]
     value['voice'] = identifier
-    value['language_voices'][voice['language']] = identifier
+    if set_language:
+        value['language_voices'][voice['language']] = identifier
     save(path, value)
     # Updating a default needs no DLL replacement. Applications may cache their
     # SAPI voice until restarted, just as they do with Windows voice settings.

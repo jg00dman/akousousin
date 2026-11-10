@@ -15,11 +15,13 @@ class Selection:
         self.cancelled = threading.Event()
         self.state = 'Ready to read selected text'
         self.closed = False
+        self.clipboard = False
 
     def status(self):
         with self.lock:
             shortcuts = self.shortcuts
             return {'reading': bool(self.thread and self.thread.is_alive()), 'state': self.state,
+                    'clipboard': self.clipboard,
                     'shortcuts_enabled': bool(shortcuts and shortcuts.enabled),
                     'shortcut_state': shortcuts.status if shortcuts else 'Reading shortcuts are disabled'}
 
@@ -31,6 +33,7 @@ class Selection:
                 self.stop()
                 return
             self.cancelled = threading.Event()
+            self.clipboard = clipboard
             self.state = 'Reading copied text…' if clipboard else 'Reading selected text…'
             def read():
                 try:

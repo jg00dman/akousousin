@@ -3,7 +3,22 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
-# Unreleased
+# Panel workflow trial — 0.7.0b11.dev1
+
+Separate `codex/panel-workflow` trial; not a beta release or main merge.
+See [trial checks](PANEL-WORKFLOW-TESTING.md).
+
+- Reorder the panel into Status & setup, Voices & languages, Dictation, Connect
+  applications, Shortcuts, Application and About. Add live microphone/readiness
+  status, setup navigation, grouped voices and explicit language voice preferences.
+- Centralise shortcut setup and desktop binding edits. Put reading and dictation
+  actions in the tray for touch use; separate stopping speech/dictation from model
+  unloading. Expose version, licences, logs and copyable diagnostics in About.
+- Default both idle timeouts to Never. Remember explicitly enabled models and
+  restore installed models at launch without downloading or opening a microphone.
+  Former default timeouts migrate once; other custom values are preserved.
+
+## Included post-beta-10 fixes
 
 - A saved Wine executable/AppImage that no longer exists no longer blocks
   registration refresh, application updates or AppImage relocation. Skip only
