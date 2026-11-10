@@ -211,6 +211,11 @@ cd Akousousin
 ~/.local/bin/akousousin --configure
 ```
 
+After installation, `install.sh` offers to launch the installed control panel
+when run in a terminal. The default answer is No. Use `./install.sh --quiet` to
+skip this question during automated installation; errors are still reported.
+Non-interactive installations do not prompt or launch the application.
+
 The per-user installer places executables/private libraries in
 `~/.local/lib/akousousin`, a launcher in `~/.local/bin`, and a menu entry and icon
 under `${XDG_DATA_HOME:-$HOME/.local/share}`. If `~/.local/bin` is not on PATH,
