@@ -109,7 +109,7 @@ class VoiceInputGuiTests(unittest.TestCase):
                 finally:
                     panel.root.destroy()
 
-    def test_update_controls_are_appimage_only_and_preferences_persist(self):
+    def test_update_notifications_in_every_format_install_action_only_in_appimage(self):
         from akousousin_app.panel import Panel
         def widgets(parent):
             for child in parent.winfo_children():
@@ -119,6 +119,7 @@ class VoiceInputGuiTests(unittest.TestCase):
             path = Path(folder) / 'settings.json'
             settings.save(path, copy.deepcopy(settings.DEFAULTS))
             for appimage in (False, True):
+                settings.save(path, copy.deepcopy(settings.DEFAULTS))
                 root = tk.Tk()
                 try:
                     panel = Panel.__new__(Panel)
@@ -128,19 +129,28 @@ class VoiceInputGuiTests(unittest.TestCase):
                     panel.config = settings.load(path)
                     panel.status = tk.StringVar(root)
                     panel.updating = False
+                    panel.busy = False
                     with patch('akousousin_app.updates.is_appimage', return_value=appimage):
                         panel.build_updates(); root.update()
                         checks = [w for w in widgets(root) if isinstance(w, ttk.Checkbutton)]
-                        self.assertEqual(len(checks), 2 if appimage else 0)
-                        if appimage:
-                            weekly = next(w for w in checks if w.cget('text') == 'Check for updates weekly')
-                            weekly.invoke(); root.update()
-                            self.assertFalse(settings.load(path)['update_weekly'])
-                            beta = next(w for w in checks if w.cget('text') == 'Show beta testing updates')
-                            beta.invoke(); root.update()
-                            self.assertFalse(settings.load(path)['update_betas'])
-                        else:
-                            self.assertFalse(any(isinstance(w, ttk.Button) for w in widgets(root)))
+                        self.assertEqual(len(checks), 2)
+                        weekly = next(w for w in checks if w.cget('text') == 'Check for updates weekly')
+                        weekly.invoke(); root.update()
+                        self.assertFalse(settings.load(path)['update_weekly'])
+                        beta = next(w for w in checks if w.cget('text') == 'Show beta testing updates')
+                        beta.invoke(); root.update()
+                        self.assertFalse(settings.load(path)['update_betas'])
+                        label = panel.install_update_button.cget('text')
+                        self.assertEqual(label, 'Install available update…' if appimage else 'Open update download page…')
+                        if not appimage:
+                            from akousousin_app import updates
+                            candidate = {'version': '99.0.0', 'page': updates.RELEASES + '/tag/v99.0.0'}
+                            with patch('akousousin_app.panel.messagebox.askyesno', return_value=True), \
+                                    patch('akousousin_app.panel.webbrowser.open') as browser, \
+                                    patch('akousousin_app.updates.install') as install:
+                                panel.confirm_update(candidate)
+                                browser.assert_called_once_with(candidate['page'])
+                                install.assert_not_called()
                 finally:
                     root.destroy()
 
