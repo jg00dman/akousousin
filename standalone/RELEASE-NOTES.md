@@ -5,6 +5,11 @@ SPDX-FileCopyrightText: 2026 John Goodman
 
 # Unreleased
 
+- Preview playback failures identify the selected audio player, exit status,
+  captured error and saved WAV path. The existing selectable error dialog offers
+  Copy command and Copy details. Player choice is unchanged pending diagnosis of
+  the reported playback failure.
+
 - Keep the existing panel layout; the GUI workflow experiment is parked on its
   separate branch. Tar installation creates its menu entry by default and now
   invokes the installed AKS CLI for Speech Dispatcher setup. AppImage relocation

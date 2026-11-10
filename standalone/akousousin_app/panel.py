@@ -781,29 +781,9 @@ class Panel:
                 finally:
                     winsound.PlaySound(None, 0)
             else:
-                player = next((shutil.which(name) for name in ('pw-play', 'paplay', 'aplay') if shutil.which(name)), None)
-                if player:
-                    import time
-                    with subprocess.Popen([player, str(path)], env=runtime.host_environment()) as playback:
-                        deadline = time.monotonic() + 120
-                        try:
-                            while playback.poll() is None:
-                                if speech_gate.suppressed(self.path, gate):
-                                    return 'Preview muted while dictation is active.'
-                                if time.monotonic() >= deadline:
-                                    raise TimeoutError('Preview playback timed out')
-                                time.sleep(.025)
-                            if playback.returncode:
-                                raise RuntimeError('Preview playback failed')
-                        finally:
-                            if playback.poll() is None:
-                                playback.terminate()
-                                try:
-                                    playback.wait(2)
-                                except subprocess.TimeoutExpired:
-                                    playback.kill(); playback.wait()
-                else:
-                    return f'Preview saved to {path}; no pw-play, paplay or aplay audio player was found.'
+                from .playback import play_wav
+                if not play_wav(path, cancelled=lambda: speech_gate.suppressed(self.path, gate)):
+                    return 'Preview muted while dictation is active.'
             return 'Preview complete.'
         self.worker(preview, self.status.set)
 
