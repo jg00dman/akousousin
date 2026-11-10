@@ -14,6 +14,27 @@ from akousousin_backend.models import install, installed
 
 
 class ModelsTests(unittest.TestCase):
+    def test_unicode_model_install_with_windows_default_encoding(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder) / 'shared'
+            source = Path(folder) / 'source'; source.mkdir()
+            payload = json.dumps({'tokens': 'Ё Ελληνικά עברית'}, ensure_ascii=False).encode('utf-8')
+            # This fixture reproduces the undefined CP1252 byte in real tokenizers.
+            with self.assertRaises(UnicodeDecodeError):
+                payload.decode('cp1252')
+            for name, data in [('model.bin', b'model'), ('config.json', payload),
+                               ('tokenizer.json', payload), ('vocabulary.txt', b'hello')]:
+                (source / name).write_bytes(data)
+            original = Path.read_text
+            def windows_read(path, encoding=None, errors=None):
+                return original(path, encoding=encoding or 'cp1252', errors=errors)
+            with patch.object(Path, 'read_text', windows_read):
+                target = install('base.en', root=root, source=source)
+            self.assertTrue(installed('base.en', root))
+            self.assertEqual((target / 'tokenizer.json').read_bytes(), payload)
+            receipt = json.loads((target / 'installation.json').read_text(encoding='utf-8'))
+            self.assertEqual(receipt['sha256']['tokenizer.json'], hashlib.sha256(payload).hexdigest())
+
     def setUp(self):
         state = tempfile.TemporaryDirectory()
         self.addCleanup(state.cleanup)

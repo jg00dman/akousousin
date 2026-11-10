@@ -5,8 +5,15 @@ SPDX-FileCopyrightText: 2026 John Goodman
 
 # API coverage and implementation status
 
-Applies to main's **0.7.0b5 beta**, reviewed on 7 November 2026.
+Applies to main's **0.7.0b9 beta**, reviewed on 10 November 2026.
 [Releases and downloads](https://github.com/jg00dman/akousousin/releases).
+
+**Complete native Windows app support is forthcoming, not yet working end to
+end.** The ZIP is experimental; user testing found voice installation and
+Whisper model-install failures. Windows microphone capture, global shortcuts
+and desktop dictation integration remain unimplemented. SAPI output coverage
+below describes that component, not complete application readiness. See the
+[Windows work plan](standalone/WINDOWS-PLAN.md).
 
 **Core speech output works through SAPI and Speech Dispatcher; neither is a
 complete implementation of its wider API. Linux Whisper voice input is experimental.

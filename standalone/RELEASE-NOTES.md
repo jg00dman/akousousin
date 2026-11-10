@@ -3,7 +3,26 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
+# Unreleased
+
+**Complete native Windows application support is forthcoming and is not yet
+working end to end.** The Windows ZIP is experimental: user testing found
+voice-install settings failures and Whisper tokenizer decoding failures. Windows
+global dictation/reading shortcuts, native microphone capture and desktop text
+integration are not implemented. SAPI speech-output components have automated
+coverage, but that is not evidence of a working complete Windows application.
+See the [Windows work plan](WINDOWS-PLAN.md).
+
+- Fix model JSON reads to use UTF-8 rather than the Windows default code page.
+- Use unique settings staging files and bounded retries for Windows file locks.
+  These fixes are in source; they are not in the published 0.7.0b9 packages.
+
 # Akousousin 0.7.0b9 beta
+
+**Windows support is forthcoming, not yet working end to end.** This beta's
+Windows ZIP is experimental and lacks native dictation capture and global
+reading/dictation shortcuts. User testing also identified voice-install and
+Whisper-download failures; do not treat package CI success as desktop readiness.
 
 - Use a single deterministic Whisper decoding attempt instead of retrying at
   multiple temperatures. Noisy fixtures reproduce substantial retry overhead;

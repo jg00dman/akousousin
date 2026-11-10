@@ -4,6 +4,8 @@
 import json
 import locale
 import os
+import tempfile
+import time
 from pathlib import Path
 from akousousin_backend.recognition_config import system_language, default_model, cpu_threads, TIERS
 
@@ -85,9 +87,24 @@ def save(path, value):
     validate(value)
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix('.tmp')
-    temporary.write_text(json.dumps(value, indent=2), encoding='utf-8')
-    temporary.replace(path)
+    # Independent panel/controller writers must never share a staging file.
+    descriptor, name = tempfile.mkstemp(prefix=path.name + '.', suffix='.tmp', dir=path.parent)
+    temporary = Path(name)
+    try:
+        with os.fdopen(descriptor, 'w', encoding='utf-8') as output:
+            json.dump(value, output, indent=2)
+        for attempt in range(6):
+            try:
+                temporary.replace(path)
+                break
+            except PermissionError:
+                # Windows denies replacement while another process holds the
+                # file open. Retry briefly, retaining the previous good file.
+                if os.name != 'nt' or attempt == 5:
+                    raise
+                time.sleep(.05 * (attempt + 1))
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def lcid(language):

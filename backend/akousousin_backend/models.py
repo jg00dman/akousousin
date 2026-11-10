@@ -84,11 +84,11 @@ def install(model='small', root=None, source=None, progress=lambda text: None):
                     raise ValueError('Incomplete model: ' + name)
                 with file.open('rb') as stream:
                     hashes[name] = hashlib.file_digest(stream, 'sha256').hexdigest()
-            json.loads((stage / 'config.json').read_text())
-            json.loads((stage / 'tokenizer.json').read_text())
+            json.loads((stage / 'config.json').read_text(encoding='utf-8'))
+            json.loads((stage / 'tokenizer.json').read_text(encoding='utf-8'))
             (stage / 'installation.json').write_text(json.dumps({'model': model, 'sha256': hashes,
                 'repository': repository if source is None else 'local import',
-                'revision': revision if source is None else None}, indent=2))
+                'revision': revision if source is None else None}, indent=2), encoding='utf-8')
             target = root / model
             # Only an incomplete installation is replaced; imports cannot silently
             # overwrite an already installed model.
