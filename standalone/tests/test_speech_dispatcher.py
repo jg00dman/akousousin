@@ -14,6 +14,41 @@ from test_backend import audio
 
 
 class DispatcherTests(unittest.TestCase):
+    def test_default_setup_retains_espeak_and_spiel_and_restores_them_on_remove(self):
+        from akousousin_app.speech_dispatcher import configure
+        with self.registration_environment(), patch('subprocess.run'):
+            config = self.root / 'config/speech-dispatcher/speechd.conf'
+            config.parent.mkdir(parents=True)
+            original = ('AddModule "espeak-ng" "sd_espeak-ng" "espeak-ng.conf"\n'
+                        'AddModule "spiel" "sd_spiel" "spiel.conf"\nDefaultModule "spiel"\n')
+            config.write_text(original)
+            configure(self.path)
+            self.assertTrue(config.read_text().startswith(original))
+            self.assertIn(DEFAULT_BLOCK, config.read_text())
+            configure(self.path, remove=True)
+            text = config.read_text()
+            self.assertIn('AddModule "espeak-ng"', text)
+            self.assertIn('AddModule "spiel"', text)
+            self.assertIn('DefaultModule "spiel"', text)
+            self.assertNotIn('DefaultModule "akousousin"', text)
+            self.assertFalse(settings.load(self.path)['speechd_setup_pending'])
+
+    def test_model_free_setup_defers_default_and_finishes_through_same_configure_path(self):
+        from akousousin_app.speech_dispatcher import configure, complete_pending_setup
+        ready = settings.load(self.path)
+        settings.save(self.path, dict(ready, voices={}))
+        with self.registration_environment(), patch('subprocess.run'):
+            config = self.root / 'config/speech-dispatcher/speechd.conf'
+            config.parent.mkdir(parents=True)
+            config.write_text('DefaultModule "spiel"\n')
+            configure(self.path)
+            self.assertTrue(settings.load(self.path)['speechd_setup_pending'])
+            self.assertNotIn(DEFAULT_BLOCK, config.read_text())
+            settings.save(self.path, dict(settings.load(self.path), voices=ready['voices']))
+            complete_pending_setup(self.path)
+            self.assertIn(DEFAULT_BLOCK, config.read_text())
+            self.assertFalse(settings.load(self.path)['speechd_setup_pending'])
+
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)

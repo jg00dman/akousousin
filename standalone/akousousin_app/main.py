@@ -4,6 +4,7 @@
 import argparse
 import multiprocessing
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -63,6 +64,7 @@ def main():
     bundle.add_argument('--uninstall-bundle', type=Path, help='Remove a tar installation, preserving models and settings')
     parser.add_argument('--bundle-prefix', type=Path, help='Tar installation prefix (default: ~/.local)')
     parser.add_argument('--quiet', action='store_true', help='Do not offer to launch after installing a tar bundle')
+    parser.add_argument('--without-speech-dispatcher', action='store_true', help='Skip default Speech Dispatcher setup during tar installation')
     args = parser.parse_args()
     if args.install_bundle or args.uninstall_bundle:
         if os.name != 'posix' or sys.platform != 'linux':
@@ -71,16 +73,22 @@ def main():
             raise RuntimeError('Run this per-user installer without sudo')
         if runtime.call(args.settings, {'command': 'status'}, launch=False):
             raise RuntimeError('Quit AKS from its tray before installing or removing a bundle')
-        from .linux_bundle import install, uninstall
+        from .linux_bundle import install, uninstall, speech_setup
         if args.install_bundle:
             target = install(args.install_bundle, args.bundle_prefix)
             print('Installed: ' + str(target))
+            if not args.without_speech_dispatcher:
+                try:
+                    speech_setup(target, args.settings)
+                except (OSError, subprocess.SubprocessError) as error:
+                    print('Warning: application installed; Speech Dispatcher setup could not run: ' + str(error), file=sys.stderr)
             if not args.quiet and sys.stdin.isatty():
                 answer = input('Launch Akousousin now? [y/N] ').strip().lower()
                 if answer in ('y', 'yes'):
                     executable = str(target / 'akousousin')
                     os.execve(executable, [executable, '--configure'], dict(os.environ, PYINSTALLER_RESET_ENVIRONMENT='1'))
         else:
+            speech_setup(args.uninstall_bundle, args.settings, remove=True)
             print(uninstall(args.uninstall_bundle))
         return
     if args.protocol_version:
@@ -122,7 +130,10 @@ def main():
     if args.install_speech_dispatcher:
         from .speech_dispatcher import configure
         configure(args.settings)
-        print('Akousousin added to Speech Dispatcher. Speech Dispatcher restarted; select akousousin.')
+        if settings.load(args.settings).get('speechd_setup_pending'):
+            print('Speech Dispatcher support registered. Download or import a voice in AKS to select it as the default; the existing default is unchanged until then.')
+        else:
+            print('Speech Dispatcher support installed; Akousousin is the default. Other engines remain available.')
         return
     if args.wine_prefix:
         config['wine_prefix'] = str(args.wine_prefix.expanduser().resolve())

@@ -91,6 +91,13 @@ def _install(source, target, path):
             replaced = True
             subprocess.run([str(target), '--settings', str(path), '--refresh-registrations'],
                            env=environment, capture_output=True, text=True, check=True, timeout=180)
+            from .speech_dispatcher import run_setup
+            try:
+                run_setup(target, path)
+            except (OSError, subprocess.SubprocessError) as error:
+                config = settings.load(path)
+                config['speechd_setup_warning'] = 'Application installed; Speech Dispatcher setup could not run: ' + str(error)
+                settings.save(path, config)
             create_menu_entry(target)
             warnings = updates.registration_warnings(path)
             if warnings:

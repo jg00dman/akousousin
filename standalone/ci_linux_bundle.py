@@ -31,8 +31,15 @@ with tempfile.TemporaryDirectory(prefix='akousousin-tar-') as directory:
     assert json.loads((installed / 'resources/build.json').read_text())['distribution'] == 'linux-tar'
     assert (installed / 'licenses/Akousousin-GPL-3.0.txt').is_file()
     assert (installed / 'licenses/Engine-LGPL-2.1.txt').is_file()
+    desktop = root / 'data/applications/org.akousousin.Akousousin.desktop'
+    assert 'NoDisplay=false' in desktop.read_text() and str(installed) in desktop.read_text()
+    dispatcher = root / 'data/Akousousin/speech-dispatcher-module'
+    assert dispatcher.is_file() and str(installed / 'akousousin') in dispatcher.read_text()
+    preferences = json.loads((root / 'config/Akousousin/settings.json').read_text())
+    assert preferences['speechd_setup_pending'], 'Model-free installation must retain the previous default until a voice is ready'
     run(str(source / 'install.sh'), '--bundle-prefix', str(prefix))
     run(str(installed / 'uninstall.sh'))
     assert not installed.exists()
     assert not (prefix / 'bin/akousousin').exists()
-    print('PASS: no-FUSE bundle launch, install, upgrade, licence notices and uninstall')
+    assert not dispatcher.exists(), 'Uninstall left a dangling Speech Dispatcher launcher'
+    print('PASS: no-FUSE bundle launch, install, upgrade, menu/default speech setup, licences and uninstall')

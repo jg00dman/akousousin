@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 John Goodman
-"""Per-user tar installation. No downloads, system files or speech registrations."""
+"""Per-user application files; speech setup delegates to AKS's public CLI."""
 import base64
 from contextlib import contextmanager
 import hashlib
@@ -14,6 +14,11 @@ import tempfile
 from .desktop_identity import APP_ID, MARKER, desktop_exec
 
 RECEIPT = '.akousousin-install.json'
+
+
+def speech_setup(target, settings_path, remove=False):
+    from .speech_dispatcher import run_setup
+    return run_setup(Path(target) / 'akousousin', settings_path, remove=remove)
 
 
 def locations(prefix, data_home):
@@ -149,4 +154,4 @@ def uninstall(target):
             else:
                 atomic_write(path, base64.b64decode(entry['previous']))
         shutil.rmtree(target)
-    return 'Application removed. Settings, models and speech registrations were preserved.'
+    return 'Application files removed. Settings, models, voices and Wine registrations were preserved.'

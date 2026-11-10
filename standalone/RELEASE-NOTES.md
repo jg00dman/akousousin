@@ -5,6 +5,15 @@ SPDX-FileCopyrightText: 2026 John Goodman
 
 # Unreleased
 
+- Keep the existing panel layout; the GUI workflow experiment is parked on its
+  separate branch. Tar installation creates its menu entry by default and now
+  invokes the installed AKS CLI for Speech Dispatcher setup. AppImage relocation
+  uses the same command. AKS becomes the default while existing eSpeak/Spiel
+  engines remain options. A model-free install defers default selection until a
+  voice is downloaded/imported. Removal delegates to AKS's own unregistration
+  command when the module belongs to this tar installation. `--quiet` and the
+  upstream launch offer are retained; `--without-speech-dispatcher` skips setup.
+
 - Fix standalone tar SAPI cold start when Wine supplies a foreign APPIMAGE or
   private-library environment. Registration stores the current package launcher
   explicitly and clears inherited Wine environment variables. Reapply existing

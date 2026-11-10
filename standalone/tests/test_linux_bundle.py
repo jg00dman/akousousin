@@ -5,13 +5,29 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 
 from akousousin_app import linux_bundle as bundle
 
 
 @unittest.skipUnless(os.name == 'posix', 'Linux bundle installer')
 class BundleTests(unittest.TestCase):
+    def test_speech_setup_delegates_to_installed_aks_with_clean_environment(self):
+        target = self.prefix / 'lib/akousousin'
+        settings_path = self.root / 'settings.json'
+        with patch.dict(os.environ, {'APPIMAGE':'/foreign-wine.AppImage', 'APPDIR':'/foreign', 'LD_LIBRARY_PATH':'/foreign/lib'}), \
+                patch('akousousin_app.speech_dispatcher.subprocess.run', return_value=Mock(returncode=0, stdout='', stderr='')) as run:
+            bundle.speech_setup(target, settings_path)
+        self.assertEqual(run.call_args.args[0], [str(target / 'akousousin'), '--settings', str(settings_path), '--install-speech-dispatcher'])
+        for name in ('APPIMAGE', 'APPDIR', 'LD_LIBRARY_PATH'):
+            self.assertNotIn(name, run.call_args.kwargs['env'])
+
+    def test_removal_does_not_unregister_another_installation(self):
+        with patch('akousousin_app.speech_dispatcher.belongs_to', return_value=False), \
+                patch('akousousin_app.speech_dispatcher.subprocess.run') as run:
+            bundle.speech_setup(self.prefix / 'lib/akousousin', self.root / 'settings.json', remove=True)
+        run.assert_not_called()
+
     def setUp(self):
         folder = tempfile.TemporaryDirectory()
         self.addCleanup(folder.cleanup)

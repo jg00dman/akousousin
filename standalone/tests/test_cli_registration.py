@@ -37,18 +37,24 @@ class CliRegistrationTests(unittest.TestCase):
 class BundleLaunchTests(unittest.TestCase):
     def test_launch_prompt_quiet_and_noninteractive_installation(self):
         target = Path('/custom prefix/lib/akousousin')
-        for quiet, tty, answer in ((True, True, 'yes'), (False, False, 'yes'),
-                                   (False, True, ''), (False, True, ' YES ')):
+        for quiet, tty, answer, skip in ((True, True, 'yes', False), (False, False, 'yes', False),
+                                         (False, True, '', False), (False, True, ' YES ', False),
+                                         (True, False, '', True)):
             with self.subTest(quiet=quiet, tty=tty, answer=answer), \
                     patch.object(main.sys, 'argv', ['akousousin', '--install-bundle', '/bundle'] +
-                                 (['--quiet'] if quiet else [])), \
+                                 (['--quiet'] if quiet else []) + (['--without-speech-dispatcher'] if skip else [])), \
                     patch.object(main.os, 'geteuid', return_value=1000), \
                     patch.object(main.runtime, 'call', return_value=None), \
                     patch('akousousin_app.linux_bundle.install', return_value=target), \
+                    patch('akousousin_app.linux_bundle.speech_setup') as setup, \
                     patch.object(main.sys, 'stdin', Mock(isatty=Mock(return_value=tty))), \
                     patch('builtins.input', return_value=answer) as prompt, \
                     patch.object(main.os, 'execve') as launch, contextlib.redirect_stdout(io.StringIO()):
                 main.main()
+                if skip:
+                    setup.assert_not_called()
+                else:
+                    setup.assert_called_once_with(target, settings.config_path())
                 self.assertEqual(prompt.called, not quiet and tty)
                 if not quiet and tty and answer.strip().lower() == 'yes':
                     executable = str(target / 'akousousin')

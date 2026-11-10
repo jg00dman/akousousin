@@ -25,7 +25,8 @@ class AppImageInstallTests(unittest.TestCase):
         (self.resources / 'build.json').write_text('{"distribution":"appimage"}')
         for context in (patch.dict(os.environ, {'APPIMAGE': str(self.source),
                             'XDG_DATA_HOME': str(self.root / 'data'), 'XDG_STATE_HOME': str(self.root / 'state')}),
-                        patch.object(integration.resources, 'root', return_value=self.resources)):
+                        patch.object(integration.resources, 'root', return_value=self.resources),
+                        patch('akousousin_app.speech_dispatcher.run_setup')):
             context.start(); self.addCleanup(context.stop)
 
     def test_visible_menu_uses_persistent_icon_and_survives_identity_refresh(self):

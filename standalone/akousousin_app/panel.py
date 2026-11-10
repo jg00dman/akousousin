@@ -97,6 +97,8 @@ class Panel:
         from .voice_input import VoiceInput
         self.voice_input = VoiceInput(self, self.pages['Voice Input'])
         self.build_updates()
+        if self.config.get('speechd_setup_warning'):
+            self.status.set(self.config['speechd_setup_warning'])
         if os.name != 'nt':
             self.build_selection()
         from .download_status import DownloadView
@@ -399,6 +401,15 @@ class Panel:
             self.build_overview()
         self.update_default()
         self.status.set('Voice installed and retained for future upgrades. Apply voice registration in Settings when needed.')
+        if os.name != 'nt' and self.config.get('speechd_setup_pending'):
+            def finish_setup():
+                from .speech_dispatcher import complete_pending_setup
+                complete_pending_setup(self.path)
+                return settings.load(self.path)
+            def finished(config):
+                self.config = config
+                self.status.set(config.get('speechd_setup_warning') or 'Voice installed. Akousousin is now the Speech Dispatcher default; other engines remain available.')
+            self.worker(finish_setup, finished)
 
     def download_starter(self):
         key = resources.STARTER
@@ -689,8 +700,15 @@ class Panel:
         from .speech_dispatcher import configure
         if not self.save():
             return
-        self.worker(lambda: configure(self.path, remove=remove),
-                    lambda _: self.status.set('Speech Dispatcher support ' + ('removed.' if remove else 'installed.') + ' Speech Dispatcher restarted.'))
+        def completed(_):
+            self.config = settings.load(self.path)
+            if remove:
+                self.status.set('Speech Dispatcher support removed; the previous default was restored.')
+            elif self.config.get('speechd_setup_pending'):
+                self.status.set('Speech Dispatcher support registered. Download or import a voice to make AKS the default; the existing default is unchanged until then.')
+            else:
+                self.status.set('Akousousin is the Speech Dispatcher default. Other engines remain available.')
+        self.worker(lambda: configure(self.path, remove=remove), completed)
 
     def install(self):
         if not self.save():

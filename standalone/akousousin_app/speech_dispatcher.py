@@ -7,9 +7,11 @@ Dispatcher owns playback, priorities and STOP/PAUSE of its queued audio.
 """
 import io
 import json
+from pathlib import Path
 import logging
 import re
 import sys
+import subprocess
 import threading
 import time
 import urllib.error
@@ -497,7 +499,16 @@ class RestartError(RuntimeError):
 def configure(path, remove=False):
     """Save registration first; restart only this user's systemd service last."""
     import subprocess
-    config = (uninstall if remove else install)(path)
+    preferences = settings.load(path)
+    pending = not remove and preferences['voice'] not in preferences['voices']
+    config = uninstall(path) if remove else install(path, set_default=not pending)
+    # A lean installation can register the module without replacing a working
+    # default with an engine that has no voice yet. Explicit first voice setup
+    # completes this same configuration path; it never downloads implicitly.
+    preferences = settings.load(path)
+    preferences['speechd_setup_pending'] = pending
+    preferences.pop('speechd_setup_warning', None)
+    settings.save(path, preferences)
     # A nested AppImage launch can put a previous mount's libraries in ORIG.
     # systemctl must use the host's libraries, including its own OpenSSL.
     environment = runtime.host_environment()
@@ -510,8 +521,41 @@ def configure(path, remove=False):
         detail = getattr(error, 'stderr', '') or str(error)
         if isinstance(detail, bytes):
             detail = detail.decode(errors='replace')
-        raise RestartError(detail.strip()) from error
+        warning = RestartError(detail.strip())
+        preferences = settings.load(path)
+        preferences['speechd_setup_warning'] = str(warning)
+        settings.save(path, preferences)
+        raise warning from error
     return config
+
+
+def complete_pending_setup(path):
+    """Finish explicitly requested setup after a voice download/import."""
+    if not settings.load(path).get('speechd_setup_pending'):
+        return
+    try:
+        configure(path)
+    except (OSError, ValueError, RuntimeError) as error:
+        preferences = settings.load(path)
+        preferences['speechd_setup_pending'] = True
+        preferences['speechd_setup_warning'] = str(error)
+        settings.save(path, preferences)
+        logging.getLogger(__name__).warning('Speech Dispatcher setup needs attention: %s', error)
+
+
+def belongs_to(executable):
+    """Whether our managed launcher points at this executable (for removal)."""
+    _, launcher, _ = dispatcher_paths()
+    if not launcher.is_file():
+        return False
+    content = launcher.read_text(encoding='utf-8')
+    if not content.startswith(LAUNCHER_HEADER):
+        return False
+    for line in content.splitlines():
+        fields = shlex.split(line, comments=True)
+        if fields and fields[0] == 'exec' and len(fields) > 1:
+            return Path(fields[1]).resolve() == Path(executable).resolve()
+    return False
 
 
 def verify_reading_engine(path):
@@ -548,3 +592,24 @@ def prepare_reading(path):
             pass  # Repair saved registration or a stopped daemon once.
     configure(path)
     verify_reading_engine(path)
+
+
+def run_setup(executable, settings_path, remove=False):
+    """Invoke the installed app's public setup command; never copy its logic."""
+    from . import runtime
+    executable = Path(executable)
+    if remove and not belongs_to(executable):
+        return
+    environment = runtime.host_environment()
+    for key in ('APPIMAGE', 'APPDIR', 'AKOUSOUSIN_RESOURCES'):
+        environment.pop(key, None)
+    flag = '--uninstall-speech-dispatcher' if remove else '--install-speech-dispatcher'
+    result = subprocess.run([str(executable), '--settings', str(settings_path), flag],
+                            env=environment, capture_output=True, text=True, timeout=60)
+    if result.returncode:
+        if remove and belongs_to(executable):
+            raise RuntimeError('Speech Dispatcher registration could not be removed. Application retained.\n' + result.stderr)
+        print('Warning: Speech Dispatcher setup needs attention (application installation is retained):\n'
+              + (result.stderr.strip() or result.stdout.strip()), file=sys.stderr)
+    elif result.stdout.strip():
+        print(result.stdout.strip())

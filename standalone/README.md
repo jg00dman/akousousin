@@ -216,6 +216,20 @@ when run in a terminal. The default answer is No. Use `./install.sh --quiet` to
 skip this question during automated installation; errors are still reported.
 Non-interactive installations do not prompt or launch the application.
 
+The installer creates the application-menu entry and icon by default. It also
+invokes the installed AKS executable's `--install-speech-dispatcher` command:
+this is the same setup implementation used by the panel, not a second installer
+configuration path. With an installed voice, AKS becomes the default output
+module; existing eSpeak, Spiel and other engines stay available. With no voice,
+the module is registered and default selection is deferred until the first voice
+download/import completes. No model is downloaded by the installer.
+
+Use `./install.sh --without-speech-dispatcher` to skip this setup. `--quiet` only
+suppresses the launch question. If the daemon is missing or cannot restart, the
+application installation remains valid and the installer prints recovery details;
+the panel also retains setup warnings. Speech Dispatcher itself is a host package
+and is not installed using sudo by AKS.
+
 The per-user installer places executables/private libraries in
 `~/.local/lib/akousousin`, a launcher in `~/.local/bin`, and a menu entry and icon
 under `${XDG_DATA_HOME:-$HOME/.local/share}`. If `~/.local/bin` is not on PATH,
@@ -229,15 +243,17 @@ For upgrades, quit AKS, extract the new archive separately and rerun its install
 with the same prefix and XDG environment. Installation stages a complete copy,
 preserves the previous installation for rollback during replacement, and rejects
 unowned/conflicting launcher files. Voice/model caches and configuration retain
-their existing XDG locations. No speech registrations are changed automatically:
-use Settings for explicit Wine or Speech Dispatcher setup.
+their existing XDG locations. Wine registration remains explicit in Settings;
+Speech Dispatcher setup uses the shared AKS command described above.
 
 Run `~/.local/lib/akousousin/uninstall.sh` to remove this application installation.
 It removes unchanged installer-owned launchers/icons and restores any previous
 managed AKS desktop entries. Modified external files, configuration, downloaded
-models/voices and speech registrations are preserved. If removing AKS entirely,
-first remove its Wine/Speech Dispatcher registrations using the existing Settings
-controls; bundle uninstall does not unregister them. Quit AKS before uninstall.
+models/voices and Wine registrations are preserved. Bundle removal invokes AKS's
+own removal command for Speech Dispatcher only if its managed launcher points to
+that installed executable; other engines and their original default are retained.
+If removing AKS entirely, first remove its Wine registrations using Settings.
+Quit AKS before uninstall.
 The tar update notification opens the release page; rerun the new installer to
 upgrade. It cannot perform AppImage replacement.
 
