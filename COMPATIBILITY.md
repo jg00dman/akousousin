@@ -5,7 +5,7 @@ SPDX-FileCopyrightText: 2026 John Goodman
 
 # API coverage and implementation status
 
-Applies to main's **0.7.0b11 beta**, reviewed on 10 November 2026.
+Applies to main's **0.8.0** (the same code as 0.7.0b11 beta), reviewed on 10 November 2026.
 [Releases and downloads](https://github.com/jg00dman/akousousin/releases).
 
 **Complete native Windows app support is forthcoming, not yet working end to

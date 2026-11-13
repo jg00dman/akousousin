@@ -3,7 +3,9 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
-# Akousousin 0.7.0b11 beta
+# Akousousin 0.8.0
+
+The first stable release: the same code as 0.7.0b11, which proved stable in testing.
 
 The existing control panel is retained; the GUI workflow trial is parked.
 **Complete native Windows app support is forthcoming and not yet working end

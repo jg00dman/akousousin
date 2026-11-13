@@ -203,14 +203,20 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           version=$(sed -n 's/^version = "\([^"]*\)"/\1/p' standalone/pyproject.toml)
-          tag="standalone-beta-${version}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          # A plain version (0.8.0) is a stable release, tagged v<version> as the in-app
+          # updater expects; anything else (0.7.0b11, 0.8.0rc1) stays a unique prerelease.
+          if [[ "$version" =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
+            tag="v${version}" kind=(--latest)
+          else
+            tag="standalone-beta-${version}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" kind=(--prerelease)
+          fi
           if actual=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha' 2>/dev/null); then
             [[ "$actual" == "$GITHUB_SHA" ]]
           else
             gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$tag" -f sha="$GITHUB_SHA"
           fi
           gh release create "$tag" --verify-tag --repo "$GITHUB_REPOSITORY" \
-            --prerelease --title "Akousousin ${version}" \
+            "${kind[@]}" --title "Akousousin ${version}" \
             --notes-file standalone/RELEASE-NOTES.md release-assets/*
       - name: Show the released control panel on the repository homepage
         if: github.ref == 'refs/heads/main'
