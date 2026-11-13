@@ -165,6 +165,12 @@ class UpdateTests(unittest.TestCase):
 
     def test_weekly_check_persists_and_reminder_does_not_install(self):
         from akousousin_app import settings
+        # A beta install (which checks for betas by default) being offered a newer beta;
+        # independent of the version this build happens to carry.
+        for target in ('akousousin_app.__version__', 'akousousin_app.updates.__version__'):
+            running = patch(target, '0.7.0b11')
+            running.start()
+            self.addCleanup(running.stop)
         path = self.root / 'settings.json'
         settings.save(path, dict(settings.DEFAULTS))
         candidate = dict(self.update, version='0.8.0b1')
