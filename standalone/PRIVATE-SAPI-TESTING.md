@@ -20,7 +20,8 @@ This trial targets fresh 64-bit Wine-prefix installations. Existing-install
 migration is outside its scope. Choose the Wine executable/AppImage used by the
 prefix in Settings, then install/apply voice registration. The compatibility
 workaround is enabled only when needed or explicitly requested for testing, and
-is limited to Wine 11.21. Native Windows system SAPI is not modified.
+has no Wine-version gate. The bundled DLL is built from Wine 11.21; this does not
+claim validation on every Wine release. Native Windows system SAPI is not modified.
 
 Quit the older AKS controller before launching this AppImage. The voice library,
 Whisper model cache, speech output and Linux dictation remain available. No model

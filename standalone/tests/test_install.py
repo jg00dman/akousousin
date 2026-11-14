@@ -202,6 +202,23 @@ class InstallTests(unittest.TestCase):
         for key in self.sapi_keys:
             self.assertEqual(self.app.reg[key], self.original[key])
 
+    def test_compatibility_install_is_not_blocked_by_wine_version(self):
+        execute = self.app.execute
+        def missing_enumeration(*args, **kwargs):
+            if args == ('--version',):
+                raise AssertionError('Wine version must not gate compatibility installation')
+            if len(args) == 1 and str(args[0]).endswith('compat-probe.exe'):
+                return subprocess.CompletedProcess(args, 1, 'E_NOTIMPL', '')
+            return execute(*args, **kwargs)
+        with patch.object(self.app, 'execute', side_effect=missing_enumeration):
+            self.app.install(self.config)
+            self.assertEqual((self.app.directory / 'compat/x64/sapi.dll').read_bytes(), b'compat')
+            self.assertEqual(self.app.reg[r'HKCU\Software\Wine\DllOverrides']['sapi'],
+                             ['REG_SZ', 'native,builtin'])
+            self.app.uninstall()
+        for key in self.sapi_keys:
+            self.assertEqual(self.app.reg[key], self.original[key])
+
     def test_private_registration_failure_restores_defaults_files_and_state(self):
         self.app.force_compat = True
         before = copy.deepcopy(self.app.state)

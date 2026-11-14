@@ -243,9 +243,6 @@ class Installer:
                         raise RuntimeError('Could not check SAPI compatibility: ' + probe.stdout + probe.stderr)
                     needs_compat = probe.returncode == 1 or self.force_compat
                 if needs_compat:
-                    version = self.execute('--version').stdout
-                    if not re.search(r'\b11\.21\b', version):
-                        raise RuntimeError('This Wine needs the SAPI compatibility fix; this beta supplies it for 11.21 only')
                     registrations = self.sapi_registrations()
                     self.state['compatibility'] = True
                     self.state['compatibility_mode'] = 'private-com'

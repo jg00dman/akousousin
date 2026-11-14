@@ -149,12 +149,13 @@ private controller files. `--settings` remains a diagnostic/test override.
 
 ## Compatibility and rollback
 
-This beta supports 64-bit callers only. Wine 11.21 prefixes missing the generic
+This release supports 64-bit callers only. Wine prefixes missing the generic
 SAPI enumeration fix use `C:\Program Files\Akousousin\compat\x64\sapi.dll`.
 The installer redirects Wine SAPI COM default values to that private DLL and sets
 `native,builtin`; Wine system DLL files and PATH remain unchanged. Original COM
-default values and the override are saved for rollback/uninstall. Other Wine
-versions needing that fix are refused rather than guessed.
+default values and the override are saved for rollback/uninstall. The bundled
+compatibility DLL is built from Wine 11.21; installation is not restricted to
+that Wine version. `--wine-compat` retains the option to force its installation.
 Remove launcher-forced `sapi=b` when the compatibility DLL is required.
 
 Settings → Uninstall & restore (or `--uninstall --wine-prefix ... --wine ...`)

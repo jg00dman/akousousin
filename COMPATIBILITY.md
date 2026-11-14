@@ -169,12 +169,14 @@ see the [current beta checklist](standalone/BETA-TESTING.md).
 
 ## Private Wine SAPI compatibility installation
 
-For supported Wine 11.21 prefixes requiring the enumeration workaround, the
+For Wine prefixes requiring the enumeration workaround, the
 compatibility DLL lives at `C:\Program Files\Akousousin\compat\x64\sapi.dll`.
 Standard Wine SAPI COM registrations are directed to that private file with a
 prefix-level `native,builtin` override. The installer does not change prefix PATH
 or replace Wine's system SAPI files. Other SAPI-named COM servers outside the Wine
-system/AKS locations are left alone.
+system/AKS locations are left alone. The bundled DLL is built from Wine 11.21;
+the installer does not impose an exact Wine-version restriction. The existing
+`--wine-compat` option can force installation of the private DLL.
 
 Original COM default-value types/data and the override are recorded and restored
 on rollback/uninstall. Updates refresh an already-installed private compatibility
