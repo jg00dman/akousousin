@@ -14,6 +14,14 @@ from . import settings
 STARTER = 'en_US-ljspeech-medium'
 
 
+def voice_available(config, identifier):
+    voice = config['voices'].get(identifier)
+    if not voice:
+        return False
+    model = Path(voice['path'])
+    return model.is_file() and Path(str(model) + '.json').is_file()
+
+
 def register_voice(path, key, voice):
     """Merge a completed download into current preferences, preserving user choices."""
     config = settings.load(path)
@@ -55,7 +63,7 @@ def bootstrap(path):
     package = root()
     voice = STARTER
     bundled = package / 'voices' / (voice + '.onnx')
-    if voice not in config['voices'] and voice not in config.get('removed_voices', []) and bundled.is_file():
+    if not voice_available(config, voice) and voice not in config.get('removed_voices', []) and bundled.is_file():
         target = settings.data_path() / 'voices' / voice
         if not target.exists():
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -63,7 +71,7 @@ def bootstrap(path):
                 shutil.copytree(package / 'voices', Path(temporary) / voice)
                 (Path(temporary) / voice).rename(target)
     target = settings.data_path() / 'voices' / voice
-    if voice not in config['voices'] and voice not in config.get('removed_voices', []) and (target / (voice + '.onnx')).is_file():
+    if not voice_available(config, voice) and voice not in config.get('removed_voices', []) and (target / (voice + '.onnx')).is_file():
         # Reuse an existing verified download even if preferences were recreated.
         try:
             receipt = json.loads((target / 'provenance.json').read_text(encoding='utf-8'))
@@ -77,6 +85,14 @@ def bootstrap(path):
                 'name': 'LJSpeech', 'quality': 'medium'})
         except (OSError, KeyError, ValueError):
             pass
+    # Keep a working selected voice. Stale paths from a previous installation
+    # must not hide the usable starter which this package has just supplied.
+    if not voice_available(config, config['voice']):
+        selected = next((key for key in config['voices'] if voice_available(config, key)), None)
+        if selected:
+            config['voice'] = selected
+            config['language_voices'][config['voices'][selected]['language']] = selected
+            settings.save(path, config)
     stored = json.loads(Path(path).read_text(encoding='utf-8')) if Path(path).exists() else {}
     if not Path(path).exists() or any(key not in stored for key in ('update_weekly', 'update_betas')):
         settings.save(path, config)

@@ -5,7 +5,10 @@ SPDX-FileCopyrightText: 2026 John Goodman
 
 # On-demand voice trial
 
-Download the AppImage alone. The default build includes the speech/dictation
+This guide covers the optional lean build (`--no-bundle-starter-voice`); official
+packages from 0.8.1 include the starter voice by default.
+
+Download the AppImage alone. The lean build includes the speech/dictation
 runtimes and catalogue, with no Piper voice or Whisper weights. Existing voices,
 settings and Whisper models are reused; nothing needs downloading again for an
 upgrade.
@@ -33,8 +36,8 @@ still fails, the error has a selectable recovery command, Copy command, and
 separately expandable/copyable technical details. Other panel errors are also
 selectable and copyable.
 
-For offline first use, build with `python standalone/package.py --bundle-starter-voice`,
-or tick **bundle_starter_voice** in the Standalone
+For offline first use, build with `python standalone/package.py` (the default),
+or leave **bundle_starter_voice** ticked in the Standalone
 Akousousin workflow. This includes the approved LJSpeech voice and its upstream
 licence/provenance files. Unticked builds are model-free. The package still
 contains its Python, Piper, Qt and recognition runtimes, so removing the voice

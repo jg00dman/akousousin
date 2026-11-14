@@ -7,7 +7,7 @@ on:
       bundle_starter_voice:
         description: Include the starter voice for offline first use
         type: boolean
-        default: false
+        default: true
       reuse_run_id:
         description: Publish a previously tested Whisper run without rebuilding
         type: string
@@ -93,7 +93,7 @@ jobs:
         run: PYTHONPATH=backend python -m unittest discover -s backend/tests -v
       - name: Build selected package variant, licences and sources
         id: package
-        run: python standalone/package.py ${{ inputs.bundle_starter_voice && '--bundle-starter-voice' || '' }}
+        run: python standalone/package.py ${{ github.event_name == 'workflow_dispatch' && !inputs.bundle_starter_voice && '--no-bundle-starter-voice' || '' }}
       - name: Check packaged GPL and LGPL notices
         run: python scripts/check-licensing.py --package build/standalone-package/Akousousin
       - name: Bundled clipboard readers without host clipboard packages

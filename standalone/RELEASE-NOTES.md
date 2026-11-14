@@ -3,6 +3,24 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
+# Akousousin 0.8.1
+
+Stable release. Official AppImage, Linux tar.gz and Windows ZIP packages now
+include the reviewed English LJSpeech starter voice (`en_US-ljspeech-medium`,
+about 64 MB). A fresh installation can register SAPI and speak without a separate
+voice download. The voice is copied into the persistent per-user library.
+
+- Keep existing working voice selections. Recover stale starter paths from the
+  verified local cache, and choose a usable installed voice if the selected
+  voice's files have disappeared. Deliberately deleted voices stay deleted.
+- Additional voices and Whisper models remain on demand. Lean builds remain
+  available with `--no-bundle-starter-voice` or by unticking the workflow option.
+- No OuDedetai changes are required or included.
+
+**Complete native Windows app support is forthcoming and not yet working end
+to end.** Its ZIP remains experimental; this release does not add Windows
+capture or global shortcuts.
+
 # Akousousin 0.8.0
 
 The first stable release: the same code as 0.7.0b11, which proved stable in testing.

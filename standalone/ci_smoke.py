@@ -111,6 +111,15 @@ if not bundled_starter:
                    env=env, check=True, timeout=30)
     assert Path(config['voices'][config['voice']]['path']).stat().st_mtime_ns == before
     print('PASS: lean package starts model-free; explicit starter download is persistent and not repeated', flush=True)
+else:
+    model = Path(config['voices'][config['voice']]['path'])
+    before = model.stat().st_mtime_ns
+    offline = dict(env, HTTP_PROXY='http://127.0.0.1:9', HTTPS_PROXY='http://127.0.0.1:9',
+                   http_proxy='http://127.0.0.1:9', https_proxy='http://127.0.0.1:9', HF_HUB_OFFLINE='1')
+    subprocess.run([str(executable), '--settings', str(settings_path), '--status'],
+                   env=offline, check=True, timeout=60)
+    assert model.stat().st_mtime_ns == before, 'Startup replaced an existing cached voice'
+    print('PASS: bundled starter is ready without a download and reused on offline startup', flush=True)
 assert config['voice'] == 'en_US-ljspeech-medium'
 assert Path(config['voices'][config['voice']]['path']).is_file(), 'Bundled default voice was not installed'
 subprocess.run(install, env=env, check=True, timeout=180)

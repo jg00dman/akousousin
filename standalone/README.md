@@ -7,22 +7,22 @@ SPDX-FileCopyrightText: 2026 John Goodman
 
 **akousousin:** *The unified neural speech engine for Linux, implementing Microsoft SAPI and Speech Dispatcher, based on Piper and Whisper.*
 
-Akousousin 0.8.0 implements SAPI text-to-speech using Piper, native Linux Speech
+Akousousin 0.8.1 implements SAPI text-to-speech using Piper, native Linux Speech
 Dispatcher output and experimental local Whisper voice input on Linux. SAPI
 recognition and native Windows microphone capture are not implemented. See the
 [compatibility table](../COMPATIBILITY.md) for the implemented capabilities.
 
 
-[Beta downloads](https://github.com/jg00dman/akousousin/releases) · [Builds and validation](https://github.com/jg00dman/akousousin/actions).
+[Downloads](https://github.com/jg00dman/akousousin/releases) · [Builds and validation](https://github.com/jg00dman/akousousin/actions).
 
-One speech service and configuration per operating-system user. This beta contains
+One speech service and configuration per operating-system user. This release contains
 the standalone 64-bit SAPI engine, control panel, tray and Piper/Waitress backend.
-The default package contains no Piper voice or Whisper model weights and no Wine
-runtime. On first use, Overview offers the reviewed en_US-ljspeech-medium voice
-(about 64 MB), or a choice from Voice library. Downloads retain upstream model
+The default package includes the reviewed en_US-ljspeech-medium starter voice
+(about 64 MB) for offline first use. It contains no Whisper model weights or Wine
+runtime. Additional voices are available in Voice library. Downloads retain upstream model
 cards, checksum provenance and licence declarations. Voices stay installed in the
-user data folder across upgrades. Existing selected voices are preserved. An
-optional build includes LJSpeech for offline first use.
+user data folder across upgrades. Existing usable selected voices are preserved.
+An optional lean build omits LJSpeech and offers a first-use download instead.
 
 ## Linux installation and storage
 
@@ -58,17 +58,21 @@ Close Logos before registering an existing initialized 64-bit Wine prefix:
 export APPIMAGE_EXTRACT_AND_RUN=1
 IMAGE="$HOME/.local/share/Akousousin/Akousousin-x86_64.AppImage"
 chmod +x "$IMAGE"
-"$IMAGE" --download-starter-voice  # one-time download; omit if a voice is already installed
+# Official packages include a starter voice; lean builds can download it explicitly:
+# "$IMAGE" --download-starter-voice
 "$IMAGE" --wine-prefix "$HOME/wine-bisect-prefix/data/wine64_bottle" \
   --wine "$HOME/akousousin/wine-akousousin-piper-11.21-logos-x86_64.AppImage" --install-only
 "$IMAGE"
 ```
 
-Startup itself never downloads weights. On a fresh installation choose Download
-starter voice in Overview, import an `.onnx` file (matching `.onnx.json` alongside),
-or review and download one in Voice library. The first installed voice becomes
-the default; subsequent downloads preserve your selection. Optional offline
-builds copy the bundled starter into the same persistent voice library. Select Make default, then Settings → Install /
+Startup itself never downloads weights. On a fresh installation, the bundled
+starter is copied into the persistent voice library and selected automatically.
+Lean builds instead offer Download starter voice in Overview. You can also import
+an `.onnx` file (matching `.onnx.json` alongside), or review and download one in
+Voice library. Existing working defaults are preserved; stale paths are recovered
+from the verified starter cache where possible, and an unavailable default can
+fall back to a usable installed voice. An explicitly deleted starter stays deleted.
+Select Make default to change the voice, then Settings → Install /
 apply voice registration. Overview → Start server → Play sample tests real Piper and
 playback. Next test Logos Read Aloud using the same Wine package.
 
@@ -372,10 +376,13 @@ proofing-language tagging is implemented.
 
 ## Build with or without the starter voice
 
-`python standalone/package.py` builds a model-free package by default. Add
-`--bundle-starter-voice` for offline first use with the reviewed LJSpeech voice.
+`python standalone/package.py` includes the reviewed LJSpeech starter voice by
+default for offline first use. Use `--no-bundle-starter-voice` for a lean package;
+`--bundle-starter-voice` remains an explicit way to select the default variant.
 The Standalone Akousousin workflow exposes the same `bundle_starter_voice`
-checkbox (off by default). Both variants retain their runtime dependencies and
+checkbox (on by default). Push/release builds include the starter; an explicit
+workflow run with the checkbox unticked builds the lean variant.
+Both variants retain their runtime dependencies and
 licence notices; only the optional voice weights differ. Packaging clears staged
 resources so an earlier offline build cannot leak weights into a lean build.
 

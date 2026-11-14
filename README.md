@@ -49,7 +49,7 @@ the explicit copied-text fallback. Suggested global shortcuts are **Ctrl+Alt+R**
 approval. See the [setup guide](standalone/README.md#global-read-selected-text--stop)
 and [beta test checklist](standalone/BETA-TESTING.md).
 
-## Try the beta
+## Download and install
 
 Download the [Linux AppImage (recommended)](https://github.com/jg00dman/akousousin/releases).
 A [standalone Linux tar.gz](standalone/README.md#standalone-linux-tar-installation-no-appimage-runtime-or-fuse)
@@ -59,9 +59,10 @@ The Windows ZIP is experimental; complete Windows support is forthcoming.
 voices, Wine-prefix registration, launcher commands and rollback.
 
 The Linux package contains the voice engine, control panel, tray and Piper backend,
-with voice models downloaded on demand. On first use, choose the reviewed
-`en_US-ljspeech-medium` starter voice (about 64 MB), another catalogue voice, or
-import a local model. Offline builds can include the starter voice. It does not contain Wine.
+including the reviewed `en_US-ljspeech-medium` starter voice (about 64 MB) for
+immediate speech on a fresh installation. Additional voices download on demand,
+or you can import a local model. A lean build without the starter remains available
+as a build option. The package does not contain Wine.
 Existing voice choices are preserved. Other models retain their own licence terms.
 The build target remains x86-64 Linux with glibc 2.35+ (Ubuntu 22.04), and existing
 working 64-bit Wine prefixes. Wine compatibility DLLs stay in the AKS directory;

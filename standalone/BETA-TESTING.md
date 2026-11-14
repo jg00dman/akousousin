@@ -38,12 +38,13 @@ The panel header should show the AKS artwork, without a bars text character.
 
 ## First run and speech output
 
-1. With a fresh profile, Overview should offer Download starter voice (about
-   64 MB) or Choose another voice. Existing profiles should retain voices/defaults.
-2. Watch the real byte progress and tray download indicator. Wait for verification
-   to finish, then play a preview. Try another voice, speed and volume.
+1. With a fresh profile, the default package should have the LJSpeech starter
+   voice ready without a download. Existing usable voice choices should remain.
+   An optional lean build instead offers Download starter voice (about 64 MB).
+2. Play a preview. For additional voices, watch the real byte progress and tray
+   download indicator; wait for verification, then try speed and volume.
 3. Replace/restart the app and confirm the installed voice is reused. The default
-   AppImage contains runtimes but no Piper voice or Whisper model weights.
+   AppImage includes one Piper voice; Whisper weights still download separately.
 4. If testing SAPI, close the target Wine/Windows application before installing
    support in Settings. Test speech, rate, cancellation and restart. For Wine, use
    the [private SAPI checks](PRIVATE-SAPI-TESTING.md); Wine system DLLs and PATH

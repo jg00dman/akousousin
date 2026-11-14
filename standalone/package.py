@@ -20,8 +20,8 @@ import urllib.request
 import zipfile
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument('--bundle-starter-voice', action='store_true',
-                    help='Include the reviewed LJSpeech voice for offline first use (default: download on demand)')
+parser.add_argument('--bundle-starter-voice', action=argparse.BooleanOptionalAction, default=True,
+                    help='Include the reviewed LJSpeech voice for offline first use (default: included; use --no-bundle-starter-voice for a lean build)')
 options = parser.parse_args()
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -51,8 +51,7 @@ def fetch(url, target, expected=None):
 for file in (ROOT / 'build/standalone-engine').glob('*'):
     shutil.copy2(file, RESOURCE)
 shutil.copytree(ROOT / 'standalone/resources', RESOURCE, dirs_exist_ok=True)
-# Program-only distribution: catalogue metadata is included, never model weights.
-# Users import a local voice or download from upstream after licence review.
+# Include one reviewed voice by default. Additional voices remain on demand.
 
 # The user explicitly approved this one reviewed starter voice for redistribution.
 # Catalogue downloads preserve its upstream model card and MIT/public-domain provenance.
@@ -163,8 +162,8 @@ shutil.copy(ROOT / 'COMPATIBILITY.md', PACKAGE / 'COMPATIBILITY.md')
 # ONNX Runtime ships unused demonstration graphs; they are not required for inference.
 for sample in (PACKAGE / '_internal/onnxruntime/datasets').glob('*.onnx'):
     sample.unlink()
-# Piper also ships optional Arabic/Hebrew preprocessing models; keep all neural
-# weights external in this beta, including those auxiliary language resources.
+# Piper also ships optional Arabic/Hebrew preprocessing models; keep these
+# auxiliary language weights external, including in starter-voice builds.
 for optional in ('piper/tashkeel/model.onnx', 'piper/hebrew/nakdimon.onnx'):
     (PACKAGE / '_internal' / optional).unlink(missing_ok=True)
 models = [file.relative_to(PACKAGE).as_posix() for file in PACKAGE.rglob('*.onnx')
