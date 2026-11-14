@@ -3,6 +3,23 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
+# Akousousin 0.8.2
+
+Stable release. Remove the installer restriction that allowed the private SAPI
+compatibility DLL only on Wine 11.21. Other Wine versions, including 11.22, are
+no longer blocked by their version string. This enables testing those versions;
+it does not claim runtime validation on every Wine release.
+
+- Keep the existing compatibility probe and `--wine-compat` force-install option.
+  The bundled compatibility DLL is still built from Wine 11.21. Its private
+  location, registry override, rollback and uninstall behaviour are unchanged.
+- Continue bundling the reviewed LJSpeech starter voice for fresh installations.
+- No OuDedetai changes are required or included.
+
+**Complete native Windows app support is forthcoming and not yet working end
+to end.** Its ZIP remains experimental; Windows capture and global shortcuts
+are not added by this release.
+
 # Akousousin 0.8.1
 
 Stable release. Official AppImage, Linux tar.gz and Windows ZIP packages now

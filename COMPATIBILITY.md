@@ -5,8 +5,9 @@ SPDX-FileCopyrightText: 2026 John Goodman
 
 # API coverage and implementation status
 
-Applies to **0.8.1**, including the reviewed LJSpeech starter voice by default,
-updated on 14 November 2026. API coverage is unchanged from 0.8.0.
+Applies to **0.8.2**, including the reviewed LJSpeech starter voice by default,
+updated on 14 November 2026. API coverage is unchanged from 0.8.0; the exact
+Wine-version installation restriction has been removed.
 [Releases and downloads](https://github.com/jg00dman/akousousin/releases).
 
 **Complete native Windows app support is forthcoming, not yet working end to
