@@ -26,6 +26,9 @@ def main():
     parser.add_argument('--install-only', action='store_true', help='Install without opening the control panel')
     parser.add_argument('--sapi-wav', nargs=2, metavar=('OUTPUT', 'TEXT'))
     parser.add_argument('--uninstall', action='store_true', help='Restore backed-up registry settings and DLLs')
+    parser.add_argument('--purge', action='store_true',
+                        help='Remove Akousousin completely, including voices, models and settings')
+    parser.add_argument('--yes', '-y', action='store_true', help='Do not ask for confirmation (with --purge)')
     parser.add_argument('--wine-compat', action='store_true', help='Force the Wine 11.21 SAPI compatibility DLL')
     parser.add_argument('--settings', type=Path, default=settings.config_path())
     parser.add_argument('--refresh-registrations', action='store_true', help='Reapply saved SAPI registrations after an update')
@@ -66,6 +69,18 @@ def main():
     parser.add_argument('--quiet', action='store_true', help='Do not offer to launch after installing a tar bundle')
     parser.add_argument('--without-speech-dispatcher', action='store_true', help='Skip default Speech Dispatcher setup during tar installation')
     args = parser.parse_args()
+    if args.purge:
+        from . import purge
+        if not args.yes:
+            if not sys.stdin.isatty():
+                raise SystemExit(purge.WARNING + '\nRun again with --purge --yes to go ahead.')
+            if input(purge.WARNING + '\nRemove everything? [y/N] ').strip().lower() not in ('y', 'yes'):
+                return
+        problems = purge.purge(args.settings, args.wine_prefix, args.wine, args.bundle_prefix)
+        if problems:
+            raise SystemExit(1)
+        print('Akousousin removed.')
+        return
     if args.install_bundle or args.uninstall_bundle:
         if os.name != 'posix' or sys.platform != 'linux':
             raise RuntimeError('Tar installation requires Linux')
