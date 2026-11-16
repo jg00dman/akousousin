@@ -3,6 +3,22 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
+# Akousousin 0.8.3
+
+Stable release of the `--purge` feature introduced in 0.8.3b1 (PR #14).
+Previous stable installations can receive this version through the normal
+update check without enabling beta updates. This release has the same purge
+implementation as the beta.
+
+`--purge` asks for confirmation before removing managed voices, Whisper models,
+settings, application files and integrations. `--yes` (or `-y`) supports
+unattended use. The bundled starter voice and Wine-version restriction removal
+are retained.
+
+**Complete native Windows app support is forthcoming and not yet working end
+to end.** Its ZIP remains experimental; this release does not add Windows
+capture or global shortcuts.
+
 # Akousousin 0.8.3b1 beta
 
 Publish the merged `--purge` feature (PR #14). Unlike the existing uninstall

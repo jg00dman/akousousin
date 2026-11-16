@@ -5,7 +5,7 @@ SPDX-FileCopyrightText: 2026 John Goodman
 
 # API coverage and implementation status
 
-Applies to **0.8.3b1 beta**, including the reviewed LJSpeech starter voice by
+Applies to **0.8.3**, including the reviewed LJSpeech starter voice by
 default and the new `--purge` removal command, updated on 16 November 2026.
 Speech API coverage is unchanged from 0.8.0; the exact Wine-version installation
 restriction remains removed.
