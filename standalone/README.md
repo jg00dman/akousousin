@@ -165,6 +165,11 @@ and preferences. Native Windows system SAPI is never replaced: extract the
 Windows ZIP, use the same control panel/tray, and register with `--install` from
 an administrator terminal. Windows data/config are under LocalAppData/Akousousin.
 
+To remove Akousousin completely, as if it had never been installed, run
+`akousousin --purge` (add `--yes` to skip the question). It quits AKS, restores
+the Wine speech registration, removes its Speech Dispatcher module, launchers and
+the tar installation, and deletes all voices, speech models and settings.
+
 Language routing uses SAPI hints or a manually selected book language; automatic
 foreign-word detection and full localisation are not implemented. Standard Piper
 has no general pitch slider. Arabic/Hebrew auxiliary Piper output models are not distributed. This is separate
