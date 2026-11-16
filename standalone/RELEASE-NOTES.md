@@ -3,6 +3,27 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
+# Akousousin 0.8.3b1 beta
+
+Publish the merged `--purge` feature (PR #14). Unlike the existing uninstall
+commands, purge also removes managed downloaded voices, Whisper models and
+settings. It asks for confirmation; `--yes` (or `-y`) supports unattended use.
+
+- Quit AKS, restore the selected Wine prefix's speech registration when the
+  prefix exists, remove Speech Dispatcher integration and AKS desktop launchers,
+  and remove the managed tar installation and application data.
+- Continue remaining cleanup steps after a failure, report the problems, and
+  return a nonzero exit status if anything failed.
+- Keep the bundled LJSpeech starter voice and the removal of the Wine 11.21-only
+  installation restriction from the previous releases.
+
+This is a prerelease; enable **Show beta testing updates** to receive it through
+the AppImage updater. Stable-only users remain on 0.8.2.
+
+**Complete native Windows app support is forthcoming and not yet working end
+to end.** Its ZIP remains experimental; this beta does not add Windows capture
+or global shortcuts.
+
 # Akousousin 0.8.2
 
 Stable release. Remove the installer restriction that allowed the private SAPI
