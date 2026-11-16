@@ -97,6 +97,19 @@ class AudioInputTests(unittest.TestCase):
 
 
 class StreamingProcessTests(unittest.TestCase):
+    def test_missing_capture_tool_reports_install_command_and_completes_cleanup(self):
+        ended = Mock()
+        capture = Capture(ended=ended)
+        with patch('akousousin_backend.audio_input.subprocess.Popen',
+                   side_effect=FileNotFoundError(2, 'No such file or directory', 'parec')):
+            capture._pump()
+        self.assertIn('sudo apt install pulseaudio-utils', capture.error)
+        self.assertIn('parec', capture.error)
+        self.assertTrue(capture.done.is_set())
+        self.assertFalse(capture.ready.is_set())
+        self.assertTrue(capture.segments.empty())
+        ended.assert_called_once()
+
     def test_stream_endpointing_and_shutdown_with_real_pipe(self):
         original = subprocess.Popen
         emitter = "import sys,time\nfor i in range(150):\n sys.stdout.buffer.write((b'\\xe8\\x03' if i%75 < 30 else b'\\0\\0')*320); sys.stdout.buffer.flush(); time.sleep(.02)\ntime.sleep(5)"

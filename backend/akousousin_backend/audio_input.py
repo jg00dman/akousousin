@@ -133,7 +133,11 @@ class Capture:
             if os.name == 'nt':
                 raise RuntimeError('Desktop microphone capture currently requires Linux')
             with tempfile.TemporaryFile() as errors:
-                process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=errors, bufsize=0, env=host_environment())
+                try:
+                    process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=errors, bufsize=0, env=host_environment())
+                except FileNotFoundError as error:
+                    raise RuntimeError("Microphone capture requires 'parec'. On Ubuntu/Debian, run: "
+                                       "sudo apt install pulseaudio-utils. This works with PipeWire.") from error
                 os.set_blocking(process.stdout.fileno(), False)
                 selector.register(process.stdout, selectors.EVENT_READ)
                 startup = time.monotonic() + 5

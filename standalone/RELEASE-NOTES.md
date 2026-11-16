@@ -3,6 +3,14 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
+# Unreleased
+
+- Add `--version` to print the application version and exit without starting the
+  controller, opening the panel or creating preferences.
+- When microphone capture cannot find `parec`, report the Ubuntu/Debian install
+  command (`sudo apt install pulseaudio-utils`) instead of a raw file-not-found
+  error. Capture still uses the existing PipeWire/PulseAudio-compatible path.
+
 # Akousousin 0.8.3
 
 Stable release of the `--purge` feature introduced in 0.8.3b1 (PR #14).

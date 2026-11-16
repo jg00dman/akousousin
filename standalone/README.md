@@ -122,6 +122,7 @@ On desktops without a tray, the panel and command interface remain usable.
 ## Launcher interface, version 2
 
 ```bash
+"$IMAGE" --version                                  # application version; exits without starting AKS
 "$IMAGE" --protocol-version                         # prints 2
 "$IMAGE" --configure                                # configuration, no independent ownership
 "$IMAGE" --acquire-session unique-id --owner-pid PID  # start/reuse and wait until ready

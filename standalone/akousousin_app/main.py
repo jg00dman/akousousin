@@ -8,7 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import resources, runtime, settings
+from . import __version__, resources, runtime, settings
 from .install import Installer
 
 
@@ -20,6 +20,8 @@ def main():
         recognition_main()
         return
     parser = argparse.ArgumentParser(description='Akousousin — Neural Voice Engine. SAPI TTS via Piper; experimental Speech Dispatcher and local Whisper dictation.')
+    parser.add_argument('--version', action='version', version=f'Akousousin {__version__}',
+                        help='Show the application version and exit')
     parser.add_argument('--wine-prefix', type=Path, help='Install into this initialized 64-bit Wine prefix')
     parser.add_argument('--wine', help='Wine executable or AppImage used by this prefix')
     parser.add_argument('--install', action='store_true', help='Install into native Windows')

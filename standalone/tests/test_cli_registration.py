@@ -12,6 +12,18 @@ from akousousin_app import main, settings
 
 
 class CliRegistrationTests(unittest.TestCase):
+    def test_version_exits_without_starting_the_app_or_creating_preferences(self):
+        output = io.StringIO()
+        with patch.object(main.sys, 'argv', ['akousousin', '--version']), \
+                patch.object(main.resources, 'bootstrap') as bootstrap, \
+                patch.object(main.runtime, 'call') as controller, \
+                contextlib.redirect_stdout(output), self.assertRaises(SystemExit) as exit_result:
+            main.main()
+        self.assertEqual(exit_result.exception.code, 0)
+        self.assertEqual(output.getvalue().strip(), f'Akousousin {main.__version__}')
+        bootstrap.assert_not_called()
+        controller.assert_not_called()
+
     def test_explicit_wine_registration_can_run_without_opening_the_panel(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / 'settings.json'
