@@ -19,7 +19,7 @@ One speech service and configuration per operating-system user. This release con
 the standalone 64-bit SAPI engine, control panel, tray and Piper/Waitress backend.
 The default package includes the reviewed en_US-ljspeech-medium starter voice
 (about 64 MB) for offline first use. It contains no Whisper model weights or Wine
-runtime. Additional voices are available in Voice library. Downloads retain upstream model
+runtime. Additional voices are available in Voices. Downloads retain upstream model
 cards, checksum provenance and licence declarations. Voices stay installed in the
 user data folder across upgrades. Existing usable selected voices are preserved.
 An optional lean build omits LJSpeech and offers a first-use download instead.
@@ -37,7 +37,7 @@ The interface uses the desktop locale. To contribute a translation, run `python 
 OuDedetai installs the AppImage to `~/.local/share/Akousousin/Akousousin-x86_64.AppImage`.
 When launched from elsewhere, the control panel offers to move the AppImage to
 that location and add an application-menu shortcut with a persistent AKS icon.
-Choose No to keep running portably; Settings → AppImage installation lets you
+Choose No to keep running portably; Application → Install AppImage… lets you
 retry later. An existing destination requires confirmation before replacement.
 The copy is verified before registrations are refreshed and AKS restarts; the
 unchanged original is removed only after the restart command succeeds. Existing
@@ -77,22 +77,21 @@ Startup itself never downloads weights. On a fresh installation, the bundled
 starter is copied into the persistent voice library and selected automatically.
 Lean builds instead offer Download starter voice in Overview. You can also import
 an `.onnx` file (matching `.onnx.json` alongside), or review and download one in
-Voice library. Existing working defaults are preserved; stale paths are recovered
+Voices. Existing working defaults are preserved; stale paths are recovered
 from the verified starter cache where possible, and an unavailable default can
 fall back to a usable installed voice. An explicitly deleted starter stays deleted.
-Select Make default to change the voice, then Settings → Install /
-apply voice registration. Overview → Start server → Play sample tests real Piper and
+Select **Set as default voice**, then apply registration in **App integrations**. **Overview → Speak sample** tests real Piper and
 playback. Next test Logos Read Aloud using the same Wine package.
 
 ## Removing voices and playback speed
 
-Select an installed entry in Voice library and choose **Delete voice…**. Confirm
+Select an installed entry in Voices and choose **Remove voice…**. Confirm
 before deletion. AKS stops its speech service, removes the library entry and
 cleans its language preferences. Downloaded voice files in the managed cache are
 deleted; imported original files and their configuration files are retained.
 Deleting the default selects another installed voice. Deleting the last voice
 leaves speech unavailable until another is installed; the starter is not silently
-reinstalled. Use **Settings → Install / apply voice registration** afterwards to
+reinstalled. Use **App integrations → Install in this prefix** afterwards to
 remove stale SAPI voice tokens, and restart applications that cache their lists.
 
 Default speed ranges from **0.5 to 4.0**, in **0.25** steps, with a stepped slider
@@ -112,7 +111,7 @@ Start/Stop Speech, Start/Stop Dictation, Default Voice (grouped by readable
 language names), Configure, Quit. Left-click toggles desktop dictation; right-click
 opens the menu. Configure opens the control panel.
 Default changes apply to subsequent speech; applications caching a SAPI voice may
-need restarting. Newly downloaded voices need registration through Settings.
+need restarting. Newly downloaded voices need registration through App integrations.
 
 If Speech Dispatcher registration is saved but restarting fails, the panel offers
 a selectable command with Copy command and separate technical details. Run the
@@ -167,7 +166,7 @@ compatibility DLL is built from Wine 11.21; installation is not restricted to
 that Wine version. `--wine-compat` retains the option to force its installation.
 Remove launcher-forced `sapi=b` when the compatibility DLL is required.
 
-Settings → Uninstall & restore (or `--uninstall --wine-prefix ... --wine ...`)
+App integrations → Remove from this prefix (or `--uninstall --wine-prefix ... --wine ...`)
 restores original registry settings/defaults and removes or restores AKS-owned
 private DLLs. It keeps voices
 and preferences. Native Windows system SAPI is never replaced: extract the
@@ -199,7 +198,7 @@ or every Logos desktop behavior; test in a backed-up prefix.
 If a saved Wine executable/AppImage has been removed, registration refresh skips
 that entry with a warning and continues updating other integrations. The warning
 appears in the panel status and Updates page; its saved registration is retained
-for repair in Settings. Other registration errors still fail the update. During
+for repair in App integrations. Other registration errors still fail the update. During
 relocation the original AKS download is retained if skipped registrations might
 still reference it. Correct the Wine path and apply registration for that prefix
 before removing the old download. This behaviour is in source after beta 10.
@@ -262,7 +261,7 @@ For upgrades, quit AKS, extract the new archive separately and rerun its install
 with the same prefix and XDG environment. Installation stages a complete copy,
 preserves the previous installation for rollback during replacement, and rejects
 unowned/conflicting launcher files. Voice/model caches and configuration retain
-their existing XDG locations. Wine registration remains explicit in Settings;
+their existing XDG locations. Wine registration remains explicit in App integrations;
 Speech Dispatcher setup uses the shared AKS command described above.
 
 Run `~/.local/lib/akousousin/uninstall.sh` to remove this application installation.
@@ -271,7 +270,7 @@ managed AKS desktop entries. Modified external files, configuration, downloaded
 models/voices and Wine registrations are preserved. Bundle removal invokes AKS's
 own removal command for Speech Dispatcher only if its managed launcher points to
 that installed executable; other engines and their original default are retained.
-If removing AKS entirely, first remove its Wine registrations using Settings.
+If removing AKS entirely, first remove its Wine registrations using App integrations.
 Quit AKS before uninstall.
 The tar update notification opens the release page; rerun the new installer to
 upgrade. It cannot perform AppImage replacement.
@@ -380,9 +379,7 @@ shortcut can enable/load voice input again after it was disabled. Tray Start
 Dictation can initiate permission setup when necessary. Stop/Cancel controls remain
 in the panel, and cancellation is available from the command interface.
 
-Voice Input and Settings support wheel scrolling and visible vertical scrollbars;
-the voice library exposes vertical/horizontal scrollbars. The initial window fits
-the available screen, and Settings remains accessible at smaller sizes.
+The pages and voice list scroll on small screens.
 
 [Voice Input testing and cache/portal troubleshooting](https://github.com/jg00dman/akousousin/blob/main/recognition/PANEL-TESTING.md)
 explains the experimental limits. SAPI recognition, other Wayland compositors and
@@ -407,8 +404,8 @@ resources so an earlier offline build cannot leak weights into a lean build.
 
 The screenshot shows the setup page before enabling the shortcuts.
 
-On KDE Wayland, download/import a voice, open Read selection and choose Enable
-global reading shortcuts. This installs Speech Dispatcher support and selects
+On KDE Wayland, download/import a voice, open Shortcuts and choose Enable
+reading shortcuts. This installs Speech Dispatcher support and selects
 AKS as its default engine first, then verifies the selected voice. Only after
 success does it request KDE shortcut permission; setup errors leave shortcuts
 disabled. Already-working support is verified without restarting the daemon.
@@ -420,7 +417,7 @@ remembers enablement and restores the session on its next launch; KDE retains th
 chosen key assignments. Explicit Disable prevents automatic restoration. Builds
 that did not save enablement require enabling once after upgrading.
 
-Speech Dispatcher support can also be installed separately in Settings. eSpeak
+Speech Dispatcher support can also be installed separately in App integrations. eSpeak
 remains available, and removing AKS support restores the earlier default.
 The Linux AppImage bundles `wl-paste` (wl-clipboard) for Wayland and `xclip`
 for X11 with their private libraries; no system installation is needed on SteamOS.
@@ -457,7 +454,7 @@ for that recording session. Stop and start another session to detect again.
 English-only models switch to their multilingual counterpart when another language
 or auto is chosen. Turbo remains importable, with no CPU speed claim.
 
-Voice Input offers CPU threads, Keep model loaded while voice input is enabled,
+Dictation → Recognition options offers CPU threads, Keep model loaded while voice input is enabled,
 and an idle timeout (one hour by default when keep-loaded is off). More threads
 are not always faster on CPU-limited systems; see the reproducible benchmark in
 `backend/tools/benchmark_recognition.py`. Timing logs contain numeric measurements

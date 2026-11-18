@@ -20,8 +20,8 @@ native Linux Speech Dispatcher output module. On-demand startup, idle model
 unloading and control-panel update checks are included. Neither output interface
 has full API coverage.
 
-This beta adds **experimental local Whisper voice input on Linux**, a Voice Input
-panel and KDE Wayland shortcut dictation. Microphone discovery, recording and
+This beta adds **experimental local Whisper voice input on Linux**, a Dictation
+page and global shortcuts for Plasma and GNOME Wayland. Microphone discovery, recording and
 insertion into Kate and a chat text field were desktop-tested on Kubuntu 26.04
 Wayland. SAPI recognition and native Windows microphone capture are not implemented.
 See the [Voice Input guide](recognition/PANEL-TESTING.md) and
@@ -36,16 +36,15 @@ The name comes from Greek **ἀκούσουσιν**, “they will hear” (John 
 | Speech Dispatcher output | Server audio, voice/language selection, rate/volume, text, characters/keys, cancellation and lifecycle events | Daemon owns queues/priorities; no separate speechd server |
 | Orca and reading feedback | SSML text/entities, coarse index marks, punctuation and spelling fallback | Exact word highlighting, full resume-position validation, localized symbols and sound icons remain |
 | Shared runtime and updates | Piper, voice library/preferences, on-demand loading, idle unloading, optional registration, update checks and Linux AppImage updates | AppImage-only weekly checks and stable/beta selection; other packages use their installation source; speechd pitch and functional debug/log-level controls are absent |
-| Speech input | Experimental multilingual Whisper recognition, microphone/language selectors and KDE Wayland dictation | Linux capture only; SAPI recognition, spoken punctuation commands and document proofing-language tagging are not implemented |
+| Speech input | Experimental multilingual Whisper recognition, microphone/language selectors and desktop dictation on Plasma and GNOME Wayland | Linux capture only; SAPI recognition, spoken punctuation commands and document proofing-language tagging are not implemented |
 
 See **[API coverage and implementation status](COMPATIBILITY.md)** for the
 command/interface matrix, unsupported operations and validation evidence.
 We report feature coverage rather than an invented percentage of the full APIs.
 
-Global selected-text reading is available on KDE Wayland through the Read selection
-page. It needs Speech Dispatcher and wl-clipboard; Wine applications may require
+Set up global selected-text reading on the Shortcuts page. It needs Speech Dispatcher and wl-clipboard; Wine applications may require
 the explicit copied-text fallback. Suggested global shortcuts are **Ctrl+Alt+R**
-(selected text / stop) and **Ctrl+Alt+Shift+R** (copied text / stop), subject to KDE
+(selected text / stop) and **Ctrl+Alt+Shift+R** (copied text / stop), subject to desktop
 approval. See the [setup guide](standalone/README.md#global-read-selected-text--stop)
 and [beta test checklist](standalone/BETA-TESTING.md).
 
@@ -82,9 +81,8 @@ launcher lifecycle hooks. An optional session interface remains available to cli
 The standalone [engine](engine/) implements public Windows COM/SAPI interfaces.
 Those standard API names and contracts are unchanged by the project rebrand.
 The [control panel and controller](standalone/) manage voices and backend sessions.
-The panel uses Tkinter; the tray/controller uses PySide6 (Qt 6). Speech Dispatcher
-output for Orca does not establish control-panel accessibility; comprehensive
-Orca/AT-SPI support remains future work.
+The panel and tray use PySide6 (Qt 6). The panel uses native widgets, keyboard navigation and the desktop locale. Orca 48.1 identified the navigation list, selected page and voice search field in an X11 keyboard walkthrough.
+See the [desktop control panel guide](standalone/README.md#desktop-control-panel) for model and voice setup, desktop shortcuts and translations.
 [CI](.github/workflows/standalone.yml) cross-compiles the engine and tests packages
 on Wine and Windows without compiling Wine. The CI suite checks controller and recognition lifecycle, cancellation, actual GUI
 scrolling and recording actions, portal protocol behavior, packaged panel shutdown,
