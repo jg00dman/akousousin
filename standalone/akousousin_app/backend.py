@@ -102,6 +102,8 @@ class Router:
             self.lock.release()
 
     def choose(self, request, config):
+        if request.get('preview_voice') is True and request.get('voice') in config['voices']:
+            return request['voice']
         language = config['book_language'] or settings.language_for_lcid(request.get('language', 0))
         selected = config['language_voices'].get(language) if language else None
         return selected or request.get('voice') or config['voice']

@@ -51,6 +51,8 @@ def fetch(url, target, expected=None):
 for file in (ROOT / 'build/standalone-engine').glob('*'):
     shutil.copy2(file, RESOURCE)
 shutil.copytree(ROOT / 'standalone/resources', RESOURCE, dirs_exist_ok=True)
+for translation in (RESOURCE / 'translations').glob('*.ts'):
+    subprocess.run(['pyside6-lrelease', str(translation), '-qm', str(translation.with_suffix('.qm'))], check=True)
 # Include one reviewed voice by default. Additional voices remain on demand.
 
 # The user explicitly approved this one reviewed starter voice for redistribution.

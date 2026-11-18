@@ -1,0 +1,7 @@
+{
+    "uuid": "focus@akousousin.org",
+    "name": "Akousousin Focus",
+    "description": "Identify the original dictation window and detect focus changes before text insertion.",
+    "shell-version": ["48", "49", "50", "51"],
+    "version": 1
+}

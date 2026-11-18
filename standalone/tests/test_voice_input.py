@@ -1,86 +1,47 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 John Goodman
-"""Panel actions use the shared controller; closing the panel leaves it running."""
-import queue
+"""Shared recognition operations from the Qt panel."""
 import threading
-from pathlib import Path
 import unittest
 from unittest.mock import Mock, patch
-from akousousin_app.voice_input import VoiceInput
+
+from akousousin_app.panel import Panel
+from akousousin_app.qt_dictation import Dictation
 
 
 class VoiceInputTests(unittest.TestCase):
-    def page(self):
-        page = VoiceInput.__new__(VoiceInput)
-        page.closed = False
-        page.events = queue.Queue()
-        page.operation_lock = threading.Lock()
-        page.action_cancelled = threading.Event()
-        page.panel = Mock(path=Path('/test/settings.json'))
-        page.save = lambda: ('small', None, None, False)
-        page.run = lambda task: task()
-        page.ensure_model = Mock()
-        return page
+    def panel(self):
+        panel = Mock(busy=False, input_cancel=threading.Event())
+        panel.run = lambda task, done: done(task())
+        return panel
 
-    def test_recording_delegates_model_lifecycle_to_shared_controller(self):
-        page = self.page()
-        with patch('akousousin_app.voice_input.runtime.call') as call:
-            page.record()
-            self.assertEqual(call.call_args.args[1], {'command': 'stt-start', 'seconds': 10})
-        page.ensure_model.assert_not_called()
+    def test_recording_delegates_to_shared_controller_and_keeps_test_local(self):
+        panel = self.panel()
+        with patch('akousousin_app.runtime.call', side_effect=[{'sequence': 7, 'busy': False}, {}]) as call:
+            Panel.start_test(panel)
+        self.assertEqual(call.call_args.args[1], {'command': 'stt-start', 'seconds': 10})
+        self.assertEqual(panel.dictation.test_since, 7)
 
-    def test_closing_panel_does_not_stop_shared_recognition(self):
-        page = self.page()
-        with patch('akousousin_app.voice_input.runtime.call') as call:
-            page.destroy(Mock(widget=page.panel.root))
-            self.assertTrue(page.closed)
-            call.assert_not_called()
+    def test_cancel_during_status_check_prevents_late_recording(self):
+        panel = self.panel()
+        def status(*args):
+            panel.input_cancel.set()
+            return {'sequence': 5, 'busy': False}
+        with patch('akousousin_app.runtime.call', side_effect=status) as call:
+            Panel.start_test(panel)
+        call.assert_called_once()
 
-    def test_shared_poll_does_not_hide_model_download_progress(self):
-        page = self.page()
-        page.busy = True
-        page.local_error = False
-        page.state = Mock()
-        page.desktop_state = Mock()
-        page.last_sequence = 0
-        page.shared({'busy': False, 'state': 'Not loaded', 'desktop': {'state': 'Disabled'}, 'sequence': 0})
-        page.state.set.assert_not_called()
+    def test_ready_sound_during_recording_leaves_input_alone(self):
+        page = Mock(recording=True)
+        Dictation.sound(page)
+        page.panel.run.assert_not_called()
 
-    def test_cancel_during_model_import_prevents_late_recording(self):
-        page = self.page()
-        page.action_cancelled.set()
-        with patch('akousousin_app.voice_input.runtime.call') as call:
-            page.record()
-            call.assert_not_called()
-
-    def test_unplugged_microphone_preference_is_preserved(self):
-        page = self.page()
-        page.source = Mock(); page.source.get.return_value = 'missing-source'
-        page.source_caption = Mock(); page.source_caption.get.return_value = 'USB microphone'
-        page.source_combo = Mock(); page.device_status = Mock()
-        page.apply_sources([('', 'System default'), ('built-in', 'Built-in microphone')])
-        page.source.set.assert_not_called()
-        self.assertEqual(page.source_options['Unavailable — USB microphone'], 'missing-source')
-        page.source_caption.set.assert_called_with('Unavailable — USB microphone')
-
-
-    def test_ready_sound_test_needs_no_model_and_reports_failure(self):
-        page = self.page()
-        page.shared_busy = page.sound_testing = False
-        page.sound_button = Mock(); page.sound_status = Mock()
-        with patch('akousousin_backend.recognition.ready_cue', side_effect=RuntimeError('Playback failed')) as cue:
-            page.test_ready_sound()
-            kind, message = page.events.get(timeout=2)
-        self.assertEqual((kind, message), ('sound', 'Playback failed'))
-        cue.assert_called_once_with()
-        page.ensure_model.assert_not_called()
-
-
-    def test_single_toggle_prepares_or_disables_input(self):
-        page = self.page()
-        page.busy = False
-        page.prepare = Mock(); page.unload = Mock()
-        page.input_enabled = False; page.toggle_input()
-        page.prepare.assert_called_once()
-        page.input_enabled = True; page.toggle_input()
-        page.unload.assert_called_once()
+    def test_test_transcript_excludes_other_desktop_and_earlier_results(self):
+        page = Mock(sequence=5, test_since=5, supported=True)
+        result = {'sequence': 8, 'state':'Ready', 'results': [
+            {'sequence': 5, 'text':'earlier', 'output':'displayed'},
+            {'sequence': 6, 'text':'desktop', 'output':'retained'},
+            {'sequence': 8, 'text':'test', 'output':'displayed'}]}
+        Dictation.update(page, result)
+        page.panel.test_result.setPlainText.assert_called_once_with('test')
+        page.history.setPlainText.assert_called_once_with('earlier\n\ndesktop\n\ntest')

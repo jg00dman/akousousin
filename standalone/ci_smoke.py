@@ -226,18 +226,18 @@ subprocess.run([str(executable), '--settings', str(settings_path), '--smoke-test
 if not native:
     os.environ.update({k: v for k, v in env.items() if k in ('XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'AKOUSOUSIN_RESOURCES')})
     from akousousin_app.panel import Panel
-    from PIL import ImageGrab
-    panel = Panel(settings_path)
+    from akousousin_app.qt_locale import application
+    app = application()
+    panel = Panel(settings_path, offer_install=False)
+    panel.show()
     deadline = time.monotonic() + 4
     while time.monotonic() < deadline:
-        panel.root.update()
-        if panel.server_status.get() != 'Checking service…':
+        app.processEvents()
+        if not panel.engine.text().startswith('Checking'):
             break
         time.sleep(.05)
-    panel.root.update_idletasks()
-    x, y = panel.root.winfo_rootx(), panel.root.winfo_rooty()
-    ImageGrab.grab(bbox=(x, y, x + panel.root.winfo_width(), y + panel.root.winfo_height())).save(WORK / 'control-panel.png')
-    panel.root.destroy()
+    assert panel.grab().save(str(WORK / 'control-panel.png'))
+    panel.close()
 # Updates reapply saved active registrations using the new package. Exercise
 # this against the initialized Wine/native Windows installation before rollback.
 subprocess.run([str(executable), '--settings', str(settings_path), '--refresh-registrations'],

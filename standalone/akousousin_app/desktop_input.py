@@ -163,6 +163,8 @@ class Desktop(PortalRequests):
         self.plugin = 'akousousin-focus-' + identity
         self.token = secrets.token_hex(24)
         self.guard = FocusGuard()
+        from .gnome_focus import on_gnome
+        self.gnome = on_gnome()
         self.status = 'Starting desktop integration…'
         self.enabled = False
         self.loop = None
@@ -217,11 +219,15 @@ class Desktop(PortalRequests):
             return
         if message.interface == 'org.freedesktop.DBus' and message.member == 'NameOwnerChanged':
             name, old, new = message.body
-            if name in ('org.kde.KWin', 'org.freedesktop.portal.Desktop') and old and old != new:
+            if name in ('org.kde.KWin', 'org.gnome.Shell', 'org.freedesktop.portal.Desktop') and old and old != new:
                 self.enabled = False
                 self.guard.invalidate()
                 self.dictation.cancel()
                 self.status = 'Desktop service restarted; disable and enable dictation again'
+            return
+        if (message.interface == 'org.akousousin.FocusWindow' and message.member == 'Changed'
+                and message.sender == getattr(self, 'shell_owner', None) and message.path == '/org/akousousin/FocusWindow'):
+            self.guard.report(*message.body)
             return
         if message.sender != self.portal_owner:
             return
@@ -255,10 +261,9 @@ class Desktop(PortalRequests):
 
     async def setup(self):
         if os.name == 'nt' or not os.environ.get('WAYLAND_DISPLAY'):
-            raise RuntimeError('Desktop dictation currently requires KDE Wayland')
+            raise RuntimeError('Desktop dictation currently requires Plasma or GNOME Wayland')
         from dbus_next.aio import MessageBus
         from dbus_next import Variant
-        from dbus_next.service import ServiceInterface, method
         self.bus = await MessageBus().connect()
         await self.call('org.freedesktop.DBus', '/org/freedesktop/DBus',
                         'org.freedesktop.DBus', 'StartServiceByName', 'su', ['org.freedesktop.portal.Desktop', 0])
@@ -269,6 +274,33 @@ class Desktop(PortalRequests):
         for rule in ("type='signal',sender='org.freedesktop.portal.Desktop'",
                      "type='signal',sender='org.freedesktop.DBus',interface='org.freedesktop.DBus',member='NameOwnerChanged'"):
             await self.call('org.freedesktop.DBus', '/org/freedesktop/DBus', 'org.freedesktop.DBus', 'AddMatch', 's', [rule])
+        if self.gnome:
+            self.shell_owner = (await self.call('org.freedesktop.DBus', '/org/freedesktop/DBus',
+                'org.freedesktop.DBus', 'GetNameOwner', 's', ['org.gnome.Shell']))[0]
+            rule = "type='signal',sender='org.gnome.Shell',interface='org.akousousin.FocusWindow',member='Changed'"
+            await self.call('org.freedesktop.DBus', '/org/freedesktop/DBus', 'org.freedesktop.DBus', 'AddMatch', 's', [rule])
+            await self.confirm_focus(require_window=False)
+        else:
+            await self.setup_kwin()
+        self.status = 'Approve the dictation shortcut in the desktop dialog…'
+        interface = 'org.freedesktop.portal.GlobalShortcuts'
+        self.shortcuts = await self.session(interface)
+        result = await self.request(interface, 'BindShortcuts', '', 'oa(sa{sv})s',
+            [self.shortcuts, [['dictate', {'description': Variant('s', 'Akousousin dictation'),
+                                        'preferred_trigger': Variant('s', 'CTRL+ALT+SPACE')}]], ''])
+        bindings = result.get('shortcuts')
+        if bindings is None or not any(item[0] == 'dictate' for item in bindings.value):
+            raise RuntimeError('No dictation shortcut was approved')
+        self.shortcut_description = bindings.value[0][1].get('trigger_description', Variant('s', 'Desktop shortcut')).value
+        await self.keyboard_permission()
+        self.enabled = True
+        self.status = 'Desktop dictation enabled — ' + self.shortcut_description
+        if self.start_requested:
+            self.start_requested = False
+            await self.toggle_recording()
+
+    async def setup_kwin(self):
+        from dbus_next.service import ServiceInterface, method
         await self.bus.request_name(self.name)
         self.focus_queries = asyncio.Queue(maxsize=8)
         owner = self
@@ -303,22 +335,6 @@ class Desktop(PortalRequests):
             raise RuntimeError('KDE focus observer could not load')
         await self.call('org.kde.KWin', '/Scripting/Script' + str(identifier), 'org.kde.kwin.Script', 'run')
         await self.confirm_focus(require_window=False)
-        self.status = 'Approve the dictation shortcut in the desktop dialog…'
-        interface = 'org.freedesktop.portal.GlobalShortcuts'
-        self.shortcuts = await self.session(interface)
-        result = await self.request(interface, 'BindShortcuts', '', 'oa(sa{sv})s',
-            [self.shortcuts, [['dictate', {'description': Variant('s', 'Akousousin dictation'),
-                                        'preferred_trigger': Variant('s', 'CTRL+ALT+SPACE')}]], ''])
-        bindings = result.get('shortcuts')
-        if bindings is None or not any(item[0] == 'dictate' for item in bindings.value):
-            raise RuntimeError('No dictation shortcut was approved')
-        self.shortcut_description = bindings.value[0][1].get('trigger_description', Variant('s', 'Desktop shortcut')).value
-        await self.keyboard_permission()
-        self.enabled = True
-        self.status = 'Desktop dictation enabled — ' + self.shortcut_description
-        if self.start_requested:
-            self.start_requested = False
-            await self.toggle_recording()
 
     async def keyboard_permission(self):
         from dbus_next import Variant
@@ -348,6 +364,15 @@ class Desktop(PortalRequests):
                                     restore_token=result.get('restore_token', Variant('s', '')).value)
 
     async def confirm_focus(self, require_window=True):
+        if getattr(self, 'gnome', False):
+            try:
+                window, epoch = await self.call(self.shell_owner, '/org/akousousin/FocusWindow',
+                    'org.akousousin.FocusWindow', 'Current', timeout=2)
+            except RuntimeError as error:
+                self.guard.invalidate()
+                raise RuntimeError('Enable Akousousin Focus in GNOME Extensions, then retry.') from error
+            self.guard.report(window, epoch)
+            return self.guard.snapshot() if require_window else None
         identifier = uuid.uuid4().hex
         future = self.loop.create_future()
         self.focus_waiters[identifier] = future
@@ -480,11 +505,12 @@ class Desktop(PortalRequests):
                 await self.call('org.freedesktop.portal.Desktop', handle, 'org.freedesktop.portal.Session', 'Close', timeout=2)
             except Exception:
                 pass
-        try:
-            await self.call('org.kde.KWin', '/Scripting', 'org.kde.kwin.Scripting', 'unloadScript', 's', [self.plugin], timeout=2)
-        except Exception:
-            pass
-        (self.directory / (self.plugin + '.js')).unlink(missing_ok=True)
+        if not getattr(self, 'gnome', False):
+            try:
+                await self.call('org.kde.KWin', '/Scripting', 'org.kde.kwin.Scripting', 'unloadScript', 's', [self.plugin], timeout=2)
+            except Exception:
+                pass
+            (self.directory / (self.plugin + '.js')).unlink(missing_ok=True)
         self.bus.disconnect()
 
     def close(self):

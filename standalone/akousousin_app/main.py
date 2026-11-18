@@ -201,14 +201,17 @@ def main():
         response = runtime.call(args.settings, request, launch=request['command'] not in ('release', 'stop', 'quit', 'status', 'stt-status', 'stt-cancel', 'selection-status', 'selection-stop'))
         print(json.dumps(response or {'running': False, 'sessions': 0}))
         return
-    runtime.initialize()
     from .panel import Panel
+    from .qt_locale import application
+    from PySide6.QtCore import QTimer
+    app = application()
     panel = Panel(args.settings, offer_install=not args.smoke_test)
+    panel.show()
     if args.smoke_test:
-        panel.show('Voice Input')
-        assert panel.voice_input.state.get()
-        panel.root.after(1500, panel.root.destroy)
-    panel.root.mainloop()
+        panel.go("Dictation")
+        QTimer.singleShot(1500, panel.close)
+    app.exec()
+
 
 
 if __name__ == '__main__':

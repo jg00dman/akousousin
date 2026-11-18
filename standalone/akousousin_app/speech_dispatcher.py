@@ -210,6 +210,9 @@ class Module:
                 if not voice:
                     voice = next((key for key, entry in config['voices'].items()
                                   if entry['language'].replace('-', '_').casefold() == language), None)
+                if not voice and language:
+                    family = language.split('_')[0]
+                    voice = next((key for code, key in preferred.items() if code.split('_')[0] == family), None)
                 if not voice:
                     voice = next((key for key, entry in config['voices'].items()
                                   if entry['language'].split('_')[0].casefold() == language.split('_')[0]),

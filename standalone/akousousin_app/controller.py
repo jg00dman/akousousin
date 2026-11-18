@@ -174,8 +174,8 @@ class Sessions:
                 self.panel_activation += 1
                 if not self.panels:
                     self.panels.append(subprocess.Popen(runtime.command('--panel', '--settings', str(self.path)), env=runtime.environment()))
-            elif operation == 'voice':
-                pending = settings.select_voice(self.path, request['voice'])
+            elif operation in ('voice', 'language-voice'):
+                pending = settings.select_voice(self.path, request['voice'], language_only=operation == 'language-voice')
                 return {'pending_registration': pending}
             elif operation != 'status':
                 raise ValueError('Unknown Akousousin command')
@@ -299,7 +299,7 @@ def run(path):
         elif 'error' in response and graphical:
             QMessageBox.warning(None, 'Akousousin', response['error'])
         elif response.get('pending_registration') and graphical:
-            QMessageBox.information(None, 'Akousousin', 'Default saved. Apply voice registration in Configure → Settings.')
+            QMessageBox.information(None, 'Akousousin', 'Default saved. Apply voice registration in App integrations.')
         if state.closed:
             # Reject new clients immediately, before potentially slow backend
             # cleanup. A restarting caller must connect to a fresh controller.

@@ -24,6 +24,14 @@ cards, checksum provenance and licence declarations. Voices stay installed in th
 user data folder across upgrades. Existing usable selected voices are preserved.
 An optional lean build omits LJSpeech and offers a first-use download instead.
 
+## Desktop control panel
+
+The PySide6 panel opens on **Overview**. Use the arrow keys in the navigation list to select a page and Tab to reach its controls. Speech output and dictation have independent status and test controls. A recording test writes its transcript to the panel. **Voices** combines the catalogue, imports, language assignments and reading preferences. **Use for [language]** changes that language’s voice. **Set as default voice** also changes the fallback for unlabelled text. A sample recording can be played before downloading a voice when the pinned catalogue includes one.
+
+**Dictation** manages Whisper models, the microphone and transcripts. **App integrations** applies SAPI changes to the displayed Wine prefix or configures Linux Speech Dispatcher. **Shortcuts** manages reading and dictation on Plasma Wayland and on GNOME Wayland with the GlobalShortcuts portal (GNOME 48 or newer). For GNOME dictation, choose **Set up GNOME focus support** and enable the bundled extension in GNOME Extensions. A new extension may require signing out and back in. The extension reports an opaque window identifier and focus changes so a transcript can be retained if the user switches windows. **About** includes the project story, credits and offline licence texts. Updates and AppImage installation are in the Application menu.
+
+The interface uses the desktop locale. To contribute a translation, run `python standalone/update_translations.py fr` (substitute the target locale), edit the resulting catalogue with Qt Linguist, and save it in `standalone/resources/translations`. Packaging compiles it automatically. For a source checkout, run `pyside6-lrelease path/to/akousousin_fr.ts` before opening the panel.
+
 ## Linux installation and storage
 
 OuDedetai installs the AppImage to `~/.local/share/Akousousin/Akousousin-x86_64.AppImage`.

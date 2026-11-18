@@ -124,12 +124,15 @@ def register(path, prefix, wine):
     save(path, value)
 
 
-def select_voice(path, identifier):
+def select_voice(path, identifier, *, language_only=False):
     value = load(path)
     voice = value['voices'][identifier]
-    value['voice'] = identifier
+    if not language_only:
+        value['voice'] = identifier
     value['language_voices'][voice['language']] = identifier
     save(path, value)
+    if language_only:
+        return []
     # Updating a default needs no DLL replacement. Applications may cache their
     # SAPI voice until restarted, just as they do with Windows voice settings.
     from .install import Installer, VOICES, FULL_TOKEN
