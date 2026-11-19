@@ -44,7 +44,6 @@ def bundle(package, cache, build, notices, fetch):
         else:
             for file in ('config.guess', 'config.sub'):
                 shutil.copy2(Path('/usr/share/misc') / file, source / file)
-                shutil.copy2(source / file, auxiliary / file)
             commands = [['autoconf'], ['./configure'], ['make', '-j2']]
             executable = source / 'xclip'
         for command in commands:
