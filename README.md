@@ -91,8 +91,7 @@ Linux checks also exercise a real speechd daemon, packaged Whisper inference and
 
 The [Wine patches](patches/) and [Wine build workflow](.github/workflows/appimage.yml)
 remain available for custom Wine builds. Wine compilation belongs in GitHub Actions,
-not the cloud development environment. Matching sources and licence notices
-accompany downloadable packages. Engine code is LGPL-2.1-or-later; panel/service
+not the cloud development environment. Packages include licence notices and the standalone guide links to matching sources. Engine code is LGPL-2.1-or-later; panel/service
 and Piper are GPL-3.0-or-later; dependency and voice notices are included.
 
 The next output milestones are exact alignment-backed word events, more complete

@@ -6,7 +6,7 @@ SPDX-FileCopyrightText: 2026 John Goodman
 # Testing the 0.7.0b8 beta
 
 Download the [Linux AppImage or Windows ZIP](https://github.com/jg00dman/akousousin/releases).
-Linux trial users need only the AppImage; source archives are separate downloads.
+Linux trial users need only the AppImage.
 Quit the previous instance from its tray, replace the application and launch it.
 Keep existing preferences and models; a configuration reset is not required.
 See [installation and storage](README.md#linux-installation-and-storage).

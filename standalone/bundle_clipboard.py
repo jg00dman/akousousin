@@ -16,7 +16,7 @@ PROJECTS = (
 GLIBC = {'libc.so.6', 'libm.so.6', 'libpthread.so.0', 'librt.so.1', 'libdl.so.2', 'libresolv.so.2'}
 
 
-def bundle(package, sources, build, notices, fetch):
+def bundle(package, cache, build, notices, fetch):
     root = package / 'resources/helpers'
     root.mkdir(parents=True, exist_ok=True)
     work = build / 'clipboard-builds'
@@ -25,7 +25,7 @@ def bundle(package, sources, build, notices, fetch):
     work.mkdir()
     records, libraries = [], []
     for name, repository, commit, binary, licence in PROJECTS:
-        archive = sources / f'{name}-{commit}.tar.gz'
+        archive = cache / f'{name}-{commit}.tar.gz'
         url = f'https://github.com/{repository}/archive/{commit}.tar.gz'
         digest = fetch(url, archive)
         checkout = work / name
@@ -34,9 +34,6 @@ def bundle(package, sources, build, notices, fetch):
             source.extractall(checkout, filter='data')
         source = next(checkout.iterdir())
         if name == 'wl-clipboard':
-            protocol_path = Path(subprocess.check_output(
-                ['pkg-config', '--variable=pkgdatadir', 'wayland-protocols'], text=True).strip())
-            shutil.copytree(protocol_path, sources / 'wayland-protocols', dirs_exist_ok=True)
             for dependency in ('wayland-protocols', 'autotools-dev'):
                 target = notices / 'clipboard' / dependency
                 target.mkdir(parents=True, exist_ok=True)
@@ -45,8 +42,6 @@ def bundle(package, sources, build, notices, fetch):
                         ['ninja', '-C', 'build', 'src/wl-paste']]
             executable = source / 'build/src/wl-paste'
         else:
-            auxiliary = sources / 'clipboard-build-tools'
-            auxiliary.mkdir(exist_ok=True)
             for file in ('config.guess', 'config.sub'):
                 shutil.copy2(Path('/usr/share/misc') / file, source / file)
                 shutil.copy2(source / file, auxiliary / file)
@@ -78,13 +73,4 @@ def bundle(package, sources, build, notices, fetch):
                         'libraries':dependencies})
     provenance = json.dumps(records, indent=2)
     (root / 'provenance.json').write_text(provenance)
-    (sources / 'clipboard-build.json').write_text(provenance)
-    (sources / 'clipboard-BUILD.txt').write_text(
-        'Clipboard readers built from the accompanying immutable source snapshots.\n'
-        'Build on Ubuntu 22.04 with a C compiler, pkg-config, meson, ninja-build,\n'
-        'autoconf, autotools-dev, libwayland-dev, wayland-protocols, libx11-dev, libxt-dev and libxmu-dev.\n'
-        'Wayland protocol XML sources are included in wayland-protocols/.\n'
-        'xclip uses the accompanying config.guess/config.sub from autotools-dev.\n'
-        'Commands, commits, archive hashes and bundled-library hashes are recorded\n'
-        'in clipboard-build.json. System glibc and the dynamic loader are not bundled.\n')
     return libraries

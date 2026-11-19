@@ -28,12 +28,11 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / 'standalone-dist'
 BUILD = ROOT / 'build/standalone-package'
 RESOURCE = BUILD / 'resources'
-SOURCE = OUT / 'sources'
 CACHE = BUILD / 'downloads'
 for stage in (RESOURCE, BUILD / 'Akousousin', BUILD / 'AppDir'):
     if stage.exists():
         shutil.rmtree(stage)
-for directory in (OUT, RESOURCE, SOURCE, CACHE):
+for directory in (OUT, RESOURCE, CACHE):
     directory.mkdir(parents=True, exist_ok=True)
 
 
@@ -77,10 +76,9 @@ if sys.platform != 'win32':
         member = next(m for m in archive if m.name.endswith('/sapi.dll') and '/x86_64-windows/' in m.name)
         with archive.extractfile(member) as source, (compat / 'sapi.dll').open('wb') as target:
             shutil.copyfileobj(source, target)
-    fetch(published + 'wine-source-11.21-logos.tar.xz', SOURCE / 'wine-compat-matching-source.tar.xz',
-          '614fbe45f5afca787810348f3fc848c6b8736bc8db7d74a321356260da7ba565')
     (compat / 'provenance.json').write_text(json.dumps({'version': '11.21', 'source_commit':
-         '3b19eb0e45ac5f57301073fc9e721cac7829dc93', 'release': 'wine-compat-11.21-3b19eb0e45ac'}, indent=2))
+         '3b19eb0e45ac5f57301073fc9e721cac7829dc93', 'release': 'wine-compat-11.21-3b19eb0e45ac',
+         'source': published + 'wine-source-11.21-logos.tar.xz'}, indent=2))
 
 # Original Akousousin artwork, shared by the AppImage, Tk window and tray.
 from PIL import Image, ImageDraw
@@ -149,7 +147,7 @@ if sys.platform != 'win32':
                 system_notices(item)
     system_notices(analysis)
     from bundle_clipboard import bundle as bundle_clipboard
-    for library in bundle_clipboard(PACKAGE, SOURCE, BUILD, notices, fetch):
+    for library in bundle_clipboard(PACKAGE, CACHE, BUILD, notices, fetch):
         system_notices(('clipboard helper dependency', library, 'BINARY'))
 
 # The tray uses PNG artwork, not Qt PDF rendering. Do not ship an unused
@@ -208,18 +206,10 @@ else:
         (PACKAGE / name).chmod(0o755)
     with tarfile.open(OUT / 'Akousousin-Linux-x86_64.tar.gz', 'w:gz') as archive:
         archive.add(PACKAGE, arcname='Akousousin')
-    # Corresponding sources for our DLL/panel and the separately bundled GPL backend.
-    subprocess.run(['git', 'archive', '--format=tar.gz', '--output', str(SOURCE / 'akousousin-source.tar.gz'), 'HEAD'], check=True)
-    fetch('https://github.com/OHF-Voice/piper1-gpl/archive/refs/tags/v1.8.0.tar.gz', SOURCE / 'piper-1.8.0.tar.gz')
-    fetch('https://github.com/espeak-ng/espeak-ng/archive/724808c.tar.gz', SOURCE / 'espeak-ng.tar.gz')
-    # Matching LGPL Qt/PySide sources for the tray and local IPC libraries.
-    for module in ('qtbase', 'qtsvg', 'qtwayland', 'qtdeclarative', 'qtshadertools', 'qttools', 'qtimageformats'):
-        fetch(f'https://github.com/qt/{module}/archive/refs/tags/v6.8.3.tar.gz', SOURCE / f'{module}-6.8.3.tar.gz')
-    fetch('https://github.com/pyside/pyside-setup/archive/refs/tags/v6.8.3.tar.gz', SOURCE / 'pyside-setup-6.8.3.tar.gz')
-    with tarfile.open(OUT / 'Akousousin-corresponding-sources.tar.gz', 'w:gz') as archive:
-        archive.add(SOURCE, arcname='sources')
 
+packages = (['Akousousin-Windows-x86_64.zip'] if sys.platform == 'win32' else
+            ['Akousousin-x86_64.AppImage', 'Akousousin-Linux-x86_64.tar.gz'])
 with (OUT / 'SHA256SUMS').open('w', encoding='ascii', newline='\n') as sums:
-    for file in sorted(OUT.iterdir()):
-        if file.suffix in ('.AppImage', '.zip', '.gz'):
-            sums.write(hashlib.file_digest(file.open('rb'), 'sha256').hexdigest() + '  ' + file.name + '\n')
+    for name in packages:
+        with (OUT / name).open('rb') as stream:
+            sums.write(hashlib.file_digest(stream, 'sha256').hexdigest() + '  ' + name + '\n')

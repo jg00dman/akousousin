@@ -150,15 +150,33 @@ jobs:
           for log in build/standalone-ci/state/Akousousin/akousousin.log build/standalone-ci/appdata/Akousousin/akousousin.log; do
             if [ -f "$log" ]; then tail -80 "$log"; fi
           done
-      - name: Upload packages and diagnostic evidence
+      - name: Upload test AppImage
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          path: standalone-dist/Akousousin-x86_64.AppImage
+          archive: false
+          if-no-files-found: error
+      - name: Upload Linux tar bundle
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          path: standalone-dist/Akousousin-Linux-x86_64.tar.gz
+          archive: false
+          if-no-files-found: error
+      - name: Upload Windows package
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          path: standalone-dist/Akousousin-Windows-x86_64.zip
+          archive: false
+          if-no-files-found: error
+      - name: Upload checksums and diagnostic evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: akousousin-standalone-${{ runner.os }}-${{ github.run_id }}
+          name: akousousin-evidence-${{ runner.os }}-${{ github.run_id }}
           path: |
-            standalone-dist/*.AppImage
-            standalone-dist/*.zip
-            standalone-dist/*.gz
             standalone-dist/SHA256SUMS
             build/dispatcher-ci/speech-dispatcher/*.log
             build/dispatcher-ci/speech-dispatcher/logs/**
@@ -178,21 +196,23 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with: {persist-credentials: false}
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
-          pattern: akousousin-standalone-*
+          pattern: Akousousin-*
+          merge-multiple: true
+          path: release-assets
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          pattern: akousousin-evidence-*
           path: release-input
       - name: Prepare checked release assets
         shell: bash
         run: |
-          mkdir release-assets
-          for directory in release-input/*/standalone-dist; do
-            (cd "$directory" && tr -d '\r' < SHA256SUMS | sha256sum --check -)
-            find "$directory" -maxdepth 1 -type f \( -name '*.AppImage' -o -name '*.zip' -o -name '*.tar.gz' \) -exec cp {} release-assets/ \;
-            if [ -f "$directory/../build/standalone-ci/control-panel.png" ]; then
-              cp "$directory/../build/standalone-ci/control-panel.png" release-assets/control-panel.png
-            fi
+          for platform in Linux Windows; do
+            manifest="$PWD/release-input/akousousin-evidence-$platform-$GITHUB_RUN_ID/standalone-dist/SHA256SUMS"
+            (cd release-assets && sha256sum --check "$manifest")
           done
+          cp "release-input/akousousin-evidence-Linux-$GITHUB_RUN_ID/build/standalone-ci/control-panel.png" release-assets/
           test -f release-assets/control-panel.png
           sed 's#../COMPATIBILITY.md#COMPATIBILITY.md#g' standalone/README.md > release-assets/TESTING.md
           cp COMPATIBILITY.md release-assets/COMPATIBILITY.md
@@ -257,11 +277,12 @@ jobs:
               env.write('BUILT_SHA=' + metadata['head_sha'] + '\n')
               env.write('BUILT_BRANCH=' + metadata['head_branch'] + '\n')
           PYTHON
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           github-token: ${{ github.token }}
           run-id: ${{ inputs.reuse_run_id || github.run_id }}
-          pattern: akousousin-standalone-Linux-*
+          pattern: '{Akousousin-x86_64.AppImage,akousousin-evidence-Linux-*,akousousin-standalone-Linux-*}'
+          merge-multiple: true
           path: release-input
       - name: Publish checked trial AppImage
         env:
@@ -271,15 +292,17 @@ jobs:
           import hashlib, os, shutil, subprocess
           from pathlib import Path
           target = Path('release-assets'); target.mkdir()
-          directory = next(Path('release-input').glob('*/standalone-dist'))
-          for line in (directory / 'SHA256SUMS').read_text().splitlines():
-              digest, name = line.split('  ', 1)
-              file = directory / name
-              with file.open('rb') as stream:
-                  assert hashlib.file_digest(stream, 'sha256').hexdigest() == digest, name
-          for file in directory.iterdir():
-              if file.is_file():
-                  shutil.copy2(file, target / file.name)
+          inputs = Path('release-input')
+          directory = inputs / 'standalone-dist'
+          name = 'Akousousin-x86_64.AppImage'
+          # Reused runs from before the split put the AppImage beside the manifest.
+          file = inputs / name if (inputs / name).is_file() else directory / name
+          sums = (directory / 'SHA256SUMS').read_text().splitlines()
+          expected, = [line.split('  ', 1)[0] for line in sums if line.endswith('  ' + name)]
+          with file.open('rb') as stream:
+              assert hashlib.file_digest(stream, 'sha256').hexdigest() == expected, name
+          shutil.copy2(file, target / name)
+          (target / 'SHA256SUMS').write_text(expected + '  ' + name + '\n')
           private_sapi = os.environ['BUILT_BRANCH'] == 'codex/private-sapi-probe'
           on_demand = os.environ['BUILT_BRANCH'] == 'codex/on-demand-voices'
           guide = 'standalone/ON-DEMAND-TESTING.md' if on_demand else 'standalone/PRIVATE-SAPI-TESTING.md' if private_sapi else 'recognition/PANEL-TESTING.md'
@@ -293,7 +316,7 @@ jobs:
           notes.write_text('[Download the AppImage](' + download + ') — this is the only download needed to try AKS.\n\n'
                            'Whisper models download separately and remain in '
                            '`~/.local/share/Akousousin/models/whisper/` (respecting `XDG_DATA_HOME`).\n\n'
-                           'Matching sources and checksums are separate release assets. '
+                           'The checksum is a separate release asset. '
                            '[Build logs and diagnostic artifacts](' + evidence + ') remain on GitHub.\n\n'
                            + Path(guide).read_text())
           subprocess.run(['gh', 'api', 'repos/' + repository + '/git/refs',
@@ -305,5 +328,5 @@ jobs:
                           *map(str, target.iterdir())], check=True)
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
               summary.write('## Trial download\n\n[Akousousin-x86_64.AppImage](' + download + ')\n\n'
-                            'Download the AppImage alone; sources and diagnostics are optional separate downloads.\n')
+                            'Download the AppImage alone to test.\n')
           PYTHON

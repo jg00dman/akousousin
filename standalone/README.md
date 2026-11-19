@@ -24,6 +24,8 @@ cards, checksum provenance and licence declarations. Voices stay installed in th
 user data folder across upgrades. Existing usable selected voices are preserved.
 An optional lean build omits LJSpeech and offers a first-use download instead.
 
+For Linux testing, download **Akousousin-x86_64.AppImage** from the standalone workflow run. After downloading, run `chmod +x Akousousin-x86_64.AppImage` to make it executable. The installable **Akousousin-Linux-x86_64.tar.gz** is a separate download.
+
 ## Desktop control panel
 
 The PySide6 panel opens on **Overview**. Use the arrow keys in the navigation list to select a page and Tab to reach its controls. Speech output and dictation have independent status and test controls. A recording test writes its transcript to the panel. **Voices** combines the catalogue, imports, language assignments and reading preferences. **Use for [language]** changes that language’s voice. **Set as default voice** also changes the fallback for unlabelled text. A sample recording can be played before downloading a voice when the pinned catalogue includes one.
@@ -188,8 +190,12 @@ vary; upstream cards and provenance are retained when downloading.
 Original project code is GPL-3.0-or-later, copyright 2026 John Goodman, with
 LGPL-2.1-or-later for the SAPI engine C code/API headers. Wine, Piper, Qt/PySide
 and other dependencies retain their upstream terms and notices. Both application
-packages include the GPL and LGPL texts and the component-licensing explanation. The source archive
-includes matching Wine, Piper, eSpeak, Qt and PySide sources. Automated deterministic
+packages include the GPL and LGPL texts and the component-licensing explanation. The standalone build records its Git commit in `resources/build.json`. The matching
+[Wine source](https://github.com/jg00dman/akousousin/releases/download/wine-compat-11.21-3b19eb0e45ac/wine-source-11.21-logos.tar.xz),
+[Piper](https://github.com/OHF-Voice/piper1-gpl/tree/v1.8.0),
+[eSpeak](https://github.com/espeak-ng/espeak-ng/tree/724808c),
+[Qt](https://github.com/qt/qt5/tree/v6.8.3) and [PySide](https://github.com/pyside/pyside-setup/tree/v6.8.3)
+sources are available upstream. The clipboard helpers record their exact source URLs and build commands in `resources/helpers/provenance.json`. Automated deterministic
 WAV checks, real Piper output and session tests do not establish audible playback
 or every Logos desktop behavior; test in a backed-up prefix.
 
@@ -214,7 +220,7 @@ in `resources/build.json`; AppImage controls also require a valid executable
 ## Standalone Linux tar installation (no AppImage runtime or FUSE)
 
 AppImage remains the recommended/default Linux download. Alternatively download
-`Akousousin-Linux-x86_64.tar.gz` (not the corresponding-sources archive). The tar
+`Akousousin-Linux-x86_64.tar.gz`. The tar
 bundle includes the same application, Python runtime, private dependencies,
 clipboard helpers and GPL/LGPL/dependency licence notices. It does not include
 Wine or voice/model weights by default. It requires x86-64 Linux with glibc 2.35+
