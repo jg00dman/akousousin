@@ -96,6 +96,9 @@ jobs:
         run: python standalone/package.py ${{ github.event_name == 'workflow_dispatch' && !inputs.bundle_starter_voice && '--no-bundle-starter-voice' || '' }}
       - name: Check packaged GPL and LGPL notices
         run: python scripts/check-licensing.py --package build/standalone-package/Akousousin
+      - name: Packaged tray icon and menu with early and late desktop startup
+        if: runner.os == 'Linux'
+        run: xvfb-run -a dbus-run-session -- python standalone/ci_tray.py build/standalone-package/AppDir/AppRun
       - name: Bundled clipboard readers without host clipboard packages
         if: runner.os == 'Linux'
         run: xvfb-run -a env PYTHONPATH=standalone:backend python standalone/ci_clipboard.py

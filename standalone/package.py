@@ -80,15 +80,6 @@ if sys.platform != 'win32':
          '3b19eb0e45ac5f57301073fc9e721cac7829dc93', 'release': 'wine-compat-11.21-3b19eb0e45ac',
          'source': published + 'wine-source-11.21-logos.tar.xz'}, indent=2))
 
-# Original Akousousin artwork, shared by the AppImage, Tk window and tray.
-from PIL import Image, ImageDraw
-icon = Image.new('RGBA', (128, 128))
-draw = ImageDraw.Draw(icon)
-draw.rounded_rectangle((0, 0, 127, 127), radius=24, fill='#087e82')
-for x, low, high in ((30, 52, 76), (47, 36, 92), (64, 26, 102), (81, 40, 88), (98, 56, 72)):
-    draw.line((x, low, x, high), fill='white', width=7)
-icon.save(RESOURCE / 'akousousin.png')
-
 commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
 (RESOURCE / 'build.json').write_text(json.dumps({'build': commit[:12] + '-' + sys.platform,
                                                'commit': commit, 'version': __version__,

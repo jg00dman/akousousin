@@ -338,6 +338,18 @@ def run(path):
         socket.readyRead.connect(read)
         read()
     server.newConnection.connect(accept)
+    tray_watcher = None
+    if graphical and app.platformName() == 'xcb':
+        # On X11 Qt chooses XEmbed if the desktop's D-Bus tray is still
+        # starting. That icon cannot switch to StatusNotifier on its own.
+        from PySide6.QtDBus import QDBusConnection, QDBusServiceWatcher
+        bus = QDBusConnection.sessionBus()
+        watcher_name = 'org.kde.StatusNotifierWatcher'
+        if bus.isConnected():
+            tray_watcher = QDBusServiceWatcher(watcher_name, bus, QDBusServiceWatcher.WatchForRegistration, app)
+            if bus.interface().isServiceRegistered(watcher_name).value():
+                tray_watcher.deleteLater()
+                tray_watcher = None
     tray = QSystemTrayIcon() if graphical else None
     if tray:
         tray.setToolTip('Akousousin — Neural Voice Engine')
@@ -380,6 +392,20 @@ def run(path):
                 submit({'command': 'stt-toggle'})
         tray.activated.connect(activate_tray)
         tray.show()
+        if tray_watcher is not None:
+            def attach_to_desktop(_service):
+                nonlocal tray
+                replacement = QSystemTrayIcon(tray.icon())
+                replacement.setToolTip(tray.toolTip())
+                tray.hide()
+                tray.deleteLater()
+                tray = replacement
+                tray.setContextMenu(menu)
+                tray.activated.connect(activate_tray)
+                tray.show()
+                # Qt now owns the D-Bus icon and handles subsequent restarts.
+                tray_watcher.deleteLater()
+            tray_watcher.serviceRegistered.connect(attach_to_desktop)
 
     def notify_update(candidate):
         nonlocal update_dialog
