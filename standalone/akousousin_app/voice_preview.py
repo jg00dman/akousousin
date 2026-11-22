@@ -23,6 +23,10 @@ def play(path, text, voice, sample, stop):
     with tempfile.TemporaryDirectory() as folder:
         audio = Path(folder) / 'preview.wav'
         if sample:
+            from .network import require, samples_allowed
+            require(path, 'online voice samples')
+            if not samples_allowed(path):
+                raise PermissionError('Samples of voices that are not downloaded are turned off in Privacy.')
             import miniaudio
             from akousousin_backend.tls import https_context
             with urllib.request.urlopen(catalogue.BASE + '/' + sample + '/samples/speaker_0.mp3',

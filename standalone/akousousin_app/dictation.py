@@ -60,15 +60,15 @@ class Dictation:
             if phase:
                 self.phase = phase
 
-    def prepare(self):
-        self._launch(False, None)
+    def prepare(self, download=False):
+        self._launch(False, None, download=download)
         return self.status()
 
     def start(self, target=None, seconds=None):
         self._launch(True, target, seconds)
         return self.status()
 
-    def _launch(self, record, target, seconds=None):
+    def _launch(self, record, target, seconds=None, download=False):
         with self.lock:
             if self.closed or self.unloading:
                 raise RuntimeError('Dictation is closed')
@@ -78,6 +78,8 @@ class Dictation:
             self.finished = threading.Event()
             self.insertion_cancelled = threading.Event()
             config = settings.load(self.path)
+            # Models download only when the user asks on the Dictation page.
+            config['_download'] = download
             self.enabled = True
             self.change('Loading model…', 'loading')
             self.thread = threading.Thread(target=self._run, args=(record, target, seconds, config), daemon=True)
@@ -90,6 +92,12 @@ class Dictation:
         if model.endswith('.en') and config['stt_language'] != 'en':
             raise ValueError('English-only models require English; select Base or Small for other languages or auto detection')
         missing = not models.installed(model) and not (model == 'turbo' and models.installed('small'))
+        if missing and not config.get('_download'):
+            raise RuntimeError(f'The {model} dictation model is not downloaded yet. '
+                               'Open Akousousin › Dictation and choose Download.')
+        if missing:
+            from .network import require
+            require(self.path, 'downloading dictation models')
         if self.recognizer and self.recognizer.model['model'] != model:
             self.recognizer.close()
             self.recognizer = None

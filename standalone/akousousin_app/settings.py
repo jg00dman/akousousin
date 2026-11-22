@@ -15,7 +15,8 @@ DEFAULTS = {'version': 1, 'voice': 'en_US-ljspeech-medium', 'speed': 1.0, 'volum
             'idle_timeout': 300, 'stt_model': default_model(system_language()), 'stt_language': system_language(),
             'stt_source': '', 'stt_beep': True, 'stt_mode': 'toggle',
             'stt_idle_timeout': 3600, 'stt_threshold': 250, 'stt_cpu_threads': cpu_threads(),
-            'stt_keep_loaded': True, 'stt_config_version': 2, 'update_weekly': True, 'update_betas': True}
+            'stt_keep_loaded': True, 'stt_config_version': 2, 'update_weekly': True, 'update_betas': True,
+            'network_blocked': False, 'voice_samples': True, 'tray_click': 'dictate'}
 
 
 def config_path():
@@ -51,9 +52,11 @@ def load(path):
 
 
 def validate(value):
-    for key in ("update_weekly", "update_betas"):
+    for key in ("update_weekly", "update_betas", "network_blocked", "voice_samples"):
         if not isinstance(value.get(key, DEFAULTS[key]), bool):
-            raise ValueError("Invalid update preference: " + key)
+            raise ValueError("Invalid preference: " + key)
+    if value.get('tray_click', 'dictate') not in ('dictate', 'open'):
+        raise ValueError('Invalid tray click preference')
     if value.get('stt_mode', 'toggle') not in ('toggle', 'push-to-talk'):
         raise ValueError('Invalid dictation activation mode')
     for key, low, high in [('stt_idle_timeout', 0, 86400), ('stt_threshold', 1, 10000)]:
