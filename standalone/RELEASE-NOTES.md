@@ -3,6 +3,39 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
+# Akousousin 0.9.0b1 beta — new control panel
+
+A redesigned control panel, test build for the v1 interface. Speech, Wine SAPI
+and Speech Dispatcher behaviour are unchanged.
+
+- **Eight clear pages:** Home, Voices, Dictation, Shortcuts, Apps, Advanced,
+  Privacy and About, with one main action per section and settings shown in
+  place instead of in dialogs. Light and dark colour schemes follow the desktop.
+- **Voices:** a Default voice chooser at the top, then one list of every voice
+  grouped by language (in each language's own name). Select a voice to hear it,
+  make it the default, use it for its language, download it after reviewing its
+  licence, or remove it. Speed, volume and reading language are on the same page.
+- **Dictation:** choose hold-to-talk or press-to-start, language, microphone and
+  Fastest / Balanced / Most accurate, and try it without typing into other apps.
+- **Privacy:** what always stays on this computer, the few uses of the internet
+  (update checks, downloads you ask for, online voice samples) and a
+  **Block all internet access** setting that turns those off. Starting
+  dictation no longer downloads a missing model by itself; choose Download on
+  the Dictation page.
+- **Tray:** click or tap to start or stop dictation (or open Akousousin, set in
+  Shortcuts); right-click or press and hold for the menu, which now includes
+  Read selected text, Read copied text and Stop reading. The icon shows Ready,
+  Listening (green microphone with a breathing glow) and Reading (the logo lines
+  rising and falling); movement follows the desktop's animation setting.
+- **Advanced:** service status and restart, memory, voice character, updates,
+  a diagnostic report that leaves out anything read or dictated, and Remove
+  everything.
+- The interface is ready for translation and follows the system language; a
+  Spanish translation is included for review.
+- Earlier unreleased changes on this branch: GNOME Wayland dictation with the
+  Akousousin Focus extension, late tray registration on X11, direct AppImage
+  and tar downloads.
+
 # Unreleased
 
 - Add `--version` to print the application version and exit without starting the
