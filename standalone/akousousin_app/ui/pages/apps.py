@@ -35,17 +35,17 @@ class PrefixRow(QWidget):
             path = text(prefix, 'small', select=True)
             path.setStyleSheet('font-family: monospace')
             words.addWidget(path)
-            words.addWidget(text(entry.get('wine') or page.tr('System Wine'), 'small'))
+            words.addWidget(text(entry.get('wine') or self.tr('System Wine'), 'small'))
         layout.addLayout(words, 1)
         registered = page.registered(prefix)
         status = StatusLine()
-        status.set(page.tr('Voices registered') if registered else page.tr('Not registered'), 'ok' if registered else 'caution')
+        status.set(self.tr('Voices registered') if registered else self.tr('Not registered'), 'ok' if registered else 'caution')
         layout.addWidget(status)
         if registered:
-            layout.addWidget(button(page.tr('Update'), lambda: page.register(prefix, entry.get('wine'), False)))
-            layout.addWidget(button(page.tr('Remove…'), lambda: page.register(prefix, entry.get('wine'), True)))
+            layout.addWidget(button(self.tr('Update'), lambda: page.register(prefix, entry.get('wine'), False)))
+            layout.addWidget(button(self.tr('Remove…'), lambda: page.register(prefix, entry.get('wine'), True)))
         else:
-            layout.addWidget(button(page.tr('Register voices'), lambda: page.register(prefix, entry.get('wine'), False), kind='primary'))
+            layout.addWidget(button(self.tr('Register voices'), lambda: page.register(prefix, entry.get('wine'), False), kind='primary'))
         outer.addLayout(layout)
         self.setAccessibleName(name)
 
