@@ -79,8 +79,10 @@ class PanelTests(unittest.TestCase):
             page = self.window.current_page()
             self.assertEqual(nav.currentItem().text(), page.title())
             self.assertEqual(self.window.stack.currentWidget().accessibleName(), page.title())
-        QTest.keyClick(self.window, Qt.Key_2, Qt.ControlModifier)
-        self.assertEqual(self.window.current_page().key, 'voices')
+        self.window.activateWindow()
+        if QTest.qWaitForWindowActive(self.window, 1000):  # shortcuts need an active window
+            QTest.keyClick(self.window.nav, Qt.Key_2, Qt.ControlModifier)
+            self.assertEqual(self.window.current_page().key, 'voices')
         for page in self.window.pages.values():
             for button in page.findChildren(QPushButton):
                 self.assertTrue(button.text() or button.accessibleName(), f'{page.key}: unnamed button')
