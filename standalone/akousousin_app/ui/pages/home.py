@@ -10,7 +10,7 @@ from ... import resources
 from .. import theme
 from ..flow import Columns
 from ..lang import dictation_state, keys, language_name, number, speech_state
-from ..widgets import Card, Keys, StatusLine, button, row, set_icon, text
+from ..widgets import Card, Keys, StatusLine, button, row, set_icon, spread, text
 from .base import Page
 
 
@@ -80,7 +80,7 @@ class HomePage(Page):
         # Connected apps
         apps = Card()
         heading = text(self.tr('Connected apps'), 'h2')
-        apps.add(row(heading, button(self.tr('Manage apps'), lambda: self.state.navigate.emit('apps'), kind='link')))
+        apps.add(spread(heading, button(self.tr('Manage apps'), lambda: self.state.navigate.emit('apps'), kind='link')))
         self.apps_row = QHBoxLayout()
         self.apps_row.setSpacing(12)
         apps.add(self.apps_row)
@@ -187,7 +187,7 @@ class HomePage(Page):
             chip.setAccessibleName(f'{name}, {detail}')
             self.apps_row.addWidget(chip)
         if not chips:
-            self.apps_row.addWidget(text(self.tr('Not connected to any apps yet. Add Logos or another Windows app in Apps.'), 'muted'))
+            self.apps_row.addWidget(text(self.tr('Not connected to any apps yet. Add Logos or another Windows app in Apps.'), 'muted'), 1)
         self.apps_row.addStretch(1)
 
     # Actions -------------------------------------------------------------

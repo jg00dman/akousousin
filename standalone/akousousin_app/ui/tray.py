@@ -87,9 +87,9 @@ class Tray(QObject):
     """The icon, menu and click behaviour. ``submit`` sends controller requests."""
     FPS = 12
 
-    def __init__(self, path, submit, quit_requested, parent=None):
+    def __init__(self, path, submit, in_use, parent=None):
         super().__init__(parent)
-        self.path, self.submit, self.quit_requested = path, submit, quit_requested
+        self.path, self.submit, self.in_use = path, submit, in_use
         self.mode = 'ready'
         self.extras = {}
         self.phase = 0.0
@@ -113,7 +113,7 @@ class Tray(QObject):
         self.downloads.setEnabled(False)
         self.update_action = self.menu.addAction('', lambda: self.submit({'command': 'configure', 'page': 'Updates'}))
         self.menu.addAction(self.tr('Open Akousousin'), lambda: self.submit({'command': 'configure'}))
-        self.menu.addAction(self.tr('Quit'), self.quit_requested)
+        self.menu.addAction(self.tr('Quit'), self.quit)
         if os.name == 'nt':
             for action in (self.stop_reading, self.read_selected, self.read_copied):
                 action.setVisible(False)
@@ -130,6 +130,13 @@ class Tray(QObject):
         self.icon.activated.connect(self._activated)
         self._paint()
         self.icon.show()
+
+    def quit(self):
+        from PySide6.QtWidgets import QMessageBox
+        if self.in_use() and QMessageBox.question(None, self.tr('Quit Akousousin?'),
+                                                  self.tr('Speech is in use. Quit and stop speaking?')) != QMessageBox.Yes:
+            return
+        self.submit({'command': 'quit'})
 
     def _activated(self, reason):
         if reason != QSystemTrayIcon.Trigger:

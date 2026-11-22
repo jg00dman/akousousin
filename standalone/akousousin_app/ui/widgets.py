@@ -92,7 +92,9 @@ def row(*widgets, spacing=10, stretch=True, wrap_alignment=Qt.AlignVCenter):
         elif hasattr(widget, 'addWidget') and not isinstance(widget, QWidget):
             layout.addLayout(widget)
         else:
-            layout.addWidget(widget, 0, wrap_alignment)
+            # Wrapping text takes the free space instead of squeezing into a column.
+            grow = 1 if isinstance(widget, QLabel) and widget.wordWrap() and widget.pixmap().isNull() else 0
+            layout.addWidget(widget, grow, wrap_alignment)
     if stretch:
         layout.addStretch(1)
     return layout
@@ -248,8 +250,8 @@ def labelled(caption, widget, help_text=''):
 
 def combo(choices=(), current=None):
     box = QComboBox()
-    box.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
-    box.setMinimumContentsLength(18)
+    box.setSizeAdjustPolicy(QComboBox.AdjustToContents)
+    box.setMinimumContentsLength(14)
     box.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
     fill(box, choices, current)
     return box

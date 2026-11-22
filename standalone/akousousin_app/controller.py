@@ -357,12 +357,9 @@ def run(path):
         from .ui.tray import Tray
         install_translators(app)
 
-        def quit_requested():
-            if (state.owners or state.service.health(settings.load(path)['port'])) and QMessageBox.question(
-                    None, tray.tr('Quit Akousousin?'), tray.tr('Speech is in use. Quit and stop speaking?')) != QMessageBox.Yes:
-                return
-            submit({'command': 'quit'})
-        tray = Tray(path, submit, quit_requested)
+        def in_use():
+            return bool(state.owners or state.service.health(settings.load(path)['port']))
+        tray = Tray(path, submit, in_use)
         if tray_watcher is not None:
             def attach_to_desktop(_service):
                 tray.create()
