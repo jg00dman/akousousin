@@ -6,7 +6,7 @@ Closing the window never stops speech; the controller keeps running.
 """
 from pathlib import Path
 
-from PySide6.QtCore import QSize, Qt, QTimer
+from PySide6.QtCore import QEvent, QSize, Qt, QTimer
 from PySide6.QtGui import QAccessible, QAccessibleAnnouncementEvent, QIcon, QKeySequence, QShortcut
 from PySide6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMainWindow,
                                QScrollArea, QStackedWidget, QVBoxLayout, QWidget)
@@ -31,6 +31,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle('Akousousin')
         self.setWindowIcon(QIcon(str(resources.root() / 'akousousin.png')))
         self.setStyleSheet(theme.style_sheet())
+        self._ground = theme.current().ground
         self.tasks = Tasks(self)
         self.state = AppState(path, self.tasks, self, poll=poll)
         self.state.preview = Preview(self.state, self.tasks)
@@ -48,20 +49,10 @@ class MainWindow(QMainWindow):
         self.stack = QStackedWidget()
         body.addWidget(self.stack, 1)
         self.pages = {}
-        for page_class in PAGES:
-            page = page_class(self.state, self.tasks)
-            scroll = QScrollArea()
-            scroll.setObjectName('pageScroll')
-            scroll.setWidgetResizable(True)
-            scroll.setWidget(page)
-            scroll.setAccessibleName(page.title())
-            self.stack.addWidget(scroll)
-            self.pages[page.key] = page
-            item = QListWidgetItem(theme.icon(page.icon, theme.current().text, 20), page.title())
-            item.setData(Qt.UserRole, page.key)
-            item.setSizeHint(QSize(0, 46))
-            self.nav.addItem(item)
+        self._build_pages()
         self.nav.currentRowChanged.connect(self._show_row)
+        QApplication.instance().styleHints().colorSchemeChanged.connect(lambda _: QTimer.singleShot(0, self.retheme))
+        QApplication.instance().installEventFilter(self)
         self.status = QLabel()
         self.status.setObjectName('status')
         self.status.setAccessibleName(self.tr('Status'))
@@ -88,6 +79,46 @@ class MainWindow(QMainWindow):
         if offer_install:
             QTimer.singleShot(700, lambda: self.pages['advanced'].offer_install())
 
+    def _build_pages(self):
+        for page_class in PAGES:
+            page = page_class(self.state, self.tasks)
+            scroll = QScrollArea()
+            scroll.setObjectName('pageScroll')
+            scroll.setWidgetResizable(True)
+            scroll.setWidget(page)
+            scroll.setAccessibleName(page.title())
+            self.stack.addWidget(scroll)
+            self.pages[page.key] = page
+            item = QListWidgetItem(theme.icon(page.icon, theme.current().text, 20), page.title())
+            item.setData(Qt.UserRole, page.key)
+            item.setSizeHint(QSize(0, 46))
+            self.nav.addItem(item)
+
+    def retheme(self):
+        """Follow a light/dark switch without restarting: restyle and redraw every page."""
+        if theme.current().ground == self._ground:
+            return
+        self._ground = theme.current().ground
+        key = self.current_page().key if self.nav.currentItem() else 'home'
+        self.setStyleSheet(theme.style_sheet())
+        self.tile.setStyleSheet(f'background: {theme.current().accent}; border-radius: 9px')
+        self.nav.blockSignals(True)
+        self.nav.clear()
+        while self.stack.count():
+            widget = self.stack.widget(0)
+            self.stack.removeWidget(widget)
+            widget.deleteLater()
+        self.pages = {}
+        self._build_pages()
+        self.nav.blockSignals(False)
+        self.go(key)
+
+    def eventFilter(self, watched, event):
+        # The desktop changed its palette (light/dark) while the panel is open.
+        if watched is QApplication.instance() and event.type() == QEvent.ApplicationPaletteChange:
+            QTimer.singleShot(0, self.retheme)
+        return False
+
     def _sidebar(self):
         side = QWidget()
         side.setObjectName('brand')
@@ -98,7 +129,7 @@ class MainWindow(QMainWindow):
         brand = QHBoxLayout()
         brand.setContentsMargins(22, 22, 14, 14)
         brand.setSpacing(10)
-        tile = QLabel()
+        tile = self.tile = QLabel()
         tile.setFixedSize(34, 34)
         tile.setAlignment(Qt.AlignCenter)
         tile.setStyleSheet(f'background: {theme.current().accent}; border-radius: 9px')

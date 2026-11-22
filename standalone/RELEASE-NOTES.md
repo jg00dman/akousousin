@@ -3,6 +3,17 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
+# Akousousin 0.9.0b2 beta
+
+Fixes from testing 0.9.0b1:
+
+- The panel now follows a light/dark switch straight away; no restart needed.
+- Scroll bars are slim and rounded, closer to Plasma's own look.
+- Dictation's cards stack in one column unless the window is wide, so its
+  controls have room.
+- Advanced › Open service log now opens the log in your desktop's viewer from
+  the AppImage too; if that fails, the log's location is copied instead.
+
 # Akousousin 0.9.0b1 beta — new control panel
 
 A redesigned control panel, test build for the v1 interface. Speech, Wine SAPI

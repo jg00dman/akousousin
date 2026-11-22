@@ -18,6 +18,19 @@ from .base import Page
 DEFAULT_NOISE, DEFAULT_WIDTH = settings.DEFAULTS['noise_scale'], settings.DEFAULTS['noise_w_scale']
 
 
+def open_file(path):
+    """Open a file in the desktop's own viewer, without the AppImage's libraries."""
+    if os.name == 'nt':
+        os.startfile(str(path))
+        return True
+    try:
+        subprocess.Popen(['xdg-open', str(path)], env=runtime.host_environment(),
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        return True
+    except OSError:
+        return QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+
+
 class AdvancedPage(Page):
     key = 'advanced'
     icon = 'sliders'
@@ -208,7 +221,13 @@ class AdvancedPage(Page):
             self.run(lambda: appimage_install.install(self.state.path, replace=replace), lambda _: self.window().close(), key='appimage')
 
     def open_log(self):
-        QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.state.service.log)))
+        log = self.state.service.log
+        if not log.is_file():
+            self.notice(self.tr('There is no service log yet.'))
+            return
+        if not open_file(log):
+            QApplication.clipboard().setText(str(log))
+            self.notice(self.tr('Could not open the log, so its location was copied: %1').replace('%1', str(log)))
 
     def copy_report(self):
         QApplication.clipboard().setText(diagnostics.report(self.state.path, self.state.status))

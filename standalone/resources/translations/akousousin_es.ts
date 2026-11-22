@@ -378,6 +378,14 @@
         <source>Removing Akousousin…</source>
         <translation>Eliminando Akousousin…</translation>
     </message>
+    <message>
+        <source>There is no service log yet.</source>
+        <translation>Todavía no hay registro del servicio.</translation>
+    </message>
+    <message>
+        <source>Could not open the log, so its location was copied: %1</source>
+        <translation>No se pudo abrir el registro, así que se copió su ubicación: %1</translation>
+    </message>
 </context>
 <context>
     <name>AppsPage</name>

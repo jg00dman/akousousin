@@ -41,7 +41,10 @@ def current():
     app = QApplication.instance()
     if app is None:
         return LIGHT
-    return DARK if app.palette().window().color().lightness() < 128 else LIGHT
+    # Either signal is enough: the desktop's colour-scheme setting or a dark palette.
+    dark = (app.styleHints().colorScheme() == Qt.ColorScheme.Dark
+            or app.palette().window().color().lightness() < 128)
+    return DARK if dark else LIGHT
 
 
 def assets(p):
@@ -128,6 +131,14 @@ QSlider::sub-page:horizontal {{ background: {p.accent}; border-radius: 3px; }}
 QSlider {{ min-height: 26px; }}
 QSlider::handle:horizontal {{ background: {p.card}; border: 2px solid {p.accent}; width: 16px; height: 16px; margin: -7px 0; border-radius: 10px; }}
 QLabel#status {{ background: {p.sidebar}; color: {p.muted}; border-top: 1px solid {p.border}; padding: 8px 20px; font-size: 13px; }}
+QScrollBar:vertical {{ background: transparent; width: 12px; margin: 2px; border: 0; }}
+QScrollBar:horizontal {{ background: transparent; height: 12px; margin: 2px; border: 0; }}
+QScrollBar::handle {{ background: {p.border}; border-radius: 4px; border: 2px solid transparent; }}
+QScrollBar::handle:vertical {{ min-height: 32px; }}
+QScrollBar::handle:horizontal {{ min-width: 32px; }}
+QScrollBar::handle:hover, QScrollBar::handle:pressed {{ background: {p.muted}; }}
+QScrollBar::add-line, QScrollBar::sub-line {{ width: 0; height: 0; border: 0; background: none; }}
+QScrollBar::add-page, QScrollBar::sub-page {{ background: none; }}
 QToolTip {{ color: {p.text}; background: {p.card}; border: 1px solid {p.border}; }}
 """
 

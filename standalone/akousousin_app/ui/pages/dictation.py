@@ -92,7 +92,7 @@ class DictationPage(Page):
         model.add(row(self.get_model, button(self.tr('Import a model folder…'), self.import_model),
                       button(self.tr('Free memory now'), lambda: self.state.command('stt-unload'))))
 
-        self.add(Columns([[start, listen], [trial, model]], minimum=420))
+        self.add(Columns([[start, listen], [trial, model]], minimum=540))
         test.changed.connect(self.recording_changed)
         test.transcript.connect(self.transcript.setPlainText)
         self.settings_changed(config)

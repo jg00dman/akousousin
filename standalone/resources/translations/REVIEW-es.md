@@ -100,6 +100,8 @@ SPDX-FileCopyrightText: 2026 John Goodman
 | AdvancedPage | Some parts could not be removed. | Algunas partes no se pudieron eliminar. |
 | AdvancedPage | Akousousin was removed. | Akousousin se ha eliminado. |
 | AdvancedPage | Removing Akousousin… | Eliminando Akousousin… |
+| AdvancedPage | There is no service log yet. | Todavía no hay registro del servicio. |
+| AdvancedPage | Could not open the log, so its location was copied: %1 | No se pudo abrir el registro, así que se copió su ubicación: %1 |
 | AppsPage | Apps | Aplicaciones |
 | AppsPage | Where Akousousin’s voices are available. | Dónde están disponibles las voces de Akousousin. |
 | AppsPage | Windows speech (SAPI) | Voz de Windows (SAPI) |
