@@ -65,7 +65,7 @@ async def check(command, desktop, late):
                 assert menu.message_type == MessageType.METHOD_RETURN, menu.body
                 labels = [child.value[1]['label'].value for child in menu.body[1][2]
                           if 'label' in child.value[1]]
-                assert 'Configure' in labels and 'Quit' in labels, labels
+                assert 'Open Akousousin' in labels and 'Quit' in labels and 'Read selected text' in labels, labels
             finally:
                 if proc.returncode is None:
                     proc.terminate()
