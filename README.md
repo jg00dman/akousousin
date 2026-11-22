@@ -81,7 +81,7 @@ launcher lifecycle hooks. An optional session interface remains available to cli
 The standalone [engine](engine/) implements public Windows COM/SAPI interfaces.
 Those standard API names and contracts are unchanged by the project rebrand.
 The [control panel and controller](standalone/) manage voices and backend sessions.
-The panel and tray use PySide6 (Qt 6). The panel uses native widgets, keyboard navigation and the desktop locale. Orca 48.1 identified the navigation list, selected page and voice search field in an X11 keyboard walkthrough.
+The panel and tray use PySide6 (Qt 6). The panel uses native widgets, keyboard navigation and the desktop locale. Orca 48.1 identified the navigation list, selected page and voice search field in an X11 keyboard walkthrough. See the [control panel architecture](standalone/UI-ARCHITECTURE.md).
 See the [desktop control panel guide](standalone/README.md#desktop-control-panel) for model and voice setup, desktop shortcuts and translations.
 [CI](.github/workflows/standalone.yml) cross-compiles the engine and tests packages
 on Wine and Windows without compiling Wine. The CI suite checks controller and recognition lifecycle, cancellation, actual GUI

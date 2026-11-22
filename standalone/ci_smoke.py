@@ -233,7 +233,7 @@ if not native:
     deadline = time.monotonic() + 4
     while time.monotonic() < deadline:
         app.processEvents()
-        if not panel.engine.text().startswith('Checking'):
+        if panel.state.status.speech is not None:
             break
         time.sleep(.05)
     assert panel.grab().save(str(WORK / 'control-panel.png'))

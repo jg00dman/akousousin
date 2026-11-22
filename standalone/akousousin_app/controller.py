@@ -65,7 +65,7 @@ class Sessions:
         operation = request['command']
         if operation == 'stt-prepare':
             self.input_owned = True
-            self.input.prepare()
+            self.input.prepare(download=request.get('download') is True)
         elif operation == 'stt-start':
             seconds = request.get('seconds')
             if seconds is not None and (isinstance(seconds, bool) or not isinstance(seconds, int) or not 1 <= seconds <= 30):
@@ -115,7 +115,8 @@ class Sessions:
             raise ValueError('Unknown voice input command')
         result = self.input.status()
         result['desktop'] = {'enabled': bool(self.desktop and self.desktop.enabled),
-                             'state': self.desktop.status if self.desktop else 'Desktop dictation is disabled'}
+                             'state': self.desktop.status if self.desktop else 'Desktop dictation is disabled',
+                             'keys': getattr(self.desktop, 'shortcut_description', '') if self.desktop and self.desktop.enabled else ''}
         return result
 
     def request(self, request):
@@ -244,9 +245,9 @@ class Sessions:
 
 def run(path):
     from PySide6.QtCore import QCoreApplication, QLockFile, QObject, QTimer, Signal, Qt
-    from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
+    from PySide6.QtGui import QIcon
     from PySide6.QtNetwork import QLocalServer
-    from PySide6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
+    from PySide6.QtWidgets import QApplication, QMessageBox
     from shiboken6 import isValid
     graphical = os.name == 'nt' or bool(os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY'))
     if graphical and os.name != 'nt':
@@ -299,7 +300,7 @@ def run(path):
         elif 'error' in response and graphical:
             QMessageBox.warning(None, 'Akousousin', response['error'])
         elif response.get('pending_registration') and graphical:
-            QMessageBox.information(None, 'Akousousin', 'Default saved. Apply voice registration in App integrations.')
+            QMessageBox.information(None, 'Akousousin', 'Default voice saved. Restart Windows apps so they use it.')
         if state.closed:
             # Reject new clients immediately, before potentially slow backend
             # cleanup. A restarting caller must connect to a fresh controller.
@@ -350,59 +351,21 @@ def run(path):
             if bus.interface().isServiceRegistered(watcher_name).value():
                 tray_watcher.deleteLater()
                 tray_watcher = None
-    tray = QSystemTrayIcon() if graphical else None
-    if tray:
-        tray.setToolTip('Akousousin — Neural Voice Engine')
-        tray.setIcon(QIcon(str(resources.root() / 'akousousin.png')))
-        menu = QMenu()
-        toggle = menu.addAction('Start Speech')
-        toggle.triggered.connect(lambda: submit({'command': 'stop' if toggle.text() == 'Stop Speech' else 'start'}))
-        dictation_toggle = menu.addAction('Start Dictation')
-        dictation_toggle.triggered.connect(lambda: submit({'command': 'stt-toggle'}))
-        voices = menu.addMenu('Default Voice')
-        def populate():
-            voices.clear()
-            config = settings.load(path)
-            from .languages import label
-            groups = {}
-            for identifier, voice in sorted(config['voices'].items(), key=lambda item: (label(item[1]['language']), item[1]['name'])):
-                group = groups.setdefault(voice['language'], None)
-                if group is None:
-                    group = groups[voice['language']] = voices.addMenu(label(voice['language']))
-                action = group.addAction(voice['name'])
-                action.setCheckable(True)
-                action.setChecked(identifier == config['voice'])
-                action.triggered.connect(lambda checked=False, key=identifier: submit({'command': 'voice', 'voice': key}))
-        voices.aboutToShow.connect(populate)
-        downloads_action = menu.addAction('No downloads')
-        downloads_action.setEnabled(False)
-        downloads_action.setVisible(False)
-        update_action = menu.addAction('Update available…', lambda: submit({'command': 'configure', 'page': 'Updates'}))
-        update_action.setVisible(False)
-        menu.addAction('Configure', lambda: submit({'command': 'configure'}))
+    tray = None
+    if graphical:
+        from .qt_locale import install_translators
+        from .ui.tray import Tray
+        install_translators(app)
+
         def quit_requested():
-            if (state.owners or state.service.health(settings.load(path)['port'])) and QMessageBox.question(None, 'Quit Akousousin?',
-                    'Speech is in use. Quit and stop Piper, interrupting speech?') != QMessageBox.Yes:
+            if (state.owners or state.service.health(settings.load(path)['port'])) and QMessageBox.question(
+                    None, tray.tr('Quit Akousousin?'), tray.tr('Speech is in use. Quit and stop speaking?')) != QMessageBox.Yes:
                 return
             submit({'command': 'quit'})
-        menu.addAction('Quit', quit_requested)
-        tray.setContextMenu(menu)
-        def activate_tray(reason):
-            if reason == QSystemTrayIcon.Trigger:
-                submit({'command': 'stt-toggle'})
-        tray.activated.connect(activate_tray)
-        tray.show()
+        tray = Tray(path, submit, quit_requested)
         if tray_watcher is not None:
             def attach_to_desktop(_service):
-                nonlocal tray
-                replacement = QSystemTrayIcon(tray.icon())
-                replacement.setToolTip(tray.toolTip())
-                tray.hide()
-                tray.deleteLater()
-                tray = replacement
-                tray.setContextMenu(menu)
-                tray.activated.connect(activate_tray)
-                tray.show()
+                tray.create()
                 # Qt now owns the D-Bus icon and handles subsequent restarts.
                 tray_watcher.deleteLater()
             tray_watcher.serviceRegistered.connect(attach_to_desktop)
@@ -451,57 +414,17 @@ def run(path):
             config = settings.load(path)
             health = state.service.health(config['port'])
             running = bool(health and health.get('ready'))
-            status = 'Idle' if running and health.get('model_loaded') is False else 'Running' if running else 'Stopped'
-            if state.service.process is not None and state.service.process.poll() is None and not running:
-                status = 'Starting'
-            if state.service.process is not None and state.service.process.poll() not in (None, 0) and not running:
-                status = 'Error'
-            if state.error and not running:
-                status = 'Error'
+            failed = state.service.process is not None and state.service.process.poll() not in (None, 0) and not running
             input_status = state.input.status()
-            candidate = update_monitor.tick(quiet=bool(input_status['busy'] or (health and health.get('speaking')) or state.selection.status()['reading']))
+            reading = state.selection.status()
+            candidate = update_monitor.tick(quiet=bool(input_status['busy'] or (health and health.get('speaking')) or reading.get('reading')))
             if candidate:
                 notify_update(candidate)
-            available = updates.available_update(path)
-            update_action.setVisible(bool(available))
-            if available:
-                update_action.setText('Update available: ' + available['version'] + '…')
-            from .download_status import current, caption
-            downloads = current()
-            active_downloads = [item for item in downloads if item['status'] == 'active']
-            failed_downloads = [item for item in downloads if item['status'] == 'error']
-            color = {'Idle': '#737b80', 'Running': '#20a45b', 'Stopped': '#737b80', 'Starting': '#e3aa26', 'Error': '#bd3838'}[status]
-            if input_status['busy']:
-                color = '#e3aa26' if input_status['phase'] in ('loading', 'opening') or input_status['state'].startswith('Paused') else '#d94747' if input_status['phase'] == 'listening' else '#327bd2'
-            pixmap = QPixmap(str(resources.root() / 'akousousin.png')).scaled(64, 64)
-            painter = QPainter(pixmap)
-            painter.setBrush(QColor(color))
-            painter.setPen(QPen(QColor('white'), 3))
-            painter.drawEllipse(44, 44, 18, 18)
-            if active_downloads:
-                item = active_downloads[0]
-                painter.setPen(QPen(QColor('#327bd2'), 6))
-                progress = item['completed'] / item['total'] if item['total'] else None
-                painter.drawArc(4, 4, 56, 56, 90 * 16,
-                                -max(1, int(min(1, progress) * 360 * 16)) if progress is not None else -100 * 16)
-                painter.drawLine(32, 22, 32, 42)
-                painter.drawLine(23, 33, 32, 42)
-                painter.drawLine(32, 42, 41, 33)
-            elif failed_downloads:
-                painter.setBrush(QColor('#bd3838'))
-                painter.drawEllipse(4, 4, 18, 18)
-            painter.end()
-            tray.setIcon(QIcon(pixmap))
-            detail = '\n'.join(caption(item) for item in downloads)
-            reading = state.selection.status()
-            if reading['reading']:
-                detail += ('\n' if detail else '') + reading['state']
-            tray.setToolTip('Akousousin · ' + status + '\nVoice input: ' + input_status['state'] + ('\n' + detail if detail else ''))
-            downloads_action.setVisible(bool(downloads))
-            downloads_action.setText(detail or 'No downloads')
-            pending_input = bool(state.desktop and state.desktop.start_requested)
-            dictation_toggle.setText('Stop Dictation' if input_status['busy'] or pending_input else 'Start Dictation')
-            toggle.setText('Stop Speech' if running else 'Start Speech')
+            from .download_status import current
+            tray.update(running=running, dictation=input_status, reading=reading,
+                        pending=bool(state.desktop and state.desktop.start_requested), downloads=current(),
+                        available=updates.available_update(path),
+                        problem=bool((state.error and not running) or failed or input_status.get('phase') == 'error'))
     timer = QTimer()
     timer.timeout.connect(tick)
     timer.start(1500)

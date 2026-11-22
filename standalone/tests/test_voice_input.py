@@ -1,47 +1,136 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 John Goodman
-"""Shared recognition operations from the Qt panel."""
-import threading
+"""The panel's dictation test: shared controller recording, local transcript."""
+import os
 import unittest
-from unittest.mock import Mock, patch
 
-from akousousin_app.panel import Panel
-from akousousin_app.qt_dictation import Dictation
+if os.name != 'nt' and not os.environ.get('DISPLAY') and not os.environ.get('WAYLAND_DISPLAY'):
+    os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
+
+from PySide6.QtCore import QObject, Signal
+
+from akousousin_app.qt_locale import application
+from akousousin_app.ui.actions import DictationTest
+from akousousin_app.ui.state import Status
 
 
-class VoiceInputTests(unittest.TestCase):
-    def panel(self):
-        panel = Mock(busy=False, input_cancel=threading.Event())
-        panel.run = lambda task, done: done(task())
-        return panel
+class SyncTasks:
+    closing = False
 
-    def test_recording_delegates_to_shared_controller_and_keeps_test_local(self):
-        panel = self.panel()
-        with patch('akousousin_app.runtime.call', side_effect=[{'sequence': 7, 'busy': False}, {}]) as call:
-            Panel.start_test(panel)
-        self.assertEqual(call.call_args.args[1], {'command': 'stt-start', 'seconds': 10})
-        self.assertEqual(panel.dictation.test_since, 7)
+    def __init__(self):
+        self.failures = []
 
-    def test_cancel_during_status_check_prevents_late_recording(self):
-        panel = self.panel()
-        def status(*args):
-            panel.input_cancel.set()
-            return {'sequence': 5, 'busy': False}
-        with patch('akousousin_app.runtime.call', side_effect=status) as call:
-            Panel.start_test(panel)
-        call.assert_called_once()
+    def run(self, work, done=None, *, failed=None, key=None, background=False):
+        try:
+            value = work()
+        except Exception as error:
+            (failed or self.failures.append)(error)
+            return True
+        if done:
+            done(value)
+        return True
 
-    def test_ready_sound_during_recording_leaves_input_alone(self):
-        page = Mock(recording=True)
-        Dictation.sound(page)
-        page.panel.run.assert_not_called()
 
-    def test_test_transcript_excludes_other_desktop_and_earlier_results(self):
-        page = Mock(sequence=5, test_since=5, supported=True)
-        result = {'sequence': 8, 'state':'Ready', 'results': [
-            {'sequence': 5, 'text':'earlier', 'output':'displayed'},
-            {'sequence': 6, 'text':'desktop', 'output':'retained'},
-            {'sequence': 8, 'text':'test', 'output':'displayed'}]}
-        Dictation.update(page, result)
-        page.panel.test_result.setPlainText.assert_called_once_with('test')
-        page.history.setPlainText.assert_called_once_with('earlier\n\ndesktop\n\ntest')
+class FakeState(QObject):
+    status_changed = Signal(object)
+    notice = Signal(str)
+
+    def __init__(self, responses):
+        super().__init__()
+        self.responses = list(responses)
+        self.calls = []
+        self.notices = []
+        self.notice.connect(self.notices.append)
+
+    def call(self, command, launch=True, **extra):
+        self.calls.append(dict(command=command, **extra))
+        return self.responses.pop(0) if self.responses else {}
+
+    def command(self, command, **extra):
+        self.calls.append({'command': command})
+
+
+class DictationTestTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = application()
+
+    def make(self, *responses):
+        self.state, self.tasks = FakeState(responses), SyncTasks()
+        test = DictationTest(self.state, self.tasks)
+        test.supported = True
+        return test
+
+    def test_recording_uses_the_shared_controller_and_remembers_where_it_started(self):
+        test = self.make({'sequence': 7, 'busy': False}, {})
+        test.toggle()
+        self.assertEqual(self.state.calls[1], {'command': 'stt-start', 'seconds': 10})
+        self.assertEqual(test.since, 7)
+        self.assertTrue(test.recording)
+
+    def test_busy_controller_prevents_a_second_recording(self):
+        test = self.make({'sequence': 5, 'busy': True})
+        test.toggle()
+        self.assertEqual([call['command'] for call in self.state.calls], ['stt-status'])
+        self.assertTrue(self.tasks.failures)
+        self.assertFalse(test.recording)
+
+    def test_finish_while_recording_sends_finish(self):
+        test = self.make({'sequence': 1, 'busy': False}, {})
+        test.toggle()
+        test.toggle()
+        self.assertEqual(self.state.calls[-1], {'command': 'stt-finish'})
+
+    def test_transcript_shows_only_this_tests_displayed_results(self):
+        test = self.make({'sequence': 5, 'busy': False}, {})
+        shown = []
+        test.transcript.connect(shown.append)
+        test.toggle()
+        self.state.status_changed.emit(Status(dictation={'busy': True, 'phase': 'listening', 'results': [
+            {'sequence': 5, 'text': 'earlier', 'output': 'displayed'},
+            {'sequence': 6, 'text': 'desktop', 'output': 'retained'},
+            {'sequence': 8, 'text': 'test', 'output': 'displayed'}]}))
+        self.assertEqual(shown[-1], 'test')
+        self.state.status_changed.emit(Status(dictation={'busy': False, 'phase': 'ready', 'results': []}))
+        self.assertFalse(test.recording)
+
+    def test_unsupported_build_explains_instead_of_recording(self):
+        test = self.make()
+        test.supported = False
+        test.toggle()
+        self.assertEqual(self.state.calls, [])
+        self.assertTrue(self.state.notices)
+
+
+class TasksTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = application()
+
+    def test_results_return_on_the_gui_thread_and_stop_after_shutdown(self):
+        import threading
+        from akousousin_app.ui.tasks import Tasks
+        tasks = Tasks()
+        seen = []
+        release = threading.Event()
+        tasks.run(lambda: 1, lambda _: seen.append(threading.get_ident()), key='one')
+        self.assertTrue(tasks.busy('one'))
+        self.assertFalse(tasks.run(lambda: None, key='one'), 'a running key must not start twice')
+        for _ in range(200):
+            self.app.processEvents()
+            if seen:
+                break
+            threading.Event().wait(.01)
+        self.assertEqual(seen, [threading.get_ident()])
+        self.assertFalse(tasks.busy())
+        tasks.run(lambda: release.wait(1), lambda _: seen.append('late'), key='late')
+        tasks.shutdown(timeout=.05)
+        release.set()
+        threading.Event().wait(.05)
+        self.app.processEvents()
+        self.assertEqual(len(seen), 1, 'nothing is delivered after shutdown')
+        self.assertFalse(tasks.run(lambda: None))
+
+
+if __name__ == '__main__':
+    unittest.main()

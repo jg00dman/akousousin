@@ -11,6 +11,12 @@ def application():
     app = QApplication.instance() or QApplication([])
     app.setApplicationName('Akousousin')
     app.setDesktopFileName(APP_ID)
+    install_translators(app)
+    return app
+
+
+def install_translators(app):
+    """Load Qt's and Akousousin's translations for the system language, once."""
     if not hasattr(app, 'translators'):
         app.translators = []
         for domain, directory in (
@@ -21,4 +27,3 @@ def application():
             if translator.load(QLocale(), domain, '_', directory):
                 app.installTranslator(translator)
                 app.translators.append(translator)
-    return app

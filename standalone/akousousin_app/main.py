@@ -208,9 +208,14 @@ def main():
     panel = Panel(args.settings, offer_install=not args.smoke_test)
     panel.show()
     if args.smoke_test:
-        panel.go("Dictation")
+        panel.go('dictation')
         QTimer.singleShot(1500, panel.close)
     app.exec()
+    # Background reads may still be waiting on the controller; never let them
+    # reach Qt objects during interpreter shutdown.
+    panel.tasks.shutdown()
+    sys.stdout.flush()
+    os._exit(0)
 
 
 
