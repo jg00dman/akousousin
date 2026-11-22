@@ -43,7 +43,8 @@ def review(locale):
             cell = lambda value: (value or '').replace('|', '\\|').replace('\n', ' ')
             rows.append(f'| {name} | {cell(message.findtext("source"))} | {cell(message.findtext("translation"))} |')
     output = TRANSLATIONS / f'REVIEW-{locale}.md'
-    output.write_text(f'# Akousousin translation review: {locale}\n\n' + '\n'.join(rows) + '\n', encoding='utf-8')
+    header = '<!--\nSPDX-License-Identifier: GPL-3.0-or-later\nSPDX-FileCopyrightText: 2026 John Goodman\n-->\n\n'
+    output.write_text(header + f'# Akousousin translation review: {locale}\n\n' + '\n'.join(rows) + '\n', encoding='utf-8')
     return output
 
 
