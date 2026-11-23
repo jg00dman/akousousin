@@ -473,7 +473,8 @@ def run(path):
             tray.update(running=running, dictation=input_status, reading=reading,
                         pending=bool(state.desktop and state.desktop.start_requested), downloads=current(),
                         available=updates.available_update(path),
-                        problem=bool((state.error and not running) or failed or input_status.get('phase') == 'error'))
+                        problem=bool((state.error and not running) or failed or input_status.get('phase') == 'error'),
+                        speaking=bool(health and health.get('speaking')))
     timer = QTimer()
     timer.timeout.connect(tick)
     timer.start(1500)

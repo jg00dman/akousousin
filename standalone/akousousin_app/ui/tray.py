@@ -35,6 +35,43 @@ def animation_factor():
     return 1.0
 
 
+def _ini(path):
+    import configparser
+    parser = configparser.ConfigParser(interpolation=None, strict=False)
+    parser.optionxform = str
+    try:
+        parser.read(path, encoding='utf-8')
+    except (OSError, configparser.Error, UnicodeError):
+        pass
+    return parser
+
+
+def panel_tint():
+    """Colour for the monochrome logo lines on the desktop's panel, or None for the app palette.
+
+    The bundled Qt does not know the desktop's colour scheme, so its palette
+    is always light and the lines came out dark on a dark panel. Follow what
+    the panel follows instead: Plasma's style (Breeze Dark is a dark panel
+    even with light apps), else the colour scheme's window text; GNOME's top
+    bar is always dark.
+    """
+    config = Path(os.environ.get('XDG_CONFIG_HOME') or Path.home() / '.config')
+    style = _ini(config / 'plasmarc').get('Theme', 'name', fallback='default').casefold()
+    if 'dark' in style:
+        return QColor('#fcfcfc')
+    if 'light' in style:
+        return QColor('#232629')
+    foreground = _ini(config / 'kdeglobals').get('Colors:Window', 'ForegroundNormal', fallback='')
+    try:
+        red, green, blue = (int(part) for part in foreground.split(',')[:3])
+        return QColor(red, green, blue)
+    except ValueError:
+        pass
+    if 'GNOME' in os.environ.get('XDG_CURRENT_DESKTOP', '').upper():
+        return QColor('#ffffff')
+    return None
+
+
 def draw(state, phase=0.0, tint=None, badge=None, progress=None, size=64):
     """Paint one frame. ``phase`` runs 0–1 through one animation cycle."""
     image = QPixmap(size, size)
@@ -163,14 +200,19 @@ class Tray(QObject):
         if not groups:
             self.voices.addAction(self.tr('No voices installed yet')).setEnabled(False)
 
-    def update(self, *, running, dictation, reading, pending, downloads, available, problem):
-        """Refresh text, visibility and icon state from the controller's status."""
+    def update(self, *, running, dictation, reading, pending, downloads, available, problem, speaking=False):
+        """Refresh text, visibility and icon state from the controller's status.
+
+        ``speaking`` is any speech from the voice service, including Windows
+        apps through SAPI; ``reading`` is Akousousin's own read-aloud shortcut.
+        """
         busy = bool(dictation.get('busy')) or pending
         listening = busy and dictation.get('phase') in ('listening', 'transcribing', 'opening', 'loading')
-        mode = 'listening' if listening else 'reading' if reading.get('reading') else 'ready'
+        aloud = bool(reading.get('reading')) or speaking
+        mode = 'listening' if listening else 'reading' if aloud else 'ready'
         if listening:
             header = self.tr('Dictation listening…')
-        elif reading.get('reading'):
+        elif aloud:
             header = self.tr('Reading aloud…')
         elif problem:
             header = self.tr('Akousousin · needs attention')
@@ -194,7 +236,7 @@ class Tray(QObject):
         elif active:
             progress = .1
         extras = {'badge': CAUTION if problem or any(item['status'] == 'error' for item in downloads) else None,
-                  'progress': progress}
+                  'progress': progress, 'tint': panel_tint() if os.name != 'nt' else None}
         tooltip = {'listening': self.tr('Akousousin — dictation listening'),
                    'reading': self.tr('Akousousin — reading aloud')}.get(mode, self.tr('Akousousin — ready'))
         if self.icon.toolTip() != tooltip:
