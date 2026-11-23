@@ -201,24 +201,13 @@ class Module:
                         self.send('702 END\n')
                 return
             config = settings.load(self.path)
-            voice = options.get('synthesis_voice')
-            if voice in (None, 'NULL'):
-                language = options.get('language', '').replace('-', '_').casefold()
-                preferred = {key.replace('-', '_').casefold(): value
-                             for key, value in config['language_voices'].items()}
-                voice = preferred.get(language)
-                if not voice:
-                    voice = next((key for key, entry in config['voices'].items()
-                                  if entry['language'].replace('-', '_').casefold() == language), None)
-                if not voice and language:
-                    family = language.split('_')[0]
-                    voice = next((key for code, key in preferred.items() if code.split('_')[0] == family), None)
-                if not voice:
-                    voice = next((key for key, entry in config['voices'].items()
-                                  if entry['language'].split('_')[0].casefold() == language.split('_')[0]),
-                                 config['voice'])
-            if voice not in config['voices']:
-                raise ValueError('Voice not installed')
+            requested = options.get('synthesis_voice')
+            # A voice the app names or a language it asks for falls back to an
+            # installed voice; only no voice at all is an error.
+            voice = settings.usable_voice(config, None if requested in (None, 'NULL') else requested,
+                                          language=options.get('language', ''))
+            if voice is None:
+                raise ValueError('No voice installed')
             rate = int(options.get('rate', 0)) / 100
             scale = 1 / (1 + rate) if rate >= 0 else 1 - rate
             for marker, part in speech_parts(text):
