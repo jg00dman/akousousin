@@ -386,6 +386,26 @@
         <source>Could not open the log, so its location was copied: %1</source>
         <translation>No se pudo abrir el registro, así que se copió su ubicación: %1</translation>
     </message>
+    <message>
+        <source>Audio system</source>
+        <translation>Sistema de audio</translation>
+    </message>
+    <message>
+        <source>Akousousin records and plays sounds through PipeWire directly when it is running, otherwise through PulseAudio.</source>
+        <translation>Akousousin graba y reproduce sonidos directamente con PipeWire cuando está en marcha; si no, con PulseAudio.</translation>
+    </message>
+    <message>
+        <source>PipeWire (native)</source>
+        <translation>PipeWire (nativo)</translation>
+    </message>
+    <message>
+        <source>PulseAudio</source>
+        <translation>PulseAudio</translation>
+    </message>
+    <message>
+        <source>Not found</source>
+        <translation>No encontrado</translation>
+    </message>
 </context>
 <context>
     <name>AppsPage</name>
@@ -782,6 +802,30 @@
     <message>
         <source>Recognition details</source>
         <translation>Detalles del reconocimiento</translation>
+    </message>
+    <message>
+        <source>Quiet</source>
+        <translation>Silencio</translation>
+    </message>
+    <message>
+        <source>Hearing sound</source>
+        <translation>Se oye sonido</translation>
+    </message>
+    <message>
+        <source>Microphone level unavailable</source>
+        <translation>Nivel del micrófono no disponible</translation>
+    </message>
+    <message>
+        <source>Microphone level</source>
+        <translation>Nivel del micrófono</translation>
+    </message>
+    <message>
+        <source>The bars move when the microphone hears you.</source>
+        <translation>Las barras se mueven cuando el micrófono te oye.</translation>
+    </message>
+    <message>
+        <source>Microphone level unavailable: %1</source>
+        <translation>Nivel del micrófono no disponible: %1</translation>
     </message>
 </context>
 <context>

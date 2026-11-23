@@ -102,6 +102,11 @@ SPDX-FileCopyrightText: 2026 John Goodman
 | AdvancedPage | Removing Akousousin… | Eliminando Akousousin… |
 | AdvancedPage | There is no service log yet. | Todavía no hay registro del servicio. |
 | AdvancedPage | Could not open the log, so its location was copied: %1 | No se pudo abrir el registro, así que se copió su ubicación: %1 |
+| AdvancedPage | Audio system | Sistema de audio |
+| AdvancedPage | Akousousin records and plays sounds through PipeWire directly when it is running, otherwise through PulseAudio. | Akousousin graba y reproduce sonidos directamente con PipeWire cuando está en marcha; si no, con PulseAudio. |
+| AdvancedPage | PipeWire (native) | PipeWire (nativo) |
+| AdvancedPage | PulseAudio | PulseAudio |
+| AdvancedPage | Not found | No encontrado |
 | AppsPage | Apps | Aplicaciones |
 | AppsPage | Where Akousousin’s voices are available. | Dónde están disponibles las voces de Akousousin. |
 | AppsPage | Windows speech (SAPI) | Voz de Windows (SAPI) |
@@ -199,6 +204,12 @@ SPDX-FileCopyrightText: 2026 John Goodman
 | DictationPage | Ready sound played. | Sonido de aviso reproducido. |
 | DictationPage | Transcript copied. | Transcripción copiada. |
 | DictationPage | Recognition details | Detalles del reconocimiento |
+| DictationPage | Quiet | Silencio |
+| DictationPage | Hearing sound | Se oye sonido |
+| DictationPage | Microphone level unavailable | Nivel del micrófono no disponible |
+| DictationPage | Microphone level | Nivel del micrófono |
+| DictationPage | The bars move when the microphone hears you. | Las barras se mueven cuando el micrófono te oye. |
+| DictationPage | Microphone level unavailable: %1 | Nivel del micrófono no disponible: %1 |
 | DictationTest | Dictation needs a Linux build with recognition. | El dictado necesita una versión para Linux con reconocimiento de voz. |
 | DictationTest | Finish the current dictation before starting a test. | Termina el dictado actual antes de empezar una prueba. |
 | DictationTest | Listening — speak now. Press Finish when you are done. | Escuchando: habla ahora. Pulsa Terminar cuando acabes. |
