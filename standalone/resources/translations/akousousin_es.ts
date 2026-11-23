@@ -119,18 +119,6 @@
         <translation>Estado</translation>
     </message>
     <message>
-        <source>Starts by itself when an app needs speech.</source>
-        <translation>Se inicia solo cuando una aplicación necesita voz.</translation>
-    </message>
-    <message>
-        <source>Free memory when idle</source>
-        <translation>Liberar memoria en reposo</translation>
-    </message>
-    <message>
-        <source>Voices are unloaded after this long without speech and reload in about a second.</source>
-        <translation>Las voces se descargan de la memoria tras este tiempo sin hablar y vuelven a cargarse en un segundo, más o menos.</translation>
-    </message>
-    <message>
         <source>Local port</source>
         <translation>Puerto local</translation>
     </message>
@@ -149,10 +137,6 @@
     <message>
         <source>More threads can be faster but leave less for other apps.</source>
         <translation>Más hilos pueden ir más rápido, pero dejan menos para otras aplicaciones.</translation>
-    </message>
-    <message>
-        <source>The dictation model is unloaded after this long without use.</source>
-        <translation>El modelo de dictado se descarga de la memoria tras este tiempo sin usarse.</translation>
     </message>
     <message>
         <source>Updates</source>
@@ -405,6 +389,70 @@
     <message>
         <source>Not found</source>
         <translation>No encontrado</translation>
+    </message>
+    <message>
+        <source>Startup and memory</source>
+        <translation>Inicio y memoria</translation>
+    </message>
+    <message>
+        <source>On</source>
+        <translation>Activado</translation>
+    </message>
+    <message>
+        <source>Start at login</source>
+        <translation>Iniciar al iniciar sesión</translation>
+    </message>
+    <message>
+        <source>The tray icon and shortcuts work straight away, without opening this window.</source>
+        <translation>El icono de la bandeja y los atajos funcionan desde el primer momento, sin abrir esta ventana.</translation>
+    </message>
+    <message>
+        <source>Load voices and dictation</source>
+        <translation>Cargar voces y dictado</translation>
+    </message>
+    <message>
+        <source>Loading at start means no wait the first time you read or dictate.</source>
+        <translation>Si se cargan al iniciar, no hay que esperar la primera vez que lees o dictas.</translation>
+    </message>
+    <message>
+        <source>Free voice memory when idle</source>
+        <translation>Liberar la memoria de la voz en reposo</translation>
+    </message>
+    <message>
+        <source>The voice reloads in about a second when it is next needed.</source>
+        <translation>La voz se vuelve a cargar en un segundo aproximadamente cuando se necesita.</translation>
+    </message>
+    <message>
+        <source>Free dictation memory when idle</source>
+        <translation>Liberar la memoria del dictado en reposo</translation>
+    </message>
+    <message>
+        <source>The dictation model takes a few seconds to reload.</source>
+        <translation>El modelo de dictado tarda unos segundos en volver a cargarse.</translation>
+    </message>
+    <message>
+        <source>Also starts by itself when an app needs speech.</source>
+        <translation>También se inicia solo cuando una aplicación necesita voz.</translation>
+    </message>
+    <message>
+        <source>When Akousousin starts</source>
+        <translation>Al iniciar Akousousin</translation>
+    </message>
+    <message>
+        <source>When first used</source>
+        <translation>Al usarlo por primera vez</translation>
+    </message>
+    <message>
+        <source>Start Akousousin when you log in?</source>
+        <translation>¿Iniciar Akousousin al iniciar sesión?</translation>
+    </message>
+    <message>
+        <source>Reading and dictation shortcuts then work as soon as you log in, and your voice is ready without a wait. Akousousin stays in the tray; you can change this in Advanced.</source>
+        <translation>Así los atajos de lectura y dictado funcionan en cuanto inicias sesión, y tu voz está lista sin esperas. Akousousin se queda en la bandeja; puedes cambiarlo en Avanzado.</translation>
+    </message>
+    <message>
+        <source>Not now</source>
+        <translation>Ahora no</translation>
     </message>
 </context>
 <context>

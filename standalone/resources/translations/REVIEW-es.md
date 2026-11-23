@@ -35,15 +35,11 @@ SPDX-FileCopyrightText: 2026 John Goodman
 | AdvancedPage | Speech service | Servicio de voz |
 | AdvancedPage | Restart | Reiniciar |
 | AdvancedPage | Status | Estado |
-| AdvancedPage | Starts by itself when an app needs speech. | Se inicia solo cuando una aplicación necesita voz. |
-| AdvancedPage | Free memory when idle | Liberar memoria en reposo |
-| AdvancedPage | Voices are unloaded after this long without speech and reload in about a second. | Las voces se descargan de la memoria tras este tiempo sin hablar y vuelven a cargarse en un segundo, más o menos. |
 | AdvancedPage | Local port | Puerto local |
 | AdvancedPage | Used only inside this computer. Change it if another program uses %1. | Solo se usa dentro de este equipo. Cámbialo si otro programa usa el %1. |
 | AdvancedPage | Dictation performance | Rendimiento del dictado |
 | AdvancedPage | Processor threads | Hilos del procesador |
 | AdvancedPage | More threads can be faster but leave less for other apps. | Más hilos pueden ir más rápido, pero dejan menos para otras aplicaciones. |
-| AdvancedPage | The dictation model is unloaded after this long without use. | El modelo de dictado se descarga de la memoria tras este tiempo sin usarse. |
 | AdvancedPage | Updates | Actualizaciones |
 | AdvancedPage | Check now | Comprobar ahora |
 | AdvancedPage | Get the update… | Obtener la actualización… |
@@ -107,6 +103,22 @@ SPDX-FileCopyrightText: 2026 John Goodman
 | AdvancedPage | PipeWire (native) | PipeWire (nativo) |
 | AdvancedPage | PulseAudio | PulseAudio |
 | AdvancedPage | Not found | No encontrado |
+| AdvancedPage | Startup and memory | Inicio y memoria |
+| AdvancedPage | On | Activado |
+| AdvancedPage | Start at login | Iniciar al iniciar sesión |
+| AdvancedPage | The tray icon and shortcuts work straight away, without opening this window. | El icono de la bandeja y los atajos funcionan desde el primer momento, sin abrir esta ventana. |
+| AdvancedPage | Load voices and dictation | Cargar voces y dictado |
+| AdvancedPage | Loading at start means no wait the first time you read or dictate. | Si se cargan al iniciar, no hay que esperar la primera vez que lees o dictas. |
+| AdvancedPage | Free voice memory when idle | Liberar la memoria de la voz en reposo |
+| AdvancedPage | The voice reloads in about a second when it is next needed. | La voz se vuelve a cargar en un segundo aproximadamente cuando se necesita. |
+| AdvancedPage | Free dictation memory when idle | Liberar la memoria del dictado en reposo |
+| AdvancedPage | The dictation model takes a few seconds to reload. | El modelo de dictado tarda unos segundos en volver a cargarse. |
+| AdvancedPage | Also starts by itself when an app needs speech. | También se inicia solo cuando una aplicación necesita voz. |
+| AdvancedPage | When Akousousin starts | Al iniciar Akousousin |
+| AdvancedPage | When first used | Al usarlo por primera vez |
+| AdvancedPage | Start Akousousin when you log in? | ¿Iniciar Akousousin al iniciar sesión? |
+| AdvancedPage | Reading and dictation shortcuts then work as soon as you log in, and your voice is ready without a wait. Akousousin stays in the tray; you can change this in Advanced. | Así los atajos de lectura y dictado funcionan en cuanto inicias sesión, y tu voz está lista sin esperas. Akousousin se queda en la bandeja; puedes cambiarlo en Avanzado. |
+| AdvancedPage | Not now | Ahora no |
 | AppsPage | Apps | Aplicaciones |
 | AppsPage | Where Akousousin’s voices are available. | Dónde están disponibles las voces de Akousousin. |
 | AppsPage | Windows speech (SAPI) | Voz de Windows (SAPI) |
