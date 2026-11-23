@@ -97,14 +97,30 @@ def prepare_model_assets(config):
                 models.install(selected, root=config['root'])
 
 
-def decode_options():
-    """One deterministic decoding attempt for interactive dictation.
+# Whisper's own decoding policy: decode greedily first; if the text is
+# suspiciously repetitive (it compresses too well) or the model is unsure,
+# decode again with a little randomness. A single attempt cannot recover from
+# Whisper's known failure on short phrases: padded to its 30 s window, it can
+# repeat the last words until it reaches its length limit ("Okay. Okay. …").
+TEMPERATURES = (0.0, 0.2, 0.4, 0.6, 0.8, 1.0)
 
-    The library default retries uncertain output at several temperatures, which
-    can multiply latency on noisy input. Keep warm-up and live decoding aligned.
-    """
-    return dict(task='transcribe', beam_size=1, temperature=0.0,
+
+def decode_options(fallback=True):
+    """Decoding settings for dictation; ``fallback=False`` only for warm-up."""
+    return dict(task='transcribe', beam_size=1, temperature=TEMPERATURES if fallback else 0.0,
+                compression_ratio_threshold=2.4, log_prob_threshold=-1.0, no_speech_threshold=0.6,
                 condition_on_previous_text=False)
+
+
+def decoding_summary(segments):
+    """Whisper's confidence figures for one phrase, kept with the result for diagnosis."""
+    if not segments:
+        return {'segments': 0}
+    return {'segments': len(segments),
+            'temperature': max(segment.temperature for segment in segments),
+            'compression_ratio': round(max(segment.compression_ratio for segment in segments), 3),
+            'avg_logprob': round(min(segment.avg_logprob for segment in segments), 3),
+            'no_speech_prob': round(max(segment.no_speech_prob for segment in segments), 3)}
 
 
 def warm_model(model):
@@ -112,7 +128,7 @@ def warm_model(model):
     import numpy as np
     began = time.monotonic()
     segments, _ = model.transcribe(np.zeros(RATE, dtype=np.float32), language='en',
-        vad_filter=False, **decode_options())
+        vad_filter=False, **decode_options(fallback=False))
     # faster-whisper evaluates lazily; construction alone is not a warm-up.
     for _ in segments:
         pass
@@ -142,11 +158,9 @@ def worker(pipe, config):
                                                **decode_options())
             decoded = list(segments)
             text = ''.join(segment.text for segment in decoded).strip()
-            logging.info('Whisper decoding model=%s segments=%d temperatures=%s log_probabilities=%s compression_ratios=%s',
-                         active, len(decoded), [segment.temperature for segment in decoded],
-                         [segment.avg_logprob for segment in decoded],
-                         [segment.compression_ratio for segment in decoded])
+            logging.info('Whisper decoding model=%s %s', active, decoding_summary(decoded))
             pipe.send((True, {'text': text, 'language': info.language if text else None,
+                              'decoding': decoding_summary(decoded),
                               'language_probability': info.language_probability if text and not language else None,
                               'language_source': 'explicit' if language else 'detected',
                               'model': active, 'fallback': fallback,

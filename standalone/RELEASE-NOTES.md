@@ -3,6 +3,20 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
+# Akousousin 0.9.0b4 beta
+
+- **Fixed: dictation sometimes typed the same words over and over** ("Okay.
+  Okay. Okay. …"). Whisper pads every phrase to a 30-second window, and on a
+  short phrase greedy decoding can repeat itself until it reaches its length
+  limit. Whisper's own safeguard — decode again with a little randomness when
+  the text is too repetitive or the model is unsure — was switched off to save
+  time, so the loop was detected but kept. Dictation now uses that safeguard,
+  and phrases Whisper judges to contain no speech are dropped.
+- Recognition details now include Whisper's confidence figures for each phrase
+  (attempts, compression ratio, log probability, no-speech probability).
+- Releases now contain only the AppImage, the Linux tar.gz, the Windows ZIP
+  and their checksums.
+
 # Akousousin 0.9.0b3 beta
 
 - **Microphone level on the Dictation page.** Bars move as the microphone
