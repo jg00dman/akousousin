@@ -163,6 +163,12 @@ SPDX-FileCopyrightText: 2026 John Goodman
 | AppsPage | Wine prefixes found on this computer | Prefijos de Wine encontrados en este equipo |
 | AppsPage | Found on this computer | Encontrados en este equipo |
 | AppsPage | Choose one, or pick another folder below. | Elige uno o selecciona otra carpeta abajo. |
+| AppsPage | Turn on Spiel | Activar Spiel |
+| AppsPage | Turn off Spiel | Desactivar Spiel |
+| AppsPage | Spiel | Spiel |
+| AppsPage | Makes Akousousin voices available to Linux apps and screen readers that use Spiel. | Permite que las aplicaciones y los lectores de pantalla de Linux que usan Spiel utilicen las voces de Akousousin. |
+| AppsPage | Remove Akousousin from Spiel and restore the previous default if it still uses Akousousin? | ¿Quitar Akousousin de Spiel y restaurar la opción anterior si Akousousin sigue siendo la opción predeterminada? |
+| AppsPage | Make Akousousin and its current default voice the default for Spiel? | ¿Usar Akousousin y su voz predeterminada actual por defecto en Spiel? |
 | Dialogs | Cancel | Cancelar |
 | Dialogs | Close | Cerrar |
 | Dialogs | Something went wrong | Algo ha fallado |

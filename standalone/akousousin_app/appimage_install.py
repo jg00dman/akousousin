@@ -67,6 +67,8 @@ def _install(source, target, path):
     stage = Path(name)
     backup = target.with_name(target.name + '.previous')
     had_target, replaced, stopped = target.exists(), False, False
+    spiel_retargeted = False
+    from . import spiel
     environment = updates.environment()
     environment['APPIMAGE'] = str(target)
     try:
@@ -99,6 +101,7 @@ def _install(source, target, path):
                 config['speechd_setup_warning'] = 'Application installed; Speech Dispatcher setup could not run: ' + str(error)
                 settings.save(path, config)
             create_menu_entry(target)
+            spiel_retargeted = spiel.retarget(path, source, target)
             warnings = updates.registration_warnings(path)
             if warnings:
                 updates.save_update_state(path, registration_warnings=warnings + [
@@ -116,6 +119,8 @@ def _install(source, target, path):
             return target
     except Exception:
         if replaced:
+            if spiel_retargeted:
+                spiel.retarget(path, target, source)
             if had_target:
                 os.replace(backup, target)
             else:

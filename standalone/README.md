@@ -116,6 +116,14 @@ them.
 
 ### Linux apps and screen readers
 
+With [Spiel (libspiel)](https://project-spiel.org/install.html) installed and a
+default voice chosen in **Voices**, open **Apps → Linux apps and screen readers**
+and turn on **Spiel**. Akousousin and its current default voice become the
+Spiel default for your desktop user. Applications with an explicit voice or
+language override keep that choice. Turning off Spiel removes the provider and
+restores the previous default if Akousousin is still selected. Both speech
+integrations can be enabled at the same time.
+
 On **Apps**, turn **Speech Dispatcher** on. Orca, Firefox's Read Aloud and
 other apps that use Speech Dispatcher can then use Akousousin voices. Your
 other speech engines stay available, and turning it off restores the previous

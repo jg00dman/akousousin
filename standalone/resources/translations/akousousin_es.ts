@@ -633,6 +633,30 @@
         <source>Choose one, or pick another folder below.</source>
         <translation>Elige uno o selecciona otra carpeta abajo.</translation>
     </message>
+    <message>
+        <source>Turn on Spiel</source>
+        <translation>Activar Spiel</translation>
+    </message>
+    <message>
+        <source>Turn off Spiel</source>
+        <translation>Desactivar Spiel</translation>
+    </message>
+    <message>
+        <source>Spiel</source>
+        <translation>Spiel</translation>
+    </message>
+    <message>
+        <source>Makes Akousousin voices available to Linux apps and screen readers that use Spiel.</source>
+        <translation>Permite que las aplicaciones y los lectores de pantalla de Linux que usan Spiel utilicen las voces de Akousousin.</translation>
+    </message>
+    <message>
+        <source>Remove Akousousin from Spiel and restore the previous default if it still uses Akousousin?</source>
+        <translation>¿Quitar Akousousin de Spiel y restaurar la opción anterior si Akousousin sigue siendo la opción predeterminada?</translation>
+    </message>
+    <message>
+        <source>Make Akousousin and its current default voice the default for Spiel?</source>
+        <translation>¿Usar Akousousin y su voz predeterminada actual por defecto en Spiel?</translation>
+    </message>
 </context>
 <context>
     <name>Dialogs</name>

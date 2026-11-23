@@ -16,7 +16,7 @@ from .linux_bundle import RECEIPT
 from . import linux_bundle, speech_dispatcher
 
 WARNING = ('This removes Akousousin completely: the application, its Wine speech registration, '
-           'its Speech Dispatcher module, and all downloaded voices, speech models and settings. '
+           'its Speech Dispatcher and Spiel registrations, and all downloaded voices, speech models and settings. '
            'It cannot be undone.')
 
 
@@ -65,6 +65,9 @@ def purge(settings_path, wine_prefix=None, wine=None, bundle_prefix=None, report
              .uninstall())
     if os.name == 'posix' and speech_dispatcher.dispatcher_paths()[1].exists():
         step('Speech Dispatcher', lambda: speech_dispatcher.configure(settings_path, remove=True))
+    if sys.platform == 'linux':
+        from . import spiel
+        step('Spiel', lambda: spiel.configure(settings_path, remove=True))
     from . import startup
     step('start at login', startup.disable)
     for entry in desktop_entries():
