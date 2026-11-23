@@ -125,6 +125,11 @@ QFrame#choice[checked="true"] {{ background: {p.accent_soft}; border: 2px solid 
 QTreeView {{ background: {p.card}; color: {p.text}; border: 1px solid {p.border}; border-radius: 12px; padding: 6px; font-size: 15px; }}
 QTreeView::item {{ min-height: 40px; padding: 2px 4px; border-radius: 6px; }}
 QTreeView::item:selected {{ background: {p.accent_soft}; color: {p.text}; }}
+QListWidget#choices {{ background: {p.field}; color: {p.text}; border: 1px solid {p.border}; border-radius: 8px; padding: 4px; font-size: 14px; outline: 0; }}
+QListWidget#choices::item {{ min-height: 30px; padding: 0 8px; border-radius: 6px; }}
+QListWidget#choices::item:selected {{ background: {p.accent_soft}; color: {p.text}; }}
+QListWidget#choices::item:hover:!selected {{ background: {p.border}; }}
+QListWidget#choices:focus {{ border: 2px solid {p.accent_text}; }}
 QHeaderView::section {{ background: {p.card}; color: {p.muted}; border: 0; border-bottom: 1px solid {p.border}; padding: 6px; font-size: 13px; font-weight: 600; }}
 QSlider::groove:horizontal {{ height: 6px; background: {p.border}; border-radius: 3px; }}
 QSlider::sub-page:horizontal {{ background: {p.accent}; border-radius: 3px; }}

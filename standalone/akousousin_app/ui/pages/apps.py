@@ -4,7 +4,9 @@
 import os
 from pathlib import Path
 
-from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QFileDialog, QHBoxLayout, QLineEdit, QVBoxLayout,
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QFileDialog, QHBoxLayout, QLineEdit, QListWidget,
+                               QListWidgetItem, QVBoxLayout,
                                QWidget)
 
 from ... import resources, settings
@@ -14,6 +16,20 @@ from .base import Page
 
 def prefix_folder(prefix):
     return Path(prefix).expanduser() / 'drive_c/Program Files/Akousousin'
+
+
+def browse(parent, title, start, folders=False):
+    """A file or folder picker that shows hidden folders, where Wine prefixes usually are."""
+    from PySide6.QtCore import QDir
+    picker = QFileDialog(parent, title, start)
+    picker.setOption(QFileDialog.DontUseNativeDialog)  # a native picker would ignore the hidden-files filter
+    picker.setFileMode(QFileDialog.Directory if folders else QFileDialog.ExistingFile)
+    if folders:
+        picker.setOption(QFileDialog.ShowDirsOnly)
+    picker.setFilter(picker.filter() | QDir.Hidden)
+    if picker.exec() == QFileDialog.Accepted and picker.selectedFiles():
+        return picker.selectedFiles()[0]
+    return ''
 
 
 class PrefixRow(QWidget):
@@ -143,13 +159,35 @@ class AppsPage(Page):
         wine = QLineEdit()
         wine.setPlaceholderText(self.tr('Leave empty to use the system Wine'))
 
+        # Most prefixes can be found, so offer them before any browsing.
+        from ... import wine_prefixes
+        registered = {str(Path(entry.get('prefix', '')).expanduser()) for entry in self.state.config.get('registrations', [])}
+        found = [path for path in wine_prefixes.find() if str(path) not in registered]
+        if found:
+            choices = QListWidget()
+            choices.setObjectName('choices')
+            choices.setAccessibleName(self.tr('Wine prefixes found on this computer'))
+            for path in found:
+                item = QListWidgetItem(self.prefix_name(str(path)) + ' — ' + wine_prefixes.display(path))
+                item.setData(Qt.UserRole, str(path))
+                choices.addItem(item)
+            choices.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            choices.setTextElideMode(Qt.ElideMiddle)
+            choices.ensurePolished()
+            rows = min(5, len(found))
+            choices.setFixedHeight(rows * max(32, choices.sizeHintForRow(0)) + 2 * choices.frameWidth() + 12)
+            choices.currentItemChanged.connect(lambda item, _old: item and prefix.setText(item.data(Qt.UserRole)))
+            layout.addLayout(labelled(self.tr('Found on this computer'), choices,
+                                      self.tr('Choose one, or pick another folder below.')))
+            choices.setCurrentRow(0)
+
         def choose_prefix():
-            folder = QFileDialog.getExistingDirectory(dialog, self.tr('Choose a Wine prefix'), prefix.text() or str(Path.home()))
+            folder = browse(dialog, self.tr('Choose a Wine prefix'), prefix.text() or str(Path.home()), folders=True)
             if folder:
                 prefix.setText(folder)
 
         def choose_wine():
-            file, _ = QFileDialog.getOpenFileName(dialog, self.tr('Choose the Wine program'), wine.text() or str(Path.home()))
+            file = browse(dialog, self.tr('Choose the Wine program'), wine.text() or str(Path.home()))
             if file:
                 wine.setText(file)
 
