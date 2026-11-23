@@ -136,6 +136,26 @@ def host_environment():
     return clean(environment())
 
 
+def open_external(target):
+    """Open a web page or file with the desktop's own handler.
+
+    Packaged builds carry their own libraries; a browser started with them
+    can fail without a word, so the desktop's clean environment is used."""
+    target = str(target)
+    if os.name == 'nt':
+        try:
+            os.startfile(target)
+            return True
+        except OSError:
+            return False
+    try:
+        subprocess.Popen(['xdg-open', target], env=host_environment(), stdin=subprocess.DEVNULL,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        return True
+    except OSError:
+        return False
+
+
 def launch_controller(path):
     with log_path().open('ab') as output:
         options = {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == 'nt' else {
