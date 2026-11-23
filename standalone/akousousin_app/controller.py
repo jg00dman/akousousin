@@ -572,7 +572,9 @@ def run(path):
         watching_owners = watch_owners()
         watch_service()
         schedule_unload()
-        active = bool(state.owners) and not watching_owners
+        # Windows keeps refreshing on a timer, as before: the voice service does
+        # not announce speech there, and its idle behaviour is untested.
+        active = os.name == 'nt' or (bool(state.owners) and not watching_owners)
         if active:
             reap()
         if tray:

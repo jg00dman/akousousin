@@ -80,7 +80,13 @@ class Router:
         self.cached_timeout = 0
 
     def announce(self):
-        """Tell the controller speech has begun, so its tray shows it without asking repeatedly."""
+        """Tell the controller speech has begun, so its tray shows it without asking repeatedly.
+
+        Not on Windows, where calling the controller needs Qt, which this
+        service does not run; the Windows tray still checks on a timer.
+        """
+        if os.name == 'nt':
+            return
         def tell():
             from . import runtime
             try:
@@ -411,7 +417,8 @@ def serve(path, instance, control_file):
         watched = watch_owner(stopping, wasyncore, server._map)
         while not stopping.is_set():
             due = router.until_expiry()
-            longest = LONGEST_SLEEP if watched else 1
+            # Windows keeps the earlier short wait until its idle behaviour has been tested there.
+            longest = .1 if os.name == 'nt' else LONGEST_SLEEP if watched else 1
             wasyncore.loop(timeout=longest if due is None else min(longest, due + .05), count=1, map=server._map)
             router.expire()
             if not watched and owner_gone():

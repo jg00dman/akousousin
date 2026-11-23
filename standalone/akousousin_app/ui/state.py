@@ -89,7 +89,10 @@ class AppState(QObject):
         self.timer = QTimer(self)  # kept for callers that stop it; no longer started
         self.timer.timeout.connect(self.poll)
         self.watcher = None
-        if poll:
+        if poll and os.name == 'nt':
+            self.timer.start(1000)  # Windows keeps asking every second, as before
+            QTimer.singleShot(0, self.poll)
+        elif poll:
             self.watcher = ChangeWatcher(path, self)
             self.watcher.changed.connect(self.poll)
             self.watcher.start()
