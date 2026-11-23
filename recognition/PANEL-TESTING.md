@@ -12,7 +12,7 @@ artifacts remain on the GitHub Actions run. Open
 **Voice Input**. This guide covers the 0.7.0b5 beta panel and Updates page.
 It retains the existing TTS features; Whisper recognition is still experimental.
 
-![Voice Input model and desktop dictation setup](../docs/images/voice-input.png)
+![Dictation page](../docs/images/dictation.png)
 
 The screenshot shows an unloaded model and disabled shortcuts in an isolated
 test profile. Microphone discovery requires the host audio utilities below.

@@ -3,43 +3,51 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
-# Akousousin screenshots
+# Screenshots
 
-These images show the actual Linux control panel. The overview was captured
-during the latest release checks. The input and reading images show earlier
-0.7.0b1 setup screens, captured from source in an isolated profile on a virtual
-X display. Current releases use the actual AKS header icon and automatically
-prepare speech support when enabling reading shortcuts. The images show
-setup states, not completed desktop permission or microphone tests. The temporary
-model path in the input screenshots belongs to that isolated profile; the normal
-cache is `~/.local/share/Akousousin/models/whisper/`, respecting `XDG_DATA_HOME`.
+Akousousin 0.9 on a Plasma desktop. It follows your desktop's light or dark
+colours.
 
-## Overview
+**Home:** whether reading aloud and dictation are ready, your shortcuts, and a
+place to try both.
 
-Speech service controls, the selected voice, preview and playback preferences.
+![Home page: reading aloud and dictation ready, with their shortcuts](images/home.png)
 
-![Overview with voice preview and service controls](images/control-panel.png)
+**Voices:** the default voice, then every voice by language. Select one to hear
+it, use it, download it or remove it.
 
-## Voice Input
+![Voices page: default voice and the English voices](images/voices.png)
 
-Persistent model management, toggle/push-to-talk and KDE shortcut setup. The
-model is unloaded and shortcuts are disabled. This capture environment has no
-host microphone utilities; a desktop with `pulseaudio-utils` lists its inputs.
+**Dictation:** shortcut, hold-to-talk or press-to-start, language and
+microphone, with a live level meter.
 
-![Voice Input model and desktop shortcut controls](images/voice-input.png)
+![Dictation page: shortcut, mode, language and microphone](images/dictation.png)
 
-Scroll down for microphone and language selection, the ready-sound test, recording
-controls and transcripts.
+**Shortcuts:** reading and dictation keys that work in every app.
 
-![Voice Input recording and transcript controls](images/voice-input-recording.png)
+![Shortcuts page: read selected text, read copied text and dictate](images/shortcuts.png)
 
-## Read selection
+**Apps:** Windows apps in Wine, such as Logos, and Linux apps through Speech
+Dispatcher.
 
-Global reading shortcut setup, selected/copied text actions and stopping the
-reader. Enable the shortcuts and approve them in KDE before using them globally.
+![Apps page: a Wine prefix with voices registered, and Speech Dispatcher on](images/apps.png)
 
-![Read selection and global reading shortcut controls](images/read-selection.png)
+**Privacy:** what stays on your computer, and the few times Akousousin uses the
+internet.
 
-See the [installation guide](../standalone/README.md),
-[Voice Input guide](../recognition/PANEL-TESTING.md) and
-[beta testing checklist](../standalone/BETA-TESTING.md).
+![Privacy page](images/privacy.png)
+
+**Advanced:** start at login, memory, the speech service, updates and
+troubleshooting.
+
+![Advanced page: startup and memory settings](images/advanced.png)
+
+**About:** the name, the story and the credits.
+
+![About page](images/about.png)
+
+**Dark:**
+
+![Home page in dark colours](images/home-dark.png)
+
+![Voices page in dark colours](images/voices-dark.png)
