@@ -8,6 +8,16 @@ SPDX-FileCopyrightText: 2026 John Goodman
 Stable releases. Each beta's notes are on its
 [release page](https://github.com/jg00dman/akousousin/releases).
 
+## 0.9.1
+
+- Whisper Base is included, so dictation works without a download.
+- Orca speaks with Akousousin chosen as its synthesizer; updates take effect
+  without logging out.
+- First word no longer cut off; ready sound plays reliably.
+- Tray icon readable on dark panels; animates for SAPI speech.
+- Wine prefixes are found for you; Browse shows hidden folders.
+- tar.gz installer quits Akousousin itself; `--quit` waits; links open.
+
 ## 0.9.0
 
 - New control panel with eight pages, light and dark colours, screen reader

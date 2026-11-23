@@ -3,43 +3,33 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
-# Akousousin 0.9.1 beta 6
+# Akousousin 0.9.1
 
-- **Dictation works straight away.** A dictation model (Whisper Base, about
-  145 MB) now comes with Akousousin, so there is nothing to download first. It
-  works in every language and is the **Fastest** choice; Balanced and Most
-  accurate are still a download away.
-- **Finding your Wine prefix.** When you add a Windows app, Akousousin lists
-  the Wine prefixes it finds on your computer, Logos first. **Browse** now
-  shows hidden folders such as `.wine`.
-- **Update pages open.** In the tar.gz, choosing to open the page for a new
-  version now opens it in your browser; before, nothing happened. Other links
-  in the window open the same way.
+Fixes for 0.9, and dictation that works on first use. Your voices, models and
+settings carry over.
 
-## From beta 5
+**Dictation works straight away.** A dictation model (Whisper Base, about
+145 MB) now comes with Akousousin, so there is nothing to download first. It
+works in every language and is the **Fastest** choice. Balanced and Most
+accurate are still a download away.
 
-- **The tray icon is clear on dark panels.** Its lines now follow your panel's
-  colours: light on Breeze Dark and on Kubuntu's standard dark panel, dark
-  on Breeze Light, and they change when you switch.
-- **Speech from Windows apps animates the icon too,** such as Logos Read Aloud
-  through SAPI, not only Akousousin's own read-aloud shortcut.
+**Orca and other screen readers**
 
-## From beta 3
+- Orca speaks when Akousousin is chosen as its synthesizer. Before, it could
+  stay silent if it asked for a voice or language Akousousin didn't have; now
+  the best installed voice is used.
+- After an update, Orca and other apps use the new version straight away,
+  without logging out.
 
-A test build for one problem: **Orca silent when Akousousin is chosen as its
-synthesizer.** It is 0.9.0 plus these changes only.
+**Fixes**
 
-- If an app asks for a voice or language Akousousin doesn't have, it now
-  speaks with the best installed voice (one for that language, then the
-  default) instead of saying nothing.
-- Asking for a regional language, such as English (United Kingdom), now also
-  lists the other English voices.
-- A speech setting Akousousin can't use is ignored on its own, instead of
-  the whole set of settings, including the voice and language, being dropped.
-- After an update, Speech Dispatcher is restarted so Orca and other apps use
-  the new version straight away. Before, they kept using the old one until
-  you logged out. Orca pauses for a moment while this happens.
-- Problems in Akousousin's Speech Dispatcher module are written to its log
-  (`~/.local/state/Akousousin/akousousin.log`), so they can be found.
+- The first word is no longer cut off, and the ready sound plays every time.
+- The tray icon is clear on dark panels, including Breeze Dark and Kubuntu's
+  standard dark panel, and animates for speech from Windows apps such as Logos.
+- Adding a Windows app lists the Wine prefixes found on your computer, and
+  **Browse** shows hidden folders such as `.wine`.
+- The tar.gz installer quits a running Akousousin itself, instead of asking you
+  to, and `akousousin --quit` waits until it has fully exited.
+- Links and update pages open in your browser from the tar.gz.
 
 [What's in 0.9](https://github.com/jg00dman/akousousin/releases/tag/v0.9.0)
