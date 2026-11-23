@@ -89,8 +89,9 @@ def main():
             raise RuntimeError('Tar installation requires Linux')
         if os.geteuid() == 0:
             raise RuntimeError('Run this per-user installer without sudo')
-        if runtime.call(args.settings, {'command': 'status'}, launch=False):
-            raise RuntimeError('Quit AKS from its tray before installing or removing a bundle')
+        status = runtime.call(args.settings, {'command': 'status'}, launch=False)
+        if status and not (status.get('closed') and runtime.wait_gone(args.settings)):
+            raise RuntimeError('Quit Akousousin from its tray (or run akousousin --quit) before installing or removing it')
         from .linux_bundle import install, uninstall, speech_setup
         if args.install_bundle:
             target = install(args.install_bundle, args.bundle_prefix)
@@ -206,6 +207,8 @@ def main():
         runtime.replace_stale(args.settings)
     if request:
         response = runtime.call(args.settings, request, launch=request['command'] not in ('release', 'stop', 'quit', 'status', 'stt-status', 'stt-cancel', 'selection-status', 'selection-stop'))
+        if request['command'] == 'quit' and response:
+            runtime.wait_gone(args.settings)  # return once it has really exited, so installers can follow
         print(json.dumps(response or {'running': False, 'sessions': 0}))
         return
     from .panel import Panel

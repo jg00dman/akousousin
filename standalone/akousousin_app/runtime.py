@@ -112,7 +112,13 @@ def replace_stale(path):
         call(path, {'command': 'quit'}, launch=False, timeout=30)
     except (OSError, RuntimeError, ValueError):
         pass
-    deadline = time.monotonic() + 20
+    wait_gone(path)
+    return True
+
+
+def wait_gone(path, seconds=20):
+    """Wait until the controller has exited, not just begun shutting down. True if it has."""
+    deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
         try:
             if call(path, {'command': 'status'}, launch=False, timeout=2) is None:
@@ -120,7 +126,7 @@ def replace_stale(path):
         except (OSError, RuntimeError, ValueError):
             return True
         time.sleep(.2)
-    return True
+    return False
 
 
 def environment():

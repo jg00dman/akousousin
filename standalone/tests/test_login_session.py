@@ -79,6 +79,21 @@ class ReplaceStaleTests(unittest.TestCase):
         self.assertEqual(self.call(None, {'7': 'active'}), (False, ['status']))
 
 
+class WaitGoneTests(unittest.TestCase):
+    def test_waits_until_the_controller_stops_answering(self):
+        replies = iter([{'closed': True}, {'closed': True}, None])
+        with patch('akousousin_app.runtime.call', side_effect=lambda *a, **k: next(replies)), \
+                patch('akousousin_app.runtime.time.sleep'):
+            self.assertTrue(runtime.wait_gone('settings.json'))
+
+    def test_gives_up_on_a_controller_that_never_exits(self):
+        clock = iter(range(100))
+        with patch('akousousin_app.runtime.call', return_value={'closed': True}), \
+                patch('akousousin_app.runtime.time.sleep'), \
+                patch('akousousin_app.runtime.time.monotonic', side_effect=lambda: next(clock)):
+            self.assertFalse(runtime.wait_gone('settings.json', seconds=5))
+
+
 class ControllerLockTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
