@@ -97,9 +97,12 @@ def main():
             print('Installed: ' + str(target))
             if not args.without_speech_dispatcher:
                 try:
-                    speech_setup(target, args.settings)
+                    speech_setup(target, args.settings)  # also restarts Speech Dispatcher
                 except (OSError, subprocess.SubprocessError) as error:
                     print('Warning: application installed; Speech Dispatcher setup could not run: ' + str(error), file=sys.stderr)
+            else:
+                from .speech_dispatcher import reload_module
+                reload_module()  # an existing registration must run the new version
             if not args.quiet and sys.stdin.isatty():
                 answer = input('Launch Akousousin now? [y/N] ').strip().lower()
                 if answer in ('y', 'yes'):

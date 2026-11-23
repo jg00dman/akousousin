@@ -9,6 +9,7 @@ import io
 import json
 from pathlib import Path
 import logging
+import os
 import re
 import sys
 import subprocess
@@ -528,6 +529,25 @@ def configure(path, remove=False):
         settings.save(path, preferences)
         raise warning from error
     return config
+
+
+def reload_module():
+    """After an update, make Speech Dispatcher run the new module.
+
+    It keeps each module running until it restarts, so without this Orca and
+    other apps keep talking to the previous version. Restarts only a running
+    Speech Dispatcher (try-restart) and only when our module is registered;
+    clients such as Orca reconnect by themselves. Returns whether it restarted.
+    """
+    if os.name == 'nt' or not dispatcher_paths()[1].is_file():
+        return False
+    try:
+        subprocess.run(['systemctl', '--user', 'try-restart', 'speech-dispatcher.service'],
+                       check=True, capture_output=True, timeout=20, env=runtime.host_environment())
+        return True
+    except (OSError, subprocess.SubprocessError) as error:
+        logging.getLogger(__name__).warning('Could not reload the Speech Dispatcher module: %s', error)
+        return False
 
 
 def complete_pending_setup(path):

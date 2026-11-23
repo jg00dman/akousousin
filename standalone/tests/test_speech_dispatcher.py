@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 John Goodman
 import io
+import os
 import json
 from pathlib import Path
 import tempfile
@@ -455,3 +456,41 @@ class DispatcherTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 configure(self.path)
         run.assert_not_called()
+
+
+class ReloadModuleTests(unittest.TestCase):
+    """After an update Speech Dispatcher must run the new module, not the one it kept."""
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+
+    def paths(self, registered):
+        launcher = self.root / 'speech-dispatcher-module'
+        if registered:
+            launcher.write_text('#!/bin/sh\n')
+        return patch('akousousin_app.speech_dispatcher.dispatcher_paths',
+                     return_value=(self.root / 'speechd.conf', launcher, self.root / 'sd_akousousin'))
+
+    @unittest.skipIf(os.name == 'nt', 'Speech Dispatcher is Linux')
+    def test_restarts_a_running_dispatcher_when_registered(self):
+        from akousousin_app.speech_dispatcher import reload_module
+        with self.paths(True), patch('akousousin_app.speech_dispatcher.subprocess.run') as run:
+            self.assertTrue(reload_module())
+        self.assertEqual(run.call_args.args[0], ['systemctl', '--user', 'try-restart', 'speech-dispatcher.service'])
+
+    def test_leaves_speech_dispatcher_alone_when_not_registered(self):
+        from akousousin_app.speech_dispatcher import reload_module
+        with self.paths(False), patch('akousousin_app.speech_dispatcher.subprocess.run') as run:
+            self.assertFalse(reload_module())
+        run.assert_not_called()
+
+    @unittest.skipIf(os.name == 'nt', 'Speech Dispatcher is Linux')
+    def test_a_failed_restart_is_logged_not_fatal(self):
+        import subprocess
+        from akousousin_app.speech_dispatcher import reload_module
+        with self.paths(True), patch('akousousin_app.speech_dispatcher.subprocess.run',
+                                     side_effect=subprocess.CalledProcessError(1, 'systemctl')), \
+                self.assertLogs('akousousin_app.speech_dispatcher', 'WARNING'):
+            self.assertFalse(reload_module())
+

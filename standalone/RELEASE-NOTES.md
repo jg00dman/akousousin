@@ -3,7 +3,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
-# Akousousin 0.9.1 beta 2
+# Akousousin 0.9.1 beta 3
 
 A test build for one problem: **Orca silent when Akousousin is chosen as its
 synthesizer.** It is 0.9.0 plus these changes only.
@@ -15,6 +15,9 @@ synthesizer.** It is 0.9.0 plus these changes only.
   lists the other English voices.
 - A speech setting Akousousin can't use is ignored on its own, instead of
   the whole set of settings, including the voice and language, being dropped.
+- After an update, Speech Dispatcher is restarted so Orca and other apps use
+  the new version straight away. Before, they kept using the old one until
+  you logged out. Orca pauses for a moment while this happens.
 - Problems in Akousousin's Speech Dispatcher module are written to its log
   (`~/.local/state/Akousousin/akousousin.log`), so they can be found.
 
