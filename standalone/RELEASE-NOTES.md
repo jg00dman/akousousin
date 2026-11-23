@@ -3,9 +3,20 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
-# Akousousin 0.9.1 beta 5
+# Akousousin 0.9.1 beta 6
 
-Beta 3 plus the tray icon:
+- **Dictation works straight away.** A dictation model (Whisper Base, about
+  145 MB) now comes with Akousousin, so there is nothing to download first. It
+  works in every language and is the **Fastest** choice; Balanced and Most
+  accurate are still a download away.
+- **Finding your Wine prefix.** When you add a Windows app, Akousousin lists
+  the Wine prefixes it finds on your computer, Logos first. **Browse** now
+  shows hidden folders such as `.wine`.
+- **Update pages open.** In the tar.gz, choosing to open the page for a new
+  version now opens it in your browser; before, nothing happened. Other links
+  in the window open the same way.
+
+## From beta 5
 
 - **The tray icon is clear on dark panels.** Its lines now follow your panel's
   colours: light on Breeze Dark and on Kubuntu's standard dark panel, dark
