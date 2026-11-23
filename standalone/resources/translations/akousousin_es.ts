@@ -1331,10 +1331,6 @@
         <translation>El clic derecho, o mantener pulsado en una pantalla táctil, siempre muestra el menú.</translation>
     </message>
     <message>
-        <source>Global reading and dictation shortcuts are available on Linux.</source>
-        <translation>Los atajos globales de lectura y dictado están disponibles en Linux.</translation>
-    </message>
-    <message>
         <source>On</source>
         <translation>Activado</translation>
     </message>
@@ -1361,6 +1357,10 @@
     <message>
         <source>Desktop action added.</source>
         <translation>Acción de escritorio añadida.</translation>
+    </message>
+    <message>
+        <source>Dictate works in every app. Press Ctrl+Alt+Space; choose hold-to-talk or press to start and stop on the Dictation page.</source>
+        <translation>El dictado funciona en cualquier aplicación. Pulsa Ctrl+Alt+Espacio; elige mantener pulsado para hablar o pulsar para empezar y parar en la página Dictado.</translation>
     </message>
 </context>
 <context>
