@@ -47,6 +47,10 @@ def main():
 
 
 def run(arguments):
+    if arguments[:1] == ['--record-microphone']:
+        from akousousin_backend.audio_system import record_main
+        record_main(arguments)
+        return
     if arguments[:1] == ['--whisper']:
         from akousousin_backend.recognition import main as recognition_main
         sys.argv = [sys.argv[0], *sys.argv[2:]]

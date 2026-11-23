@@ -8,6 +8,7 @@ recorder is the same PipeWire or PulseAudio tool dictation uses.
 """
 from array import array
 import math
+import os
 import time
 
 from PySide6.QtCore import QObject, QProcess, QProcessEnvironment, QRectF, QSize, Qt, QTimer, Signal
@@ -70,7 +71,10 @@ class LevelMonitor(QObject):
             return
         for signal in (process.readyReadStandardOutput, process.errorOccurred, process.finished):
             signal.disconnect()
-        process.terminate()
+        if os.name == 'nt':
+            process.kill()  # the Windows recorder has no window to receive a close request
+        else:
+            process.terminate()
         if not process.waitForFinished(500):
             process.kill()
             process.waitForFinished(500)

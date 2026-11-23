@@ -63,8 +63,6 @@ class DictationPage(Page):
         mic_box.addLayout(row(self.meter, refresh, stretch=False))
         self.meter_note = text(self.tr('The bars move when the microphone hears you.'), 'small')
         mic_box.addWidget(self.meter_note)
-        self.meter.setVisible(not self.state.windows)
-        self.meter_note.setVisible(not self.state.windows)
         fields = Columns([[self._box(labelled(self.tr('Language'), self.language,
                                               self.tr('Starts with your system language. Automatic detects it each time.')))],
                           [self._box(mic_box)]], minimum=240)
@@ -107,8 +105,7 @@ class DictationPage(Page):
         test.transcript.connect(self.transcript.setPlainText)
         self.settings_changed(config)
         self.status_changed(self.state.status)
-        if not self.state.windows:
-            QTimer.singleShot(150, lambda: self.refresh_mics(quiet=True))
+        QTimer.singleShot(150, lambda: self.refresh_mics(quiet=True))
 
     @staticmethod
     def _box(layout):
@@ -118,7 +115,7 @@ class DictationPage(Page):
 
     # Microphone level ---------------------------------------------------------
     def shown(self):
-        if not self.state.windows and not self.monitor.running:
+        if not self.monitor.running:
             self.meter_note.setText(self.tr('The bars move when the microphone hears you.'))
             self.monitor.start(self.state.config['stt_source'])
 

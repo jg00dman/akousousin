@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 
 from .host import host_environment
 
@@ -67,6 +68,8 @@ def server():
 
 
 def describe():
+    if os.name == 'nt':
+        return 'Windows audio'
     return {PIPEWIRE: 'PipeWire (native)', PULSEAUDIO: 'PulseAudio'}.get(server(), 'Not found')
 
 
@@ -91,6 +94,11 @@ def _properties(stream, role=None):
 
 def record_command(source=None, stream='Dictation'):
     """A command writing mono 16 kHz signed 16-bit PCM to stdout."""
+    if os.name == 'nt':
+        # Windows has no recorder tool: Akousousin records with miniaudio
+        # in a child process of its own (see record_main below).
+        base = [sys.executable] if getattr(sys, 'frozen', False) else [sys.executable, '-m', __name__]
+        return [*base, '--record-microphone', *(['--source', source] if source else [])]
     kind = server()
     if kind == PIPEWIRE:
         arguments = ['pw-record', *_raw_flag(), f'--rate={RATE}', '--channels=1', '--format=s16',
@@ -162,6 +170,10 @@ def _pulse_sources():
 
 def list_sources():
     """(sources, default name). Each source has name, description and, for PulseAudio, its monitor fields."""
+    if os.name == 'nt':
+        import miniaudio
+        names = [device['name'] for device in miniaudio.Devices().get_captures()]
+        return [{'name': name, 'description': name, 'monitor': False} for name in names], ''
     kind = server()
     if kind == PIPEWIRE:
         return _pipewire_sources()
@@ -204,3 +216,46 @@ class PcmStream:
         samples = array('h', data[:cut])
         samples.byteswap()
         return samples.tobytes()
+
+
+def record_main(arguments=None):
+    """Windows recorder: mono 16 kHz signed 16-bit PCM to stdout until stopped."""
+    import argparse
+    import threading
+    import miniaudio
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--record-microphone', action='store_true')
+    parser.add_argument('--source', default='')
+    options = parser.parse_args(arguments)
+    device_id = None
+    if options.source:
+        for device in miniaudio.Devices().get_captures():
+            if device['name'] == options.source:
+                device_id = device['id']
+                break
+    output = sys.stdout.buffer
+    stopped = threading.Event()
+
+    def consume():
+        while True:
+            data = yield
+            try:
+                output.write(data)
+                output.flush()
+            except (OSError, ValueError):  # the reader went away
+                stopped.set()
+
+    device = miniaudio.CaptureDevice(input_format=miniaudio.SampleFormat.SIGNED16, nchannels=1,
+                                     sample_rate=RATE, buffersize_msec=20, device_id=device_id,
+                                     app_name='Akousousin')
+    generator = consume()
+    next(generator)
+    device.start(generator)
+    try:
+        stopped.wait()
+    finally:
+        device.close()
+
+
+if __name__ == '__main__':
+    record_main()

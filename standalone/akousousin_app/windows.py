@@ -13,7 +13,8 @@ WINDOWS = os.name == 'nt'
 # Launches that belong to another program (a SAPI client, login, the
 # controller) must never print into whatever console started them.
 QUIET_FLAGS = ('--api-start', '--acquire-session', '--release-session', '--background',
-               '--controller', '--serve', '--panel', '--configure', '--speech-dispatcher')
+               '--controller', '--serve', '--panel', '--configure', '--speech-dispatcher',
+               '--record-microphone')
 
 
 def hidden():

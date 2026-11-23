@@ -291,14 +291,13 @@ def ready_cue():
 
 def capture(seconds, source=None, on_ready=None, cue=None):
     """Open the microphone before readiness; exclude startup and cue audio."""
-    if os.name == 'nt':
-        raise RuntimeError('This capture adapter requires Linux; use a WAV input on Windows')
     if isinstance(seconds, bool) or not isinstance(seconds, int) or not 1 <= seconds <= MAX_SECONDS:
         raise ValueError('Capture duration must be 1–30 seconds')
     from .audio_system import PcmStream, record_command
     args = record_command(source)
     with tempfile.TemporaryFile() as recording, tempfile.TemporaryFile() as errors:
-        process = subprocess.Popen(args, stdout=recording, stderr=errors, env=host_environment())
+        process = subprocess.Popen(args, stdout=recording, stderr=errors, env=host_environment(),
+                                   **({'creationflags': subprocess.CREATE_NO_WINDOW} if os.name == 'nt' else {}))
         try:
             deadline = time.monotonic() + 5
             while os.fstat(recording.fileno()).st_size == 0:

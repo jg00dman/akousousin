@@ -66,7 +66,7 @@ class DictationTest(QObject):
         self.state, self.tasks = state, tasks
         self.since = None
         self.recording = False
-        self.supported = os.name != 'nt' and importlib.util.find_spec('faster_whisper') is not None
+        self.supported = importlib.util.find_spec('faster_whisper') is not None
         state.status_changed.connect(self._status)
 
     def toggle(self):
@@ -74,8 +74,7 @@ class DictationTest(QObject):
             self.state.command('stt-finish')
             return
         if not self.supported:
-            self.state.notice.emit(self.tr('Dictation is not available on Windows yet.') if os.name == 'nt'
-                                   else self.tr('Dictation needs a Linux build with recognition.'))
+            self.state.notice.emit(self.tr('Dictation needs a Linux build with recognition.'))
             return
 
         def start():

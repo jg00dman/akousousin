@@ -61,12 +61,14 @@ class ShortcutsPage(Page):
 
     def build(self):
         main = Card(self.tr('Global shortcuts'))
-        main.add(text(self.tr('These work in every app. Your desktop asks you to approve each one the first time, '
-                              'and you can change the keys in your desktop’s settings at any time.'), 'muted'))
+        self.intro = text(self.tr('These work in every app. Your desktop asks you to approve each one the first time, '
+                                  'and you can change the keys in your desktop’s settings at any time.'), 'muted')
+        main.add(self.intro)
         self.reading_on = button(self.tr('Turn on…'), self.enable_reading)
         self.reading_off = button(self.tr('Turn off'), lambda: self.state.command('selection-shortcuts-disable', key='reading'))
         self.change = button(self.tr('Change keys…'), self.change_keys)
-        main.add(SettingRow(self.tr('Reading shortcuts'), '', self.reading_on, self.reading_off, self.change, first=True))
+        self.reading = SettingRow(self.tr('Reading shortcuts'), '', self.reading_on, self.reading_off, self.change, first=True)
+        main.add(self.reading)
         self.selected = Shortcut('voices', self.tr('Read selected text'),
                                  self.tr('Highlight text anywhere and press the keys. Press them again to stop.'))
         self.copied = Shortcut('copy', self.tr('Read copied text'),
@@ -109,8 +111,11 @@ class ShortcutsPage(Page):
         self.add(tray)
 
         if os.name == 'nt':
-            main.setEnabled(False)
-            self.layout_.insertWidget(2, text(self.tr('Global reading and dictation shortcuts are available on Linux.'), 'muted'))
+            # Dictation works on Windows; reading selected text is Linux-only for now.
+            for widget in (self.reading, self.selected, self.copied):
+                widget.setVisible(False)
+            self.intro.setText(self.tr('Dictate works in every app. Press Ctrl+Alt+Space; '
+                                       'choose hold-to-talk or press to start and stop on the Dictation page.'))
         self.status_changed(self.state.status)
 
     def settings_changed(self, config):

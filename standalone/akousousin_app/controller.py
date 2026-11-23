@@ -78,8 +78,8 @@ class Sessions:
                         self.service.start(config['port'])
                 except Exception as error:
                     self.error = 'Could not load the voice: ' + str(error)
-        if os.name == 'nt' or self.closed:
-            return  # dictation is Linux-only for now
+        if self.closed:
+            return
         from akousousin_backend import models
         model = config['stt_model']
         if models.installed(model) or (model == 'turbo' and models.installed('small')):
@@ -125,9 +125,13 @@ class Sessions:
         elif operation == 'stt-desktop-enable':
             if self.desktop:
                 self.desktop.close()
-            from .desktop_input import Desktop
-            identity = runtime.name(self.path).split('/')[-1].replace('-', '_')
-            self.desktop = Desktop(self.input, lambda: settings.load(self.path), runtime.directory(), identity, preferences=self.desktop_preferences)
+            if os.name == 'nt':
+                from .windows_input import Desktop as WindowsDesktop
+                self.desktop = WindowsDesktop(self.input, lambda: settings.load(self.path), preferences=self.desktop_preferences)
+            else:
+                from .desktop_input import Desktop
+                identity = runtime.name(self.path).split('/')[-1].replace('-', '_')
+                self.desktop = Desktop(self.input, lambda: settings.load(self.path), runtime.directory(), identity, preferences=self.desktop_preferences)
             self.input.insert = self.desktop.insert
             self.input_owned = True
             self.desktop.start(listen=request.get('listen', False))
@@ -478,7 +482,7 @@ def run(path):
     timer.timeout.connect(tick)
     timer.start(1500)
     tick()
-    if graphical and os.name != 'nt' and os.environ.get('WAYLAND_DISPLAY'):
+    if graphical and (os.name == 'nt' or os.environ.get('WAYLAND_DISPLAY')):
         QTimer.singleShot(0, lambda: threading.Thread(target=state.restore_desktop_shortcuts, daemon=True).start())
     if graphical and os.name != 'nt':
         # Leave with the desktop. Plasma asks Qt to survive a compositor exit,

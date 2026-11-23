@@ -894,10 +894,6 @@
         <source>Nothing was heard. Check the microphone on the Dictation page.</source>
         <translation>No se oyó nada. Revisa el micrófono en la página Dictado.</translation>
     </message>
-    <message>
-        <source>Dictation is not available on Windows yet.</source>
-        <translation>El dictado aún no está disponible en Windows.</translation>
-    </message>
 </context>
 <context>
     <name>HomePage</name>
@@ -1416,10 +1412,6 @@
     <message>
         <source>Ready — starts when needed</source>
         <translation>Listo: se inicia cuando hace falta</translation>
-    </message>
-    <message>
-        <source>Dictation is not available on Windows yet</source>
-        <translation>El dictado aún no está disponible en Windows</translation>
     </message>
 </context>
 <context>

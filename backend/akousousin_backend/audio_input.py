@@ -7,7 +7,6 @@ import io
 import logging
 import os
 import queue
-import selectors
 import subprocess
 import tempfile
 import threading
@@ -172,15 +171,31 @@ class Capture:
             logging.warning('Silero speech detection unavailable (%s); using loudness', problem)
         stream = PcmStream()
         process = None
-        selector = selectors.DefaultSelector()
         try:
-            if os.name == 'nt':
-                raise RuntimeError('Desktop microphone capture currently requires Linux')
             args = record_command(self.source)
             with tempfile.TemporaryFile() as errors:
-                process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=errors, bufsize=0, env=host_environment())
-                os.set_blocking(process.stdout.fileno(), False)
-                selector.register(process.stdout, selectors.EVENT_READ)
+                process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=errors, bufsize=0, env=host_environment(),
+                                           **({'creationflags': subprocess.CREATE_NO_WINDOW} if os.name == 'nt' else {}))
+                # A reader thread rather than selectors: Windows cannot select() on pipes.
+                chunks = queue.Queue()
+
+                def reader(pipe=process.stdout):
+                    try:
+                        while True:
+                            data = pipe.read(8192)
+                            chunks.put(data)
+                            if not data:
+                                return
+                    except (OSError, ValueError):
+                        chunks.put(b'')
+
+                threading.Thread(target=reader, daemon=True).start()
+
+                def receive(timeout):
+                    try:
+                        return chunks.get(timeout=timeout)
+                    except queue.Empty:
+                        return None
                 startup = time.monotonic() + 5
                 last_audio = time.monotonic()
                 buffer = bytearray()
@@ -190,13 +205,13 @@ class Capture:
                     if process.poll() is not None:
                         errors.seek(0)
                         raise RuntimeError('Microphone disconnected: ' + errors.read(500).decode(errors='replace'))
-                    if not selector.select(.05):
+                    data = receive(.05)
+                    if data is None:
                         if time.monotonic() - last_audio > 5:
                             raise TimeoutError('Microphone stopped delivering audio')
                         if first and time.monotonic() >= startup:
                             raise TimeoutError('Microphone did not become ready')
                         continue
-                    data = os.read(process.stdout.fileno(), 8192)
                     if not data:
                         raise RuntimeError('Microphone stream ended')
                     last_audio = time.monotonic()
@@ -210,8 +225,7 @@ class Capture:
                         # Drain startup/cue audio before accepting speech.
                         until = time.monotonic() + .12
                         while time.monotonic() < until:
-                            if selector.select(.02):
-                                os.read(process.stdout.fileno(), 8192)
+                            receive(.02)
                         first = False
                         if self.stop.is_set():
                             break
@@ -238,7 +252,6 @@ class Capture:
             self.error = str(error)
             self.changed('Recording stopped: ' + self.error)
         finally:
-            selector.close()
             if process is not None:
                 if process.poll() is None:
                     process.terminate()
