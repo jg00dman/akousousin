@@ -163,6 +163,12 @@ SPDX-FileCopyrightText: 2026 John Goodman
 | AppsPage | This restarts Speech Dispatcher, so Orca pauses for a moment. Continue? | Esta ação reinicia o Speech Dispatcher e interrompe brevemente o Orca. Continuar? |
 | AppsPage | Turn off | Desativar |
 | AppsPage | Turn on | Ativar |
+| AppsPage | Turn on Spiel | Ativar o Spiel |
+| AppsPage | Turn off Spiel | Desativar o Spiel |
+| AppsPage | Spiel | Spiel |
+| AppsPage | Makes Akousousin voices available to Linux apps and screen readers that use Spiel. | Disponibiliza as vozes do Akousousin às aplicações Linux e aos leitores de ecrã que usam o Spiel. |
+| AppsPage | Remove Akousousin from Spiel and restore the previous default if it still uses Akousousin? | Remover o Akousousin do Spiel e repor a predefinição anterior, se o Spiel ainda usar o Akousousin? |
+| AppsPage | Make Akousousin and its current default voice the default for Spiel? | Tornar o Akousousin e a sua voz predefinida atual a predefinição do Spiel? |
 | Dialogs | Cancel | Cancelar |
 | Dialogs | Close | Fechar |
 | Dialogs | Something went wrong | Ocorreu um problema |
