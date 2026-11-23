@@ -657,6 +657,10 @@
         <source>Make Akousousin and its current default voice the default for Spiel?</source>
         <translation>Faire d’Akousousin et de sa voix par défaut actuelle le choix par défaut de Spiel ?</translation>
     </message>
+    <message>
+        <source>Not installed</source>
+        <translation>Non installé</translation>
+    </message>
 </context>
 <context>
     <name>Dialogs</name>
