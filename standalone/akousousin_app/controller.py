@@ -46,6 +46,8 @@ class Sessions:
         Each command takes the controller lock only for as long as it needs
         it; holding it across both would stall the tray and every request.
         """
+        if os.environ.get('FLATPAK_ID'):
+            return
         try:
             saved = self.desktop_preferences.load()
         except Exception as error:
@@ -102,6 +104,8 @@ class Sessions:
 
     def input_request(self, request):
         operation = request['command']
+        if os.environ.get('FLATPAK_ID') and operation in ('stt-toggle', 'stt-desktop-enable'):
+            raise RuntimeError('Use the Dictation page to record and copy a transcript in Flatpak.')
         if operation == 'stt-prepare':
             self.input_owned = True
             self.input.prepare(download=request.get('download') is True)
@@ -159,6 +163,8 @@ class Sessions:
         return result
 
     def request(self, request):
+        if os.environ.get('FLATPAK_ID') and request.get('command') in ('selection-toggle', 'selection-shortcuts-enable'):
+            raise RuntimeError('Use the Home page to read text aloud in Flatpak.')
         if request.get('command') == 'selection-shortcuts-enable' and os.name != 'nt':
             # Checking Speech Dispatcher (and restarting it if it lacks our
             # module) can take many seconds and touches no controller state,
@@ -302,7 +308,8 @@ def run(path):
     from PySide6.QtWidgets import QApplication, QMessageBox
     from shiboken6 import isValid
     graphical = os.name == 'nt' or bool(os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY'))
-    if graphical and os.name != 'nt':
+    sandboxed = bool(os.environ.get('FLATPAK_ID'))
+    if graphical and os.name != 'nt' and not sandboxed:
         # Install before Qt/portal startup so the desktop service can discover it
         # before the user enables shortcuts. Failures must not prevent TTS use.
         from .desktop_identity import ensure_desktop_entry
@@ -327,9 +334,20 @@ def run(path):
         from .qt_locale import install_link_handler
         install_link_handler(app)
         app.setWindowIcon(QIcon(str(resources.root() / 'akousousin.png')))
-    lock = QLockFile(str(runtime.directory() / (os.path.basename(runtime.name(path)) + '.lock')))
-    if not lock.tryLock(10000):
-        return
+    lock_path = runtime.directory() / (os.path.basename(runtime.name(path)) + '.lock')
+    if sandboxed:
+        # Independent Flatpak launches can have different PID namespaces.
+        import fcntl
+        lock = lock_path.open('a')
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            lock.close()
+            return
+    else:
+        lock = QLockFile(str(lock_path))
+        if not lock.tryLock(10000):
+            return
     QLocalServer.removeServer(runtime.name(path))
     server = QLocalServer()
     server.setSocketOptions(QLocalServer.UserAccessOption)
@@ -513,4 +531,7 @@ def run(path):
         # Stop accepting clients before waiting for backend process cleanup.
         server.close()
         state.quit()
-        lock.unlock()
+        if sandboxed:
+            lock.close()
+        else:
+            lock.unlock()

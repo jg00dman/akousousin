@@ -39,9 +39,10 @@ class AdvancedPage(Page):
         ready = Card(self.tr('Startup and memory'))
         self.login = QCheckBox(self.tr('On'))
         self.login.toggled.connect(self.save_login)
-        ready.add(SettingRow(self.tr('Start at login'),
-                             self.tr('The tray icon and shortcuts work straight away, without opening this window.'),
-                             self.login, first=True))
+        if startup.supported():
+            ready.add(SettingRow(self.tr('Start at login'),
+                                 self.tr('The tray icon and shortcuts work straight away, without opening this window.'),
+                                 self.login, first=True))
         self.preload = combo()
         self.preload.activated.connect(lambda _: self.state.save(preload=self.preload.currentData()))
         ready.add(SettingRow(self.tr('Load voices and dictation'),
@@ -107,11 +108,14 @@ class AdvancedPage(Page):
         trouble = Card(self.tr('Troubleshooting'))
         trouble.add(row(button(self.tr('Open service log'), self.open_log), button(self.tr('Copy diagnostic report'), self.copy_report)))
         trouble.add(text(self.tr('The report contains versions, settings and recent errors — no text you have read or dictated.'), 'muted'))
-        trouble.add(SettingRow(self.tr('Remove Akousousin completely'),
-                               self.tr('Deletes voices, models and settings, and unregisters it from every app.'),
-                               button(self.tr('Remove everything…'), self.purge, kind='danger')))
-
-        self.add(Columns([[ready, service, dictation], [self.updates, voice, trouble]], minimum=440))
+        if os.environ.get('FLATPAK_ID'):
+            right = [voice, trouble]
+        else:
+            trouble.add(SettingRow(self.tr('Remove Akousousin completely'),
+                                   self.tr('Deletes voices, models and settings, and unregisters it from every app.'),
+                                   button(self.tr('Remove everything…'), self.purge, kind='danger')))
+            right = [self.updates, voice, trouble]
+        self.add(Columns([[ready, service, dictation], right], minimum=440))
         self.settings_changed(config)
         self.status_changed(self.state.status)
 

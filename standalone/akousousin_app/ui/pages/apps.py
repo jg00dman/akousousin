@@ -78,6 +78,13 @@ class AppsPage(Page):
         return self.tr('Where Akousousin’s voices are available.')
 
     def build(self):
+        if os.environ.get('FLATPAK_ID'):
+            card = Card(self.tr('Linux apps and screen readers'))
+            card.add(SettingRow(self.tr('Spiel'),
+                                self.tr('Choose an installed Akousousin voice in an app that uses Spiel.'), first=True))
+            card.add(text(self.tr('Use the native Linux package to register voices with Wine or Speech Dispatcher.'), 'muted'))
+            self.add(card)
+            return
         windows = self.state.windows
         wine = Card()
         words = QVBoxLayout()
@@ -132,6 +139,8 @@ class AppsPage(Page):
         return (prefix_folder(prefix) / 'install-state.json').is_file() if prefix else False
 
     def settings_changed(self, config):
+        if os.environ.get('FLATPAK_ID'):
+            return
         while self.rows.count():
             item = self.rows.takeAt(0)
             if item.widget():

@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 John Goodman
 import io
+import os
 from pathlib import Path
 import tempfile
 import threading
@@ -41,6 +42,18 @@ class GateTests(unittest.TestCase):
         with patch('akousousin_app.speech_gate.psutil.Process') as process:
             process.return_value.create_time.return_value = -1
             self.assertFalse(speech_gate.snapshot(self.path)[0])
+
+    @unittest.skipUnless(os.name == 'posix', 'requires flock')
+    def test_flatpak_mutes_across_pid_namespaces_and_recovers_after_exit(self):
+        with patch.dict(os.environ, {'FLATPAK_ID': 'io.github.jg00dman.akousousin',
+                                     'XDG_RUNTIME_DIR': str(self.path.parent / 'run')}):
+            self.lease.acquire()
+            with patch('akousousin_app.speech_gate.psutil.Process', side_effect=AssertionError):
+                self.assertTrue(speech_gate.snapshot(self.path)[0])
+            # A crash releases the kernel lock but leaves the active record behind.
+            self.lease.lock.close()
+            self.lease.lock = None
+            self.assertEqual(speech_gate.snapshot(self.path), (False, self.lease.value['generation']))
 
     @patch('akousousin_app.speech_dispatcher.runtime.call')
     @patch('akousousin_app.speech_dispatcher.fetch')

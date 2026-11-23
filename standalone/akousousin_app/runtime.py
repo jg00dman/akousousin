@@ -17,7 +17,10 @@ def directory(path=None):
     if os.name == 'nt':
         base = settings.data_path() / 'run'
     else:
-        base = Path(os.environ.get('XDG_RUNTIME_DIR', f'/tmp/akousousin-{os.getuid()}')) / 'Akousousin'
+        base = Path(os.environ.get('XDG_RUNTIME_DIR', f'/tmp/akousousin-{os.getuid()}'))
+        if app_id := os.environ.get('FLATPAK_ID'):
+            base = base / 'app' / app_id
+        base = base / 'Akousousin'
     base.mkdir(parents=True, exist_ok=True, mode=0o700)
     if os.name != 'nt':
         if base.stat().st_uid != os.getuid() or base.is_symlink():

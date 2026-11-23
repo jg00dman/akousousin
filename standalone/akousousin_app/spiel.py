@@ -4,6 +4,7 @@
 from contextlib import contextmanager
 import json
 import logging
+import os
 from pathlib import Path
 import re
 import shlex
@@ -115,6 +116,8 @@ def configure(path, remove=False, *, executable=None):
     """Register Akousousin or remove its registration and restore the previous default."""
     if sys.platform != 'linux':
         raise RuntimeError('Spiel integration is available on Linux.')
+    if os.environ.get('FLATPAK_ID'):
+        raise RuntimeError('Flatpak exports the Spiel provider. Choose the voice in your Spiel client.')
     service = service_path()
     if remove and not service.exists() and not service.is_symlink():
         return

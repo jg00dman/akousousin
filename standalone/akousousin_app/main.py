@@ -87,6 +87,13 @@ def main():
     parser.add_argument('--quiet', action='store_true', help='Do not offer to launch after installing a tar bundle')
     parser.add_argument('--without-speech-dispatcher', action='store_true', help='Skip default Speech Dispatcher setup during tar installation')
     args = parser.parse_args()
+    if os.environ.get('FLATPAK_ID') and any((
+        args.wine_prefix, args.wine, args.install, args.install_only, args.sapi_wav, args.uninstall,
+        args.purge, args.install_bundle, args.uninstall_bundle, args.install_speech_dispatcher,
+        args.uninstall_speech_dispatcher, args.speech_dispatcher, args.refresh_registrations,
+        args.install_selection_action,
+    )):
+        parser.error('This operation requires the native Akousousin package.')
     if args.purge:
         from . import purge
         if not args.yes:

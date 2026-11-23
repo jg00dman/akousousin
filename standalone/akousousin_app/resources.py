@@ -64,6 +64,8 @@ def bundled_dictation_model():
 def root():
     if os.environ.get('AKOUSOUSIN_RESOURCES'):
         return Path(os.environ['AKOUSOUSIN_RESOURCES'])
+    if os.environ.get('FLATPAK_ID'):
+        return Path('/app/share/akousousin')
     if getattr(sys, 'frozen', False):
         return Path(sys.executable).parent / 'resources'
     return Path(__file__).resolve().parents[1] / 'resources'

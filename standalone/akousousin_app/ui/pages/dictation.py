@@ -2,6 +2,7 @@
 # SPDX-FileCopyrightText: 2026 John Goodman
 """Dictation: how to start, what to listen to, speed against accuracy, and a test."""
 import json
+import os
 from pathlib import Path
 
 from PySide6.QtCore import QTimer
@@ -25,6 +26,8 @@ class DictationPage(Page):
         return self.tr('Dictation')
 
     def subtitle(self):
+        if os.environ.get('FLATPAK_ID'):
+            return self.tr('Record speech on this computer and copy the transcript.')
         return self.tr('Speak into any app. Recognition runs on this computer.')
 
     def build(self):
@@ -102,6 +105,8 @@ class DictationPage(Page):
         model.add(row(self.get_model, button(self.tr('Import a model folder…'), self.import_model),
                       button(self.tr('Free memory now'), lambda: self.state.command('stt-unload'))))
 
+        if os.environ.get('FLATPAK_ID'):
+            start.hide()
         self.add(Columns([[start, listen], [trial, model]], minimum=540))
         test.changed.connect(self.recording_changed)
         test.transcript.connect(self.transcript.setPlainText)

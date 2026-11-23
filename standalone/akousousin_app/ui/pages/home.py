@@ -123,7 +123,10 @@ class HomePage(Page):
         self.read_status.set(sentence, tone)
         reading = status.reading
         read_keys = keys((reading.get('keys') or {}).get('read-selection', ''))
-        if reading.get('reading'):
+        if os.environ.get('FLATPAK_ID'):
+            self.read_hint.setText(self.tr('Paste text below to read it aloud.'))
+            read_keys = []
+        elif reading.get('reading'):
             self.read_hint.setText(self.tr('Reading — press the same keys again to stop'))
         elif reading.get('shortcuts_enabled') and read_keys:
             self.read_hint.setText(self.tr('Select text anywhere and press'))
@@ -142,7 +145,10 @@ class HomePage(Page):
         self.dict_status.set(sentence, tone)
         desktop = dictation.get('desktop') or {}
         dict_keys = keys(desktop.get('keys', ''))
-        if desktop.get('enabled') and dict_keys:
+        if os.environ.get('FLATPAK_ID'):
+            self.dict_hint.setText(self.tr('Record speech here and copy the transcript.'))
+            dict_keys = []
+        elif desktop.get('enabled') and dict_keys:
             hold = config.get('stt_mode') == 'push-to-talk'
             self.dict_hint.setText(self.tr('Hold these keys and speak') if hold else self.tr('Press these keys and speak'))
         else:
@@ -186,7 +192,9 @@ class HomePage(Page):
             layout.addLayout(words)
             chip.setAccessibleName(f'{name}, {detail}')
             self.apps_row.addWidget(chip)
-        if not chips:
+        if os.environ.get('FLATPAK_ID'):
+            self.apps_row.addWidget(text(self.tr('Installed voices are available to apps that use Spiel.'), 'muted'), 1)
+        elif not chips:
             self.apps_row.addWidget(text(self.tr('Not connected to any apps yet. Add Logos or another Windows app in Apps.'), 'muted'), 1)
         self.apps_row.addStretch(1)
 

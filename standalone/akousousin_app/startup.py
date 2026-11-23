@@ -24,7 +24,7 @@ RUN_VALUE = 'Akousousin'
 
 
 def supported():
-    return os.name == 'nt' or os.name == 'posix'
+    return os.name == 'nt' or (os.name == 'posix' and not os.environ.get('FLATPAK_ID'))
 
 
 def invocation():

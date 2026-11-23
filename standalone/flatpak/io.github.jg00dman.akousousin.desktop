@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
+[Desktop Entry]
+Type=Application
+Name=Akousousin
+Comment=Read text aloud and dictate locally
+Exec=akousousin --configure
+Icon=io.github.jg00dman.akousousin
+Terminal=false
+Categories=Utility;Accessibility;
+Keywords=speech;reading;dictation;text-to-speech;

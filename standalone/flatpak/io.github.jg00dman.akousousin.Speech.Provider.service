@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 John Goodman
+[D-BUS Service]
+Name=io.github.jg00dman.akousousin.Speech.Provider
+Exec=/app/bin/akousousin --spiel-provider
