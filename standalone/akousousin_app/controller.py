@@ -38,7 +38,20 @@ class Sessions:
         self._speech_check = 0
         self._speaking = False
         self.reading_setup = threading.Lock()
+        self.generation = 0  # counts changes, so control panels can wait for the next one
+        self.changes = threading.Condition()
         self.login_session = None  # the desktop login this controller serves, when known
+
+    def bump(self):
+        """Something a control panel shows may have changed; wake panels waiting for it."""
+        with self.changes:
+            self.generation += 1
+            self.changes.notify_all()
+
+    def wait_for_change(self, after, timeout):
+        with self.changes:
+            self.changes.wait_for(lambda: self.closed or after is None or self.generation != after, timeout)
+            return {'generation': self.generation}
 
     def restore_desktop_shortcuts(self):
         """Restore opted-in sessions, never start microphone capture on launch.
@@ -159,6 +172,12 @@ class Sessions:
         return result
 
     def request(self, request):
+        if request.get('command') == 'wait':
+            after, timeout = request.get('after'), request.get('timeout', 25)
+            if (after is not None and (isinstance(after, bool) or not isinstance(after, int))) or \
+                    isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not 0 <= timeout <= 60:
+                raise ValueError('Invalid wait')
+            return self.wait_for_change(after, timeout)
         if request.get('command') == 'selection-shortcuts-enable' and os.name != 'nt':
             # Checking Speech Dispatcher (and restarting it if it lacks our
             # module) can take many seconds and touches no controller state,
@@ -255,6 +274,7 @@ class Sessions:
     def quit(self, update_pid=None):
         import logging
         self.closed = True
+        self.bump()  # release control panels waiting for a change
         cleanup = [self.selection.close, self.input.close]
         if self.desktop:
             desktop, self.desktop = self.desktop, None
@@ -363,10 +383,11 @@ def run(path):
             # cleanup. A restarting caller must connect to a fresh controller.
             server.close()
             QTimer.singleShot(250, app.quit)
-        else:
-            events.changed.emit()  # requests change what the tray shows
 
     events.result.connect(finish)
+
+    # Questions about state, which change nothing the tray or a panel shows.
+    read_only = {'wait', 'status', 'panel-status', 'stt-status', 'selection-status'}
 
     def submit(request, socket=None):
         def work():
@@ -375,6 +396,8 @@ def run(path):
             except Exception as error:
                 state.error = str(error)
                 result = {'error': str(error)}
+            if request.get('command') not in read_only:
+                events.changed.emit()  # it may have changed what the tray and panels show
             events.result.emit(socket, result)
         threading.Thread(target=work, daemon=True).start()
 
@@ -543,6 +566,7 @@ def run(path):
     def refresh():
         nonlocal refresh_pending
         refresh_pending = False
+        state.bump()
         if state.closed and not connections:
             QTimer.singleShot(500, app.quit)
         watching_owners = watch_owners()

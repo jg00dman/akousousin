@@ -156,7 +156,9 @@ class Dictation:
             self.trim_history()
             if outcome in ('displayed', 'retained'):
                 log_timings(record)
-            return record
+        if self.on_change:
+            self.on_change()  # a new transcript for the control panel
+        return record
 
     def trim_history(self):
         # Leave room for status metadata inside the existing 1 MiB IPC limit.
@@ -170,6 +172,8 @@ class Dictation:
             self.sequence += 1
             if values.get('output') in ('inserted', 'retained', 'cancelled'):
                 log_timings(record)
+        if self.on_change:
+            self.on_change()
 
     def _run(self, record, target, seconds, config):
         timer = None
