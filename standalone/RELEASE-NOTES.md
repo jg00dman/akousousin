@@ -3,6 +3,58 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
+# Akousousin 0.9.0
+
+A new control panel, dictation that is faster to start and far more reliable,
+and an app that is ready when you are. Previous stable installations receive
+this version through the normal update check. Voices, models, Wine SAPI
+registrations and Speech Dispatcher setup carry over.
+
+**A new control panel.** Eight clear pages — Home, Voices, Dictation,
+Shortcuts, Apps, Advanced, Privacy and About — with one main action per section
+and settings shown in place. It follows the desktop's light or dark scheme
+straight away, is built for screen readers and keyboard use, and follows the
+system language; a Spanish translation is included.
+
+- **Voices:** choose the default at the top, then one list of every voice by
+  language. Select a voice to hear it, make it the default, use it for its
+  language, or download or remove it.
+- **Dictation:** hold-to-talk or press-to-start, language, microphone and
+  Fastest / Balanced / Most accurate, with a live microphone level and a place
+  to try it out.
+- **Privacy:** what stays on this computer, the few uses of the internet, and
+  a setting that blocks all of them. Models download only when you choose
+  Download.
+- **Tray:** click or tap to start or stop dictation; right-click or press and
+  hold for the menu, including Read selected text. The icon shows Ready,
+  Listening (green microphone) and Reading (the logo lines moving).
+
+**Dictation.**
+
+- **Fixed: text repeated over and over** ("Okay. Okay. Okay. …"). Whisper's own
+  safeguard for repetitive or uncertain results was switched off; it is back on.
+  It retries only a phrase that fails, so normal phrases cost no extra time.
+- **Speech, not noise.** Phrases are now found by Silero, a small
+  speech-detection model, instead of loudness, so fans, hum, music and typing
+  no longer turn into stray words.
+- **PipeWire natively,** with PulseAudio still supported. `pulseaudio-utils` is
+  no longer needed on PipeWire systems.
+
+**Ready when you are.**
+
+- Your voice and dictation model load when Akousousin starts and stay loaded,
+  so the first read or dictation has no wait. Unloading when idle and loading
+  only when first used are in Advanced → Startup and memory.
+- **Start at login,** offered the first time the window opens: Akousousin sits
+  in the tray with its shortcuts working and no window. It quits when you log
+  out.
+
+**Also:** `--version` prints the version; releases contain only the AppImage,
+the Linux tar.gz, the Windows ZIP and checksums.
+
+Complete native Windows support is still forthcoming; its ZIP remains
+experimental.
+
 # Akousousin 0.9.0b7 beta
 
 - **Akousousin now quits when you log out.** On Plasma, apps are asked to
@@ -120,7 +172,7 @@ and Speech Dispatcher behaviour are unchanged.
   Akousousin Focus extension, late tray registration on X11, direct AppImage
   and tar downloads.
 
-# Unreleased
+# Earlier unreleased changes (included in 0.9.0)
 
 - Add `--version` to print the application version and exit without starting the
   controller, opening the panel or creating preferences.
