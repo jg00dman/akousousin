@@ -41,7 +41,7 @@ def download_starter(path):
     if STARTER not in config['voices']:
         from . import catalogue
         entry = catalogue.catalogue(root())[STARTER]
-        voice = catalogue.install(entry, settings.data_path() / 'voices')
+        voice = catalogue.install(entry, settings.data_path() / 'voices', path=path)
         config = register_voice(path, STARTER, voice)
     if os.name != 'nt' and config.get('speechd_setup_pending'):
         from .speech_dispatcher import complete_pending_setup

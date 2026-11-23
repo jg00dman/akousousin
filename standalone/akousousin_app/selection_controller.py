@@ -21,7 +21,8 @@ class Selection:
             shortcuts = self.shortcuts
             return {'reading': bool(self.thread and self.thread.is_alive()), 'state': self.state,
                     'shortcuts_enabled': bool(shortcuts and shortcuts.enabled),
-                    'shortcut_state': shortcuts.status if shortcuts else 'Reading shortcuts are disabled'}
+                    'shortcut_state': shortcuts.status if shortcuts else 'Reading shortcuts are disabled',
+                    'keys': dict(shortcuts.descriptions) if shortcuts and shortcuts.enabled else {}}
 
     def toggle(self, clipboard=False):
         with self.lock:

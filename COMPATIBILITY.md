@@ -5,25 +5,23 @@ SPDX-FileCopyrightText: 2026 John Goodman
 
 # API coverage and implementation status
 
-Applies to **0.8.3**, including the reviewed LJSpeech starter voice by
-default and the new `--purge` removal command, updated on 16 November 2026.
-Speech API coverage is unchanged from 0.8.0; the exact Wine-version installation
-restriction remains removed.
-[Releases and downloads](https://github.com/jg00dman/akousousin/releases).
+For developers and integrators: what Akousousin implements of each speech
+interface, as of **0.9.0**. For using Akousousin, see the
+[user guide](standalone/README.md).
 
-**Complete native Windows app support is forthcoming, not yet working end to
-end.** The ZIP is experimental; user testing found voice installation and
-Whisper model-install failures. Windows microphone capture, global shortcuts
-and desktop dictation integration remain unimplemented. SAPI output coverage
-below describes that component, not complete application readiness. See the
-[Windows work plan](standalone/WINDOWS-PLAN.md).
+**In short**
 
-**Core speech output works through SAPI and Speech Dispatcher; neither is a
-complete implementation of its wider API. Linux Whisper voice input is experimental.
-It does not implement SAPI recognition.**
-There is no defensible overall coverage percentage: SAPI includes recognition and
-many runtime interfaces, and our Speech Dispatcher component is an output module,
-not a replacement for the daemon or its client API. Feature coverage follows.
+- **SAPI (Windows apps in Wine):** a 64-bit text-to-speech engine. Speaking,
+  voices, rate, volume and cancelling work. Word events, pitch, phonemes and
+  most speech markup do not. Speech recognition is not implemented.
+- **Speech Dispatcher (Linux apps, Orca):** an output module for voices,
+  languages, rate, volume, characters and keys, with coarse index marks.
+- **Dictation:** Linux only, typing into apps on Plasma and GNOME Wayland.
+- **Windows:** experimental. Microphone capture, shortcuts and dictation are
+  not implemented. See the [Windows plan](standalone/WINDOWS-PLAN.md).
+
+Neither speech interface is complete, so we list features rather than claim a
+percentage.
 
 ## Microsoft SAPI
 
@@ -127,7 +125,7 @@ additional work; those features are not implied by this beta's coverage.
 | Language selection | Automatic detection with the last detected language displayed; searchable/scrollable explicit language selection locks recognition. Accuracy varies; no guarantee of reliable recognition for every supported language. |
 | Microphone capture | PulseAudio-compatible `parec` capture through PipeWire/PulseAudio, named input selector and system default. Native Windows microphone capture is not implemented. |
 | Model and recording controls | Enable/Disable voice input manages recognition and model memory. Recording and an already-approved shortcut can enable/load it again. Disable retains downloaded files; idle unloading retains enabled state. |
-| KDE Wayland dictation | GlobalShortcuts and keyboard-only RemoteDesktop portals, plus a temporary KWin focus observer. Tray Start Dictation can initiate consent. Other compositors are not supported by this adapter. |
+| Plasma and GNOME Wayland dictation | GlobalShortcuts and keyboard-only RemoteDesktop portals. Plasma uses a temporary KWin focus observer. GNOME 48–51 uses the optional Akousousin Focus shell extension. GNOME focus changes have been tested on a private D-Bus. Live GNOME desktop acceptance remains pending. |
 | Insertion and focus | Unicode key events without automatic Enter/Tab or clipboard paste. Focus changes retain transcripts; a scheduling race may leave partial insertion. Individual fields/cursor positions inside one window are not tracked. |
 | Cancellation and Quit | Bounded audio queue, cancellable recognition/download worker, and capture cleanup. Normal Quit closes owned control panels, speech/input workers and portal sessions. The updater temporarily preserves only its own panel to finish replacement. |
 | Ready cue and UI | Two 300 Hz tones, a separate sound test, wheel scrolling and scrollbars. Cue amplitude is about +10.3 dB over the earlier trial, limited below PCM clipping. |
@@ -158,9 +156,7 @@ explicit copied-text action; there is no silent stale-clipboard fallback.
 
 Configure reuses a single panel. Tray left-click toggles dictation; right-click
 opens its menu. Copyable recovery commands and separate diagnostics are provided.
-The panel is Tkinter, while the tray/controller uses PySide6 (Qt 6). Output-module
-Orca support does not imply that Orca can read the panel; comprehensive panel
-accessibility remains future work.
+The panel and tray use PySide6 (Qt 6). In an X11 session, Orca 48.1 produced speech announcements for the six-item navigation list, the selected page and the voice search field. Live Plasma and GNOME Wayland screen-reader walkthroughs remain pending.
 
 Release [42318174159](https://github.com/jg00dman/akousousin/actions/runs/42318174159)
 passed Linux and Windows package checks, including private SAPI registration and

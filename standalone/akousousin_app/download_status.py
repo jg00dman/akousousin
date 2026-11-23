@@ -48,39 +48,3 @@ def caption(value):
     elif value['status'] == 'active' and done:
         text += f' · {done / 1e6:.1f} MB received'
     return text
-
-
-class DownloadView:
-    def __init__(self, parent):
-        from tkinter import ttk
-        self.frame = ttk.Frame(parent)
-        self.frame.pack(fill='x', padx=22)
-        self.rows = {}
-        self.frame.after(100, self.poll)
-
-    def poll(self):
-        from tkinter import ttk
-        values = current()
-        ids = {value['id'] for value in values}
-        for identifier in set(self.rows) - ids:
-            frame, label, bar = self.rows.pop(identifier)
-            bar.stop()
-            frame.destroy()
-        for value in values:
-            identifier = value['id']
-            if identifier not in self.rows:
-                frame = ttk.Frame(self.frame); frame.pack(fill='x', pady=3)
-                label = ttk.Label(frame, wraplength=760); label.pack(anchor='w')
-                bar = ttk.Progressbar(frame, maximum=100); bar.pack(fill='x')
-                self.rows[identifier] = frame, label, bar
-            frame, label, bar = self.rows[identifier]
-            label.configure(text=caption(value), foreground='#bd3838' if value['status'] == 'error' else '#193c43')
-            known = bool(value['total']) or value['status'] != 'active'
-            mode = 'determinate' if known else 'indeterminate'
-            if str(bar.cget('mode')) != mode:
-                bar.stop(); bar.configure(mode=mode)
-                if not known:
-                    bar.start(15)
-            if known:
-                bar.configure(value=100 if value['status'] == 'done' else min(100, value['completed'] * 100 / value['total']) if value['total'] else 0)
-        self.frame.after(150, self.poll)

@@ -1,0 +1,39 @@
+<!--
+SPDX-License-Identifier: GPL-3.0-or-later
+SPDX-FileCopyrightText: 2026 John Goodman
+-->
+
+# Changelog
+
+Stable releases. Each beta's notes are on its
+[release page](https://github.com/jg00dman/akousousin/releases).
+
+## 0.9.0
+
+- New control panel with eight pages, light and dark colours, screen reader
+  support and translations (Spanish first).
+- Dictation: fixed repeated text; Silero speech detection ignores background
+  noise; native PipeWire; microphone level meter.
+- Start at login, models kept loaded, clean exit at logout.
+- Privacy page, with a switch to block all internet use.
+- `--version`.
+
+## 0.8.3
+
+- `akousousin --purge` removes Akousousin completely, including voices, models
+  and settings. It asks first; `--yes` skips the question.
+
+## 0.8.2
+
+- The Wine compatibility DLL is no longer limited to Wine 11.21.
+
+## 0.8.1
+
+- Packages include an English starter voice, so a fresh install can speak
+  without a download.
+
+## 0.8.0
+
+- First stable release: Piper voices for Windows apps in Wine (SAPI) and for
+  Linux apps (Speech Dispatcher), global reading shortcuts, experimental
+  Whisper dictation, the voice library and AppImage updates.

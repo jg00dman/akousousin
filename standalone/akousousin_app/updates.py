@@ -107,6 +107,8 @@ def environment():
 
 def install(update, path):
     """Replace the AppImage at its registered path; preserve a rollback image."""
+    from .network import require
+    require(path, 'installing updates')
     image = os.environ.get('APPIMAGE')
     if not is_appimage():
         raise RuntimeError('Automatic installation requires the Linux AppImage; use the release download instead')
@@ -256,6 +258,8 @@ def download_page(candidate):
 
 
 def perform_check(path):
+    from .network import require
+    require(path, 'checking for updates')
     config = settings.load(path)
     save_update_state(path, attempted_at=time.time())
     candidate = check(include_beta=config['update_betas'])
@@ -308,7 +312,7 @@ class UpdateMonitor:
 
     def tick(self, quiet=False):
         config = settings.load(self.path)
-        if not config['update_weekly']:
+        if not config['update_weekly'] or config.get('network_blocked'):
             return None
         state = update_state(self.path)
         now = time.time()

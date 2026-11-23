@@ -1,350 +1,228 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 John Goodman
-"""Actual Tk hit-testing: the Start button must not be hidden behind its row."""
-import copy
+"""The control panel: keyboard navigation, accessible names and the main workflows."""
 import os
 from pathlib import Path
 import tempfile
-import time
-import tkinter as tk
-from tkinter import ttk
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
-from akousousin_app import settings
-from akousousin_app.voice_input import VoiceInput
+if os.name != 'nt' and not os.environ.get('DISPLAY') and not os.environ.get('WAYLAND_DISPLAY'):
+    os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
+
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QAccessible
+from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QLabel, QPushButton
+
+from akousousin_app import network, resources, settings
+from akousousin_app.panel import Panel
+from akousousin_app.qt_locale import application
+from akousousin_app.ui.pages import PAGES
 
 
-@unittest.skipUnless(os.environ.get('DISPLAY'), 'Run under xvfb-run for the GUI test')
-class VoiceInputGuiTests(unittest.TestCase):
+def synchronous(window):
+    """Run panel tasks inline so tests can follow each workflow step by step."""
+    def run(work, done=None, *, failed=None, key=None, background=False):
+        try:
+            value = work()
+        except Exception as error:
+            (failed or window.tasks.failed.emit)(error)
+            return True
+        if done:
+            done(value)
+        return True
+    window.tasks.run = run
+
+
+class PanelTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = application()
+
     def setUp(self):
-        self.callback_errors = []
-        reporter = patch.object(tk.Tk, 'report_callback_exception', side_effect=lambda *args: self.callback_errors.append(args))
-        reporter.start(); self.addCleanup(reporter.stop)
-        self.addCleanup(lambda: self.assertEqual(self.callback_errors, [], 'Tk callback errors'))
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name)
+        self.path = self.root / 'settings.json'
+        for context in (patch.dict(os.environ, {f'XDG_{key}_HOME': str(self.root / key) for key in ('CONFIG', 'STATE', 'DATA')}),
+                        patch('akousousin_app.ui.pages.dictation.discover_microphones', return_value=[('', 'System default')])):
+            context.start()
+            self.addCleanup(context.stop)
+        self.window = Panel(self.path, offer_install=False, poll=False)
+        synchronous(self.window)
+        self.window.resize(1100, 760)
+        self.window.show()
+        self.app.processEvents()
+        self.addCleanup(self.window.close)
 
-    def test_speed_steps_and_confirmed_import_removal(self):
-        from akousousin_app.panel import Panel
-        with tempfile.TemporaryDirectory() as folder:
-            path = Path(folder) / 'settings.json'
-            original = Path(folder) / 'local.onnx'; original.write_bytes(b'keep model')
-            config = copy.deepcopy(settings.DEFAULTS)
-            config.update(voice='local', speed=1.23456789, voices={'local': {
-                'path':str(original), 'language':'en_US', 'name':'Local', 'quality':'local', 'sample_rate':22050}})
-            settings.save(path, config)
-            with patch('akousousin_app.resources.root', return_value=Path(folder)), \
-                    patch('akousousin_app.catalogue.catalogue', return_value={}), \
-                    patch('akousousin_app.runtime.call', return_value=None), \
-                    patch('akousousin_app.updates.is_appimage', return_value=False), \
-                    patch('akousousin_app.voice_input.discover_microphones', return_value=[('', 'System default')]):
-                panel = Panel(path, offer_install=False)
-                try:
-                    panel.root.update()
-                    status = 'A long diagnostic status — ready for copying.'
-                    panel.status.set(status)
-                    panel.root.update()
-                    panel.status_field.focus_force()
-                    panel.status_field.event_generate('<Control-a>'); panel.root.update()
-                    panel.status_field.event_generate('<Control-c>'); panel.root.update()
-                    self.assertEqual(panel.root.clipboard_get(), status)
-                    copy_button = next(child for child in panel.status_field.master.winfo_children()
-                                if isinstance(child, ttk.Button) and child.cget('text') == 'Copy')
-                    copy_button.invoke(); panel.root.update()
-                    self.assertEqual(panel.root.clipboard_get(), status)
-                    self.assertEqual(panel.speed.get(), 1.25)
-                    panel.speed_slider.set(2.123456)
-                    panel.root.update()
-                    self.assertEqual(panel.speed.get(), 2.0)
-                    self.assertLessEqual(len(panel.speed_spin.get().partition('.')[2]), 2)
-                    panel.speed_slider.set(4)
-                    self.assertTrue(panel.save())
-                    self.assertEqual(settings.load(path)['speed'], 4)
-                    panel.root.geometry('760x480')
-                    panel.show('Voice library')
-                    panel.root.update()
-                    self.assertTrue(panel.delete_voice_button.winfo_ismapped())
-                    self.assertLessEqual(panel.delete_voice_button.winfo_rooty() + panel.delete_voice_button.winfo_height(),
-                                         panel.root.winfo_rooty() + panel.root.winfo_height())
-                    panel.tree.selection_set('local')
-                    panel.tree.event_generate('<<TreeviewSelect>>'); panel.root.update()
-                    self.assertFalse(panel.delete_voice_button.instate(['disabled']))
-                    with patch('akousousin_app.panel.messagebox.askyesno', return_value=True):
-                        panel.delete_voice_button.invoke()
-                    deadline = time.monotonic() + 3
-                    while panel.busy and time.monotonic() < deadline:
-                        panel.root.update(); time.sleep(.01)
-                    self.assertFalse(panel.busy)
-                    self.assertFalse(settings.load(path)['voices'])
-                    self.assertEqual(original.read_bytes(), b'keep model')
-                    self.assertNotIn('local', panel.tree.get_children())
-                    panel.show('Overview'); panel.root.update()
-                    self.assertTrue(panel.starter_card.winfo_ismapped())
-                finally:
-                    panel.root.destroy()
+    def voices(self):
+        self.window.go('voices')
+        return self.window.pages['voices']
 
-    def test_header_uses_actual_application_image(self):
-        from akousousin_app.panel import Panel
-        with tempfile.TemporaryDirectory() as folder:
-            icon_root = tk.Tk()
-            picture = tk.PhotoImage(master=icon_root, width=128, height=128)
-            picture.put('#087e82', to=(0, 0, 128, 128))
-            picture.write(str(Path(folder) / 'akousousin.png'), format='png')
-            icon_root.destroy()
-            with patch('akousousin_app.resources.root', return_value=Path(folder)), \
-                    patch('akousousin_app.resources.bootstrap', return_value=copy.deepcopy(settings.DEFAULTS)), \
-                    patch('akousousin_app.catalogue.catalogue', return_value={}), \
-                    patch('akousousin_app.runtime.call', return_value=None), \
-                    patch('akousousin_app.updates.is_appimage', return_value=False), \
-                    patch('akousousin_app.voice_input.discover_microphones', return_value=[('', 'System default')]):
-                panel = Panel(Path(folder) / 'settings.json', offer_install=False)
-                try:
-                    panel.root.update()
-                    self.assertEqual(panel.header_icon.width(), 32)
-                    self.assertEqual(panel.header_icon.get(0, 0), (8, 126, 130))
-                    header = panel.root.winfo_children()[0]
-                    labels = [child for child in header.winfo_children() if isinstance(child, ttk.Label)]
-                    self.assertTrue(any(str(child.cget('image')) for child in labels))
-                    self.assertTrue(any(child.cget('text') == 'Akousousin' for child in labels))
-                    self.assertFalse(any('▥' in str(child.cget('text')) for child in labels))
-                finally:
-                    panel.root.destroy()
+    def import_voice(self, key, language):
+        model = self.root / (key + '.onnx')
+        model.touch()
+        Path(str(model) + '.json').write_text('{}')
+        resources.register_voice(self.path, key, dict(path=str(model), language=language, name=key, quality='local'))
+        self.window.state.reload()
+        return model
 
-    def test_update_notifications_in_every_format_install_action_only_in_appimage(self):
-        from akousousin_app.panel import Panel
-        def widgets(parent):
-            for child in parent.winfo_children():
-                yield child
-                yield from widgets(child)
-        with tempfile.TemporaryDirectory() as folder:
-            path = Path(folder) / 'settings.json'
-            settings.save(path, copy.deepcopy(settings.DEFAULTS))
-            for appimage in (False, True):
-                settings.save(path, copy.deepcopy(settings.DEFAULTS))
-                root = tk.Tk()
-                try:
-                    panel = Panel.__new__(Panel)
-                    panel.path, panel.root = path, root
-                    panel.pages = {'Updates': ttk.Frame(root)}
-                    panel.pages['Updates'].pack(fill='both', expand=True)
-                    panel.config = settings.load(path)
-                    panel.status = tk.StringVar(root)
-                    panel.updating = False
-                    panel.busy = False
-                    with patch('akousousin_app.updates.is_appimage', return_value=appimage):
-                        panel.build_updates(); root.update()
-                        checks = [w for w in widgets(root) if isinstance(w, ttk.Checkbutton)]
-                        self.assertEqual(len(checks), 2)
-                        weekly = next(w for w in checks if w.cget('text') == 'Check for updates weekly')
-                        weekly.invoke(); root.update()
-                        self.assertFalse(settings.load(path)['update_weekly'])
-                        beta = next(w for w in checks if w.cget('text') == 'Show beta testing updates')
-                        beta.invoke(); root.update()
-                        self.assertFalse(settings.load(path)['update_betas'])
-                        label = panel.install_update_button.cget('text')
-                        self.assertEqual(label, 'Install available update…' if appimage else 'Open update download page…')
-                        if not appimage:
-                            from akousousin_app import updates
-                            candidate = {'version': '99.0.0', 'page': updates.RELEASES + '/tag/v99.0.0'}
-                            with patch('akousousin_app.panel.messagebox.askyesno', return_value=True), \
-                                    patch('akousousin_app.panel.webbrowser.open') as browser, \
-                                    patch('akousousin_app.updates.install') as install:
-                                panel.confirm_update(candidate)
-                                browser.assert_called_once_with(candidate['page'])
-                                install.assert_not_called()
-                finally:
-                    root.destroy()
+    def test_keyboard_reaches_every_page_with_accessible_names(self):
+        nav = self.window.nav
+        nav.setFocus()
+        self.assertEqual(QAccessible.queryAccessibleInterface(nav).text(QAccessible.Name), 'Pages')
+        self.assertEqual(nav.count(), len(PAGES))
+        for index in range(nav.count()):
+            if index:
+                QTest.keyClick(nav, Qt.Key_Down)
+            page = self.window.current_page()
+            self.assertEqual(nav.currentItem().text(), page.title())
+            self.assertEqual(self.window.stack.currentWidget().accessibleName(), page.title())
+        self.window.activateWindow()
+        if QTest.qWaitForWindowActive(self.window, 1000):  # shortcuts need an active window
+            QTest.keyClick(self.window.nav, Qt.Key_2, Qt.ControlModifier)
+            self.assertEqual(self.window.current_page().key, 'voices')
+        for page in self.window.pages.values():
+            for button in page.findChildren(QPushButton):
+                self.assertTrue(button.text() or button.accessibleName(), f'{page.key}: unnamed button')
 
-    def test_restart_error_has_selectable_text_and_copy_command(self):
-        from akousousin_app.dialogs import show_error
-        from akousousin_app.speech_dispatcher import RestartError, RESTART_COMMAND
-        root = tk.Tk(); self.addCleanup(root.destroy)
-        error = RestartError("systemctl: /tmp/.mount_AKS/libcrypto.so.3: version OPENSSL_3.4.0 not found")
-        window = show_error(root, error); root.update()
-        def widgets(parent):
-            for child in parent.winfo_children():
-                yield child
-                yield from widgets(child)
-        children = list(widgets(window))
-        field = next(child for child in children if isinstance(child, ttk.Entry))
-        self.assertEqual(field.get(), RESTART_COMMAND)
-        self.assertEqual(str(field.cget('state')), 'readonly')
-        command = next(child for child in children if isinstance(child, ttk.Button) and child.cget('text') == 'Copy command')
-        command.invoke(); root.update()
-        self.assertEqual(root.clipboard_get(), RESTART_COMMAND)
-        summary = next(child for child in children if isinstance(child, tk.Text))
-        summary.tag_add('sel', '1.0', '1.12')
-        summary.event_generate('<<Copy>>'); root.update()
-        self.assertEqual(root.clipboard_get(), summary.get('1.0', '1.12'))
-        reveal = next(child for child in children if isinstance(child, ttk.Button) and child.cget('text') == 'Show technical details')
-        reveal.invoke(); root.update()
-        detail = next(child for child in children if isinstance(child, tk.Text) and 'OPENSSL_3.4.0' in child.get('1.0', 'end'))
-        self.assertTrue(detail.winfo_ismapped())
-        copy = next(child for child in children if isinstance(child, ttk.Button) and child.cget('text') == 'Copy details')
-        copy.invoke(); root.update()
-        self.assertIn(error.details, root.clipboard_get())
+    def test_old_page_names_still_open_the_right_page(self):
+        self.window.go('Updates')
+        self.assertEqual(self.window.current_page().key, 'advanced')
+        self.window.go('Dictation')
+        self.assertEqual(self.window.current_page().key, 'dictation')
 
-    def test_first_use_is_explicit_and_progress_uses_real_byte_counts(self):
-        from akousousin_app.panel import Panel
-        with tempfile.TemporaryDirectory() as folder, patch('akousousin_app.resources.bootstrap', return_value=copy.deepcopy(settings.DEFAULTS)), \
-                patch('akousousin_app.catalogue.catalogue', return_value={}), \
-                patch('akousousin_app.voice_input.discover_microphones', return_value=[('', 'System default')]), \
-                patch('akousousin_app.runtime.call', return_value=None), \
-                patch('akousousin_app.resources.download_starter') as download:
-            panel = Panel(Path(folder) / 'settings.json'); self.addCleanup(panel.root.destroy)
-            panel.root.geometry('760x480'); panel.root.update()
-            download.assert_not_called()
-            self.assertTrue(panel.starter_card.winfo_ismapped())
-            start = next(child for child in panel.starter_card.winfo_children()
-                         if isinstance(child, ttk.Button) and 'Download starter voice' in child.cget('text'))
-            self.assertLess(start.winfo_rooty() + start.winfo_height(), panel.root.winfo_rooty() + panel.root.winfo_height())
-            voice = {'path': str(Path(folder) / 'voice.onnx'), 'sample_rate': 22050,
-                     'language': 'en_US', 'name': 'LJSpeech', 'quality': 'medium'}
-            download.return_value = dict(copy.deepcopy(settings.DEFAULTS), voices={settings.DEFAULTS['voice']: voice})
-            start.invoke()
-            deadline = time.monotonic() + 2
-            while panel.busy and time.monotonic() < deadline:
-                panel.root.update(); time.sleep(.01)
-            download.assert_called_once_with(panel.path)
-            self.assertFalse(hasattr(panel, 'starter_card'))
-            value = {'id': 'test', 'label': 'Voice', 'phase': 'Downloading', 'completed': 25,
-                     'total': 100, 'status': 'active'}
-            with patch('akousousin_app.download_status.current', return_value=[value]):
-                panel.downloads.poll()
-                _, label, bar = panel.downloads.rows['test']
-                self.assertIn('25%', label.cget('text'))
-                self.assertEqual(float(bar.cget('value')), 25)
-                self.assertEqual(str(bar.cget('mode')), 'determinate')
-                value['total'] = None
-                panel.downloads.poll()
-                self.assertNotIn('%', label.cget('text'))
-                self.assertEqual(str(bar.cget('mode')), 'indeterminate')
+    def test_default_and_per_language_voices_can_be_chosen(self):
+        for key in ('Alpha', 'Beta'):
+            self.import_voice(key, 'fr_FR')
+        page = self.voices()
+        page.search.setText('Beta')
+        self.assertEqual(page.key_(), 'Beta')
 
-    def test_start_button_is_visible_and_starts_a_recording(self):
-        with tempfile.TemporaryDirectory() as folder:
-            root = tk.Tk(); self.addCleanup(root.destroy)
-            root.geometry('1000x680+0+0')
-            panel = Mock(root=root, path=Path(folder) / 'settings.json', config=copy.deepcopy(settings.DEFAULTS))
-            def card(parent, title):
-                frame = ttk.Frame(parent, padding=12)
-                frame.pack(fill='x', pady=8)
-                ttk.Label(frame, text=title).pack(anchor='w')
-                return frame
-            panel.card = card
-            container = ttk.Frame(root); container.pack(fill='both', expand=True)
-            with patch('akousousin_app.voice_input.discover_microphones', return_value=[('', 'System default'), ('mic', 'Built-in microphone')]), patch('akousousin_app.voice_input.runtime.call', return_value=None) as call:
-                page = VoiceInput(panel, container)
-                page.ensure_model = Mock()
-                root.update()
-                page.canvas.yview_moveto(1)
-                root.update()
-                button = page.record_button
-                x = button.winfo_rootx() + button.winfo_width() // 2
-                y = button.winfo_rooty() + button.winfo_height() // 2
-                self.assertIs(root.winfo_containing(x, y), button, 'Start button is obscured or clipped')
-                self.assertEqual(button.cget('text'), 'Start recording (10 seconds)')
-                button.invoke()
-                deadline = time.monotonic() + 2
-                while page.busy and time.monotonic() < deadline:
-                    root.update(); time.sleep(.01)
-                self.assertTrue(any(item.args[1] == {'command': 'stt-start', 'seconds': 10} for item in call.call_args_list))
+        def request(path, payload, launch=True):
+            return {'pending_registration': settings.select_voice(path, payload['voice'],
+                    language_only=payload['command'] == 'language-voice')}
+        with patch('akousousin_app.runtime.call', side_effect=request):
+            self.assertTrue(page.make_default.isVisibleTo(page))
+            page.make_default.click()
+            page.search.setText('Alpha')
+            page.use_for.click()
+        config = settings.load(self.path)
+        self.assertEqual(config['voice'], 'Beta')
+        self.assertEqual(config['language_voices']['fr_FR'], 'Alpha')
+        self.assertEqual(page.default.currentData(), 'Beta')
+        self.assertIn('Default voice', page.library.role('Beta', config))
 
-    def test_device_selection_language_search_and_last_detection(self):
-        with tempfile.TemporaryDirectory() as folder:
-            root = tk.Tk(); self.addCleanup(root.destroy)
-            root.geometry('1000x680+0+0')
-            panel = Mock(root=root, path=Path(folder) / 'settings.json', config=copy.deepcopy(settings.DEFAULTS))
-            def card(parent, title):
-                frame = ttk.Frame(parent); frame.pack(fill='x'); return frame
-            panel.card = card
-            container = ttk.Frame(root); container.pack(fill='both', expand=True)
-            with patch('akousousin_app.voice_input.discover_microphones', return_value=[('', 'System default'), ('usb-input', 'USB microphone')]), patch('akousousin_app.voice_input.runtime.call', return_value=None):
-                page = VoiceInput(panel, container)
-                root.update()
-                page.apply_sources([('', 'System default'), ('usb-input', 'USB microphone')])
-                self.assertEqual(page.source_caption.get(), 'System default')
-                page.source_caption.set('USB microphone'); page.select_source()
-                self.assertEqual(settings.load(panel.path)['stt_source'], 'usb-input')
-                picker = page.language_picker
-                picker.open(); root.update()
-                self.assertGreater(len(picker.tree.get_children()), 90)
-                self.assertLess(picker.tree.yview()[1], 1, 'Language list must scroll')
-                picker.search.set('German'); root.update()
-                self.assertEqual(picker.tree.get_children(), ('de',))
-                picker.choose()
-                self.assertEqual(settings.load(panel.path)['stt_language'], 'de')
-                picker.open(); picker.search.set('Multilingual'); root.update()
-                picker.choose()
-                self.assertEqual(page.language.get(), '')
-                page.shared({'busy': False, 'state': 'Ready', 'desktop': {'state': 'Disabled'}, 'sequence': 1,
-                             'results': [{'text': 'Guten Morgen', 'language': 'de', 'language_source': 'detected', 'output': 'displayed',
-                                          'timings': {'recognition_seconds': .67, 'insertion_seconds': .07}}]})
-                self.assertIn('German (de)', page.detected_language.get())
-                page.result.focus_force(); root.update()
-                page.result.event_generate('<Control-a>'); root.update()
-                self.assertEqual(page.result.get('sel.first', 'sel.last'), page.result.get('1.0', 'end-1c'))
-                before = page.result.get('1.0', 'end-1c')
-                page.result.insert('1.0', '888888')
-                self.assertEqual(page.result.get('1.0', 'end-1c'), before)
-                self.assertEqual(str(page.result.cget('state')), 'disabled')
-                page.copy()
-                self.assertIn('recognition: 0.67s', root.clipboard_get())
-                self.assertIn('insertion: 0.07s', root.clipboard_get())
-                self.assertEqual(page.language.get(), '', 'Detection must not silently lock the language')
-                with patch('akousousin_backend.recognition.ready_cue') as cue:
-                    page.sound_button.invoke()
-                    deadline = time.monotonic() + 2
-                    while page.sound_testing and time.monotonic() < deadline:
-                        root.update(); time.sleep(.01)
-                    cue.assert_called_once_with()
-                    self.assertIn('Playback completed', page.sound_status.get())
+    def test_catalogue_filter_and_sample_preview(self):
+        page = self.voices()
+        page.search.setText(resources.STARTER)
+        self.assertEqual(page.key_(), resources.STARTER)
+        self.assertTrue(page.download.isVisibleTo(page))
+        self.assertFalse(page.make_default.isVisibleTo(page))
+        with patch.object(self.window.state.preview, 'toggle') as toggle:
+            page.play.click()
+        self.assertEqual(toggle.call_args.args[0], resources.STARTER)
+        self.assertEqual(toggle.call_args.args[2], 'en/en_US/ljspeech/medium')
+        page.show_group.buttons()[1].click()  # Installed only
+        self.assertIsNone(page.key_())
+
+    def test_removing_an_imported_voice_keeps_the_original_file(self):
+        model = self.import_voice('local', 'de_DE')
+        page = self.voices()
+        page.search.setText('local')
+        with patch.object(page, 'confirm', return_value=True), patch('akousousin_app.runtime.call'):
+            page.delete()
+        self.assertTrue(model.exists())
+        self.assertFalse(settings.load(self.path)['voices'])
+
+    def test_blocking_the_internet_is_saved_and_enforced(self):
+        self.window.go('privacy')
+        page = self.window.pages['privacy']
+        page.blocked.click()
+        self.assertTrue(settings.load(self.path)['network_blocked'])
+        self.assertFalse(page.samples.isEnabled())
+        with self.assertRaises(network.NetworkBlocked):
+            network.require(self.path, 'testing')
+        from akousousin_app import updates
+        with self.assertRaises(network.NetworkBlocked):
+            updates.perform_check(self.path)
+
+    @unittest.skipIf(os.name == 'nt', 'XDG autostart is for Linux desktops')
+    def test_start_at_login_is_offered_once_and_can_be_turned_off(self):
+        from akousousin_app import startup
+        page = self.window.pages['advanced']
+        with patch.object(page, 'confirm', return_value=True) as asked, \
+                patch('akousousin_app.ui.pages.advanced.updates.is_appimage', return_value=False):
+            page.first_run()
+            page.first_run()
+        asked.assert_called_once()
+        self.assertTrue(startup.enabled())
+        self.assertTrue(settings.load(self.path)['login_offered'])
+        self.window.go('advanced')
+        self.assertTrue(page.login.isChecked())
+        page.login.click()
+        self.assertFalse(startup.enabled())
+        page.preload.setCurrentIndex(page.preload.findData(False))
+        page.preload.activated.emit(page.preload.currentIndex())
+        self.assertFalse(settings.load(self.path)['preload'])
+
+    def test_declining_start_at_login_is_remembered(self):
+        from akousousin_app import startup
+        page = self.window.pages['advanced']
+        with patch.object(page, 'confirm', return_value=False) as asked, \
+                patch('akousousin_app.ui.pages.advanced.updates.is_appimage', return_value=False):
+            page.first_run()
+            page.first_run()
+        asked.assert_called_once()
+        self.assertFalse(startup.enabled())
+
+    def test_about_explains_the_name_with_a_keyboard_link(self):
+        self.window.go('about')
+        page = self.window.pages['about']
+        labels = page.findChildren(QLabel)
+        link = next(w for w in labels if 'biblia.com' in w.text())
+        self.assertTrue(link.focusPolicy() & Qt.TabFocus)
+        content = ' '.join(w.text() for w in labels)
+        for words in ('ἀκούσουσιν', 'Greek word for “they will hear”', 'those who hear will live.', 'Logos', 'Piper', 'Whisper', 'faster-whisper'):
+            self.assertIn(words, content)
+        self.assertTrue(any('licence texts' in b.text() for b in page.findChildren(QPushButton)))
+
+    @unittest.skipIf(os.name == 'nt', 'Linux microphone level')
+    def test_microphone_level_runs_only_while_dictation_is_visible(self):
+        import sys
+        import time
+        from akousousin_app.ui.meter import loudness
+        self.assertEqual(loudness(b''), 0.0)
+        self.assertGreater(loudness(b'\x00\x40' * 800), loudness(b'\x10\x00' * 800))
+        emitter = "import sys,time\nwhile True:\n sys.stdout.buffer.write(b'\\x00\\x40'*320); sys.stdout.buffer.flush(); time.sleep(.02)"
+        levels = []
+        with patch('akousousin_backend.audio_system.record_command', return_value=[sys.executable, '-c', emitter]) as command:
+            self.window.go('dictation')
+            page = self.window.pages['dictation']
+            page.monitor.level.connect(levels.append)
+            self.assertTrue(page.monitor.running)
+            self.assertEqual(command.call_args.args[1], 'Microphone level')
+            deadline = time.monotonic() + 5
+            while not any(levels) and time.monotonic() < deadline:
+                self.app.processEvents()
+                time.sleep(.01)
+            self.assertGreater(max(levels), .5)
+            self.assertEqual(page.meter.accessibleDescription(), 'Hearing sound')
+            self.window.go('voices')
+            self.assertFalse(page.monitor.running, 'the microphone closes when the page is left')
+            self.window.go('dictation')
+            self.window.showMinimized()
+            self.app.processEvents()
+            self.assertFalse(page.monitor.running, 'the microphone closes when the window is minimised')
+
+    def test_closing_with_work_running_hides_and_waits(self):
+        self.window.tasks.active.add('download')
+        self.window.close()
+        self.assertFalse(self.window.isVisible())
+        self.assertTrue(self.window.quit_when_idle)
+        self.window.tasks.active.clear()
 
 
-    def test_wheel_routes_only_to_visible_scroll_area(self):
-        from akousousin_app.scrolling import ScrollArea
-        root = tk.Tk(); self.addCleanup(root.destroy)
-        root.geometry('450x300')
-        first, second = ScrollArea(root), ScrollArea(root)
-        first.pack(fill='both', expand=True)
-        labels = []
-        for area in (first, second):
-            for number in range(50):
-                label = ttk.Label(area.inner, text='Row ' + str(number), padding=10)
-                label.pack()
-            labels.append(label)
-        root.update()
-        labels[0].event_generate('<Button-5>'); root.update()
-        self.assertGreater(first.canvas.yview()[0], 0)
-        before = first.canvas.yview()
-        first.pack_forget(); second.pack(fill='both', expand=True); root.update()
-        labels[1].event_generate('<MouseWheel>', delta=-120); root.update()
-        self.assertGreater(second.canvas.yview()[0], 0)
-        self.assertEqual(first.canvas.yview(), before)
-        labels[1].event_generate('<MouseWheel>', delta=120); root.update()
-        self.assertEqual(second.canvas.yview()[0], 0)
-
-    def test_settings_fit_small_window_and_library_has_scrollbars(self):
-        from akousousin_app.panel import Panel
-        with tempfile.TemporaryDirectory() as folder, patch('akousousin_app.resources.bootstrap', return_value=copy.deepcopy(settings.DEFAULTS)), patch('akousousin_app.catalogue.catalogue', return_value={}), patch('akousousin_app.voice_input.discover_microphones', return_value=[('', 'System default')]), patch('akousousin_app.runtime.call', return_value=None):
-            panel = Panel(Path(folder) / 'settings.json')
-            self.addCleanup(panel.root.destroy)
-            panel.root.geometry('760x480')
-            panel.show('Settings'); panel.root.update()
-            scroll = panel.settings_scroll
-            self.assertTrue(scroll.scrollbar.winfo_ismapped())
-            self.assertLess(scroll.canvas.yview()[1], 1)
-            scroll.canvas.yview_moveto(1); panel.root.update()
-            def buttons(widget):
-                for child in widget.winfo_children():
-                    if isinstance(child, ttk.Button): yield child
-                    yield from buttons(child)
-            save = next(button for button in buttons(scroll.inner) if button.cget('text') == 'Save settings')
-            self.assertLess(save.winfo_rooty() + save.winfo_height(), panel.root.winfo_rooty() + panel.root.winfo_height())
-            panel.show('Voice library'); panel.root.update()
-            self.assertTrue(panel.library_scrollbar.winfo_ismapped())
-            panel.show('Voice Input'); panel.root.update()
-            page = panel.voice_input
-            page.shared({'busy': False, 'loaded': True, 'enabled': True, 'state': 'Ready', 'desktop': {'state': 'Disabled'}, 'sequence': 0, 'results': []})
-            self.assertEqual(page.model_button.cget('text'), 'Disable voice input')
-            with patch.object(page, 'unload') as unload:
-                page.model_button.invoke()
-                unload.assert_called_once()
+if __name__ == '__main__':
+    unittest.main()

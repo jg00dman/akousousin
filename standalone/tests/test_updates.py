@@ -237,20 +237,13 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(tomllib.loads(project.read_text())['project']['version'], __version__)
 
     def test_declining_update_does_not_install_or_stop_speech(self):
-        from akousousin_app.panel import Panel
-        panel = Panel.__new__(Panel)
-        panel.busy = 0
-        panel.update_status = Mock()
-        panel.root = Mock()
-        panel.path = self.root / 'settings.json'
-        panel.updating = False
-        panel.worker = lambda function, success: success(function())
-        with patch.object(updates, 'is_appimage', return_value=True), \
-                patch('akousousin_app.panel.updates.perform_check', return_value=self.update), \
-                patch('akousousin_app.panel.messagebox.askyesno', return_value=False), \
-                patch('akousousin_app.panel.updates.install') as install, \
-                patch.object(updates.runtime, 'call') as call:
-            panel.check_updates()
+        from akousousin_app.ui.pages.advanced import AdvancedPage
+        panel = Mock(tr=lambda text: text)
+        panel.confirm.return_value = False
+        with patch.object(updates, 'is_appimage', return_value=True), patch.object(updates, 'available_update', return_value=self.update), \
+                patch.object(updates, 'install') as install, patch.object(updates.runtime, 'call') as call:
+            AdvancedPage.install(panel)
+        panel.confirm.assert_called_once()
         install.assert_not_called()
         call.assert_not_called()
 

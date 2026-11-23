@@ -119,13 +119,12 @@ class AppImageInstallTests(unittest.TestCase):
         self.assertIn(str(self.source), warning)
 
     def test_declining_prompt_keeps_application_and_menu_unchanged(self):
-        from akousousin_app.panel import Panel
-        panel = Panel.__new__(Panel)
-        panel.busy = panel.updating = False
-        panel.root = Mock()
-        with patch('akousousin_app.panel.messagebox.askyesno', return_value=False), \
-                patch.object(integration, 'install') as install:
-            panel.offer_appimage_install()
+        from akousousin_app.ui.pages.advanced import AdvancedPage
+        panel = Mock(tr=lambda text: text)
+        panel.confirm.return_value = False
+        with patch.object(integration, 'install') as install:
+            AdvancedPage.offer_install(panel)
+        panel.confirm.assert_called_once()
         install.assert_not_called()
         self.assertTrue(self.source.exists())
         self.assertFalse((self.root / 'data/applications').exists())

@@ -12,3 +12,4 @@ __pycache__/
 /backend/build/
 
 /recognition-dist/
+standalone/resources/translations/*.qm

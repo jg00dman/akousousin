@@ -6,6 +6,7 @@ import os
 import subprocess
 import threading
 import time
+from pathlib import Path
 
 import psutil
 
@@ -36,22 +37,58 @@ class Sessions:
         self.input_owned = False
         self._speech_check = 0
         self._speaking = False
+        self.reading_setup = threading.Lock()
+        self.login_session = None  # the desktop login this controller serves, when known
 
     def restore_desktop_shortcuts(self):
-        """Restore opted-in sessions, never start microphone capture on launch."""
-        with self.lock:
+        """Restore opted-in sessions, never start microphone capture on launch.
+
+        Each command takes the controller lock only for as long as it needs
+        it; holding it across both would stall the tray and every request.
+        """
+        try:
+            saved = self.desktop_preferences.load()
+        except Exception as error:
+            self.error = 'Could not restore desktop shortcuts: ' + str(error)
+            return
+        for key, command in (('dictation_enabled', 'stt-desktop-enable'),
+                             ('reading_enabled', 'selection-shortcuts-enable')):
+            if saved[key] and not self.closed:
+                try:
+                    self.request({'command': command})
+                except Exception as error:
+                    self.error = 'Could not restore desktop shortcuts: ' + str(error)
+
+    def get_ready(self):
+        """Load the voice and the dictation model now, if the user wants them ready.
+
+        Runs once when the controller starts, off the GUI thread. Nothing is
+        downloaded here, and a missing voice or model is simply skipped: the
+        app is then ready as soon as the user has chosen one.
+        """
+        config = settings.load(self.path)
+        if not config.get('preload', True) or self.closed:
+            return
+        voice = config['voices'].get(config['voice'])
+        if voice and Path(voice['path']).is_file():
+            # Same lock as 'acquire', so an app starting speech now cannot launch a second service.
+            with self.lock:
+                try:
+                    if not self.closed:
+                        self.service.start(config['port'])
+                except Exception as error:
+                    self.error = 'Could not load the voice: ' + str(error)
+        if os.name == 'nt' or self.closed:
+            return  # dictation is Linux-only for now
+        from akousousin_backend import models
+        model = config['stt_model']
+        if models.installed(model) or (model == 'turbo' and models.installed('small')):
             try:
-                saved = self.desktop_preferences.load()
+                self.input.prepare()
+            except BlockingIOError:
+                pass  # the user is already dictating, which loads it anyway
             except Exception as error:
-                self.error = 'Could not restore desktop shortcuts: ' + str(error)
-                return
-            for key, command in (('dictation_enabled', 'stt-desktop-enable'),
-                                 ('reading_enabled', 'selection-shortcuts-enable')):
-                if saved[key] and not self.closed:
-                    try:
-                        self.request({'command': command})
-                    except Exception as error:
-                        self.error = 'Could not restore desktop shortcuts: ' + str(error)
+                self.error = 'Could not load dictation: ' + str(error)
 
     def speaking(self):
         now = time.monotonic()
@@ -65,7 +102,7 @@ class Sessions:
         operation = request['command']
         if operation == 'stt-prepare':
             self.input_owned = True
-            self.input.prepare()
+            self.input.prepare(download=request.get('download') is True)
         elif operation == 'stt-start':
             seconds = request.get('seconds')
             if seconds is not None and (isinstance(seconds, bool) or not isinstance(seconds, int) or not 1 <= seconds <= 30):
@@ -115,10 +152,20 @@ class Sessions:
             raise ValueError('Unknown voice input command')
         result = self.input.status()
         result['desktop'] = {'enabled': bool(self.desktop and self.desktop.enabled),
-                             'state': self.desktop.status if self.desktop else 'Desktop dictation is disabled'}
+                             'state': self.desktop.status if self.desktop else 'Desktop dictation is disabled',
+                             'keys': getattr(self.desktop, 'shortcut_description', '') if self.desktop and self.desktop.enabled else ''}
         return result
 
     def request(self, request):
+        if request.get('command') == 'selection-shortcuts-enable' and os.name != 'nt':
+            # Checking Speech Dispatcher (and restarting it if it lacks our
+            # module) can take many seconds and touches no controller state,
+            # so it runs outside the lock the tray and other requests wait on.
+            if self.closed:
+                raise RuntimeError('Akousousin is shutting down')
+            with self.reading_setup:
+                self.selection.enable()
+            return self.selection.status()
         with self.lock:
             operation = request['command']
             self.panels = [panel for panel in self.panels if panel.poll() is None]
@@ -160,6 +207,9 @@ class Sessions:
             elif operation == 'wake':
                 self.service.start(port)
                 self.on_demand = True
+            elif operation == 'background':
+                # Started at login: stay running in the tray with no window.
+                self.independent = True
             elif operation == 'start':
                 self.service.start(port)
                 self.independent = True
@@ -174,12 +224,13 @@ class Sessions:
                 self.panel_activation += 1
                 if not self.panels:
                     self.panels.append(subprocess.Popen(runtime.command('--panel', '--settings', str(self.path)), env=runtime.environment()))
-            elif operation == 'voice':
-                pending = settings.select_voice(self.path, request['voice'])
+            elif operation in ('voice', 'language-voice'):
+                pending = settings.select_voice(self.path, request['voice'], language_only=operation == 'language-voice')
                 return {'pending_registration': pending}
             elif operation != 'status':
                 raise ValueError('Unknown Akousousin command')
             return {'sessions': len(self.owners), 'running': bool(self.service.health(port)),
+                    'login_session': self.login_session,
                     'independent': self.independent, 'closed': self.closed,
                     'panels': [panel.pid for panel in self.panels]}
 
@@ -244,9 +295,9 @@ class Sessions:
 
 def run(path):
     from PySide6.QtCore import QCoreApplication, QLockFile, QObject, QTimer, Signal, Qt
-    from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
+    from PySide6.QtGui import QIcon
     from PySide6.QtNetwork import QLocalServer
-    from PySide6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
+    from PySide6.QtWidgets import QApplication, QMessageBox
     from shiboken6 import isValid
     graphical = os.name == 'nt' or bool(os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY'))
     if graphical and os.name != 'nt':
@@ -299,7 +350,7 @@ def run(path):
         elif 'error' in response and graphical:
             QMessageBox.warning(None, 'Akousousin', response['error'])
         elif response.get('pending_registration') and graphical:
-            QMessageBox.information(None, 'Akousousin', 'Default saved. Apply voice registration in Configure → Settings.')
+            QMessageBox.information(None, 'Akousousin', 'Default voice saved. Restart Windows apps so they use it.')
         if state.closed:
             # Reject new clients immediately, before potentially slow backend
             # cleanup. A restarting caller must connect to a fresh controller.
@@ -338,48 +389,35 @@ def run(path):
         socket.readyRead.connect(read)
         read()
     server.newConnection.connect(accept)
-    tray = QSystemTrayIcon() if graphical else None
-    if tray:
-        tray.setToolTip('Akousousin — Neural Voice Engine')
-        tray.setIcon(QIcon(str(resources.root() / 'akousousin.png')))
-        menu = QMenu()
-        toggle = menu.addAction('Start Speech')
-        toggle.triggered.connect(lambda: submit({'command': 'stop' if toggle.text() == 'Stop Speech' else 'start'}))
-        dictation_toggle = menu.addAction('Start Dictation')
-        dictation_toggle.triggered.connect(lambda: submit({'command': 'stt-toggle'}))
-        voices = menu.addMenu('Default Voice')
-        def populate():
-            voices.clear()
-            config = settings.load(path)
-            from .languages import label
-            groups = {}
-            for identifier, voice in sorted(config['voices'].items(), key=lambda item: (label(item[1]['language']), item[1]['name'])):
-                group = groups.setdefault(voice['language'], None)
-                if group is None:
-                    group = groups[voice['language']] = voices.addMenu(label(voice['language']))
-                action = group.addAction(voice['name'])
-                action.setCheckable(True)
-                action.setChecked(identifier == config['voice'])
-                action.triggered.connect(lambda checked=False, key=identifier: submit({'command': 'voice', 'voice': key}))
-        voices.aboutToShow.connect(populate)
-        downloads_action = menu.addAction('No downloads')
-        downloads_action.setEnabled(False)
-        downloads_action.setVisible(False)
-        update_action = menu.addAction('Update available…', lambda: submit({'command': 'configure', 'page': 'Updates'}))
-        update_action.setVisible(False)
-        menu.addAction('Configure', lambda: submit({'command': 'configure'}))
-        def quit_requested():
-            if (state.owners or state.service.health(settings.load(path)['port'])) and QMessageBox.question(None, 'Quit Akousousin?',
-                    'Speech is in use. Quit and stop Piper, interrupting speech?') != QMessageBox.Yes:
-                return
-            submit({'command': 'quit'})
-        menu.addAction('Quit', quit_requested)
-        tray.setContextMenu(menu)
-        def activate_tray(reason):
-            if reason == QSystemTrayIcon.Trigger:
-                submit({'command': 'stt-toggle'})
-        tray.activated.connect(activate_tray)
-        tray.show()
+    tray_watcher = None
+    if graphical and os.name != 'nt':
+        # Qt picks its tray backend when the icon is created. If the desktop's
+        # D-Bus tray is still starting (as at login), X11 falls back to an
+        # XEmbed icon that never moves to StatusNotifier, and Wayland, which
+        # has no fallback, shows nothing at all. Recreate it once the tray is up.
+        from PySide6.QtDBus import QDBusConnection, QDBusServiceWatcher
+        bus = QDBusConnection.sessionBus()
+        watcher_name = 'org.kde.StatusNotifierWatcher'
+        if bus.isConnected():
+            tray_watcher = QDBusServiceWatcher(watcher_name, bus, QDBusServiceWatcher.WatchForRegistration, app)
+            if bus.interface().isServiceRegistered(watcher_name).value():
+                tray_watcher.deleteLater()
+                tray_watcher = None
+    tray = None
+    if graphical:
+        from .qt_locale import install_translators
+        from .ui.tray import Tray
+        install_translators(app)
+
+        def in_use():
+            return bool(state.owners or state.service.health(settings.load(path)['port']))
+        tray = Tray(path, submit, in_use)
+        if tray_watcher is not None:
+            def attach_to_desktop(_service):
+                tray.create()
+                # Qt now owns the D-Bus icon and handles subsequent restarts.
+                tray_watcher.deleteLater()
+            tray_watcher.serviceRegistered.connect(attach_to_desktop)
 
     def notify_update(candidate):
         nonlocal update_dialog
@@ -425,63 +463,46 @@ def run(path):
             config = settings.load(path)
             health = state.service.health(config['port'])
             running = bool(health and health.get('ready'))
-            status = 'Idle' if running and health.get('model_loaded') is False else 'Running' if running else 'Stopped'
-            if state.service.process is not None and state.service.process.poll() is None and not running:
-                status = 'Starting'
-            if state.service.process is not None and state.service.process.poll() not in (None, 0) and not running:
-                status = 'Error'
-            if state.error and not running:
-                status = 'Error'
+            failed = state.service.process is not None and state.service.process.poll() not in (None, 0) and not running
             input_status = state.input.status()
-            candidate = update_monitor.tick(quiet=bool(input_status['busy'] or (health and health.get('speaking')) or state.selection.status()['reading']))
+            reading = state.selection.status()
+            candidate = update_monitor.tick(quiet=bool(input_status['busy'] or (health and health.get('speaking')) or reading.get('reading')))
             if candidate:
                 notify_update(candidate)
-            available = updates.available_update(path)
-            update_action.setVisible(bool(available))
-            if available:
-                update_action.setText('Update available: ' + available['version'] + '…')
-            from .download_status import current, caption
-            downloads = current()
-            active_downloads = [item for item in downloads if item['status'] == 'active']
-            failed_downloads = [item for item in downloads if item['status'] == 'error']
-            color = {'Idle': '#737b80', 'Running': '#20a45b', 'Stopped': '#737b80', 'Starting': '#e3aa26', 'Error': '#bd3838'}[status]
-            if input_status['busy']:
-                color = '#e3aa26' if input_status['phase'] in ('loading', 'opening') or input_status['state'].startswith('Paused') else '#d94747' if input_status['phase'] == 'listening' else '#327bd2'
-            pixmap = QPixmap(str(resources.root() / 'akousousin.png')).scaled(64, 64)
-            painter = QPainter(pixmap)
-            painter.setBrush(QColor(color))
-            painter.setPen(QPen(QColor('white'), 3))
-            painter.drawEllipse(44, 44, 18, 18)
-            if active_downloads:
-                item = active_downloads[0]
-                painter.setPen(QPen(QColor('#327bd2'), 6))
-                progress = item['completed'] / item['total'] if item['total'] else None
-                painter.drawArc(4, 4, 56, 56, 90 * 16,
-                                -max(1, int(min(1, progress) * 360 * 16)) if progress is not None else -100 * 16)
-                painter.drawLine(32, 22, 32, 42)
-                painter.drawLine(23, 33, 32, 42)
-                painter.drawLine(32, 42, 41, 33)
-            elif failed_downloads:
-                painter.setBrush(QColor('#bd3838'))
-                painter.drawEllipse(4, 4, 18, 18)
-            painter.end()
-            tray.setIcon(QIcon(pixmap))
-            detail = '\n'.join(caption(item) for item in downloads)
-            reading = state.selection.status()
-            if reading['reading']:
-                detail += ('\n' if detail else '') + reading['state']
-            tray.setToolTip('Akousousin · ' + status + '\nVoice input: ' + input_status['state'] + ('\n' + detail if detail else ''))
-            downloads_action.setVisible(bool(downloads))
-            downloads_action.setText(detail or 'No downloads')
-            pending_input = bool(state.desktop and state.desktop.start_requested)
-            dictation_toggle.setText('Stop Dictation' if input_status['busy'] or pending_input else 'Start Dictation')
-            toggle.setText('Stop Speech' if running else 'Start Speech')
+            from .download_status import current
+            tray.update(running=running, dictation=input_status, reading=reading,
+                        pending=bool(state.desktop and state.desktop.start_requested), downloads=current(),
+                        available=updates.available_update(path),
+                        problem=bool((state.error and not running) or failed or input_status.get('phase') == 'error'))
     timer = QTimer()
     timer.timeout.connect(tick)
     timer.start(1500)
     tick()
     if graphical and os.name != 'nt' and os.environ.get('WAYLAND_DISPLAY'):
         QTimer.singleShot(0, lambda: threading.Thread(target=state.restore_desktop_shortcuts, daemon=True).start())
+    if graphical and os.name != 'nt':
+        # Leave with the desktop. Plasma asks Qt to survive a compositor exit,
+        # so at logout nothing else would stop this controller; the next login
+        # would then reach a controller with no screen, tray or live shortcuts.
+        from . import login_session
+        state.login_session = login_session.current()
+        if state.login_session:
+            def check_login():
+                if not state.closed and not login_session.running(state.login_session):
+                    import logging
+                    logging.warning('Login session %s ended; quitting', state.login_session)
+                    submit({'command': 'quit'})
+            session_timer = QTimer()
+            session_timer.timeout.connect(check_login)
+            session_timer.start(3000)
+    # Let the tray appear first, then load models in the background.
+    QTimer.singleShot(1000, lambda: threading.Thread(target=state.get_ready, daemon=True).start())
+    try:
+        from . import startup
+        startup.refresh()
+    except Exception:
+        import logging
+        logging.exception('Could not update the start-at-login entry')
     try:
         app.exec()
     finally:

@@ -3,111 +3,96 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
-# Akousousin — Neural Voice Engine
+# Akousousin
 
-**akousousin:** *The unified neural speech engine for Linux, implementing Microsoft SAPI and Speech Dispatcher, based on Piper and Whisper.*
+**Natural-sounding speech and dictation for the Linux desktop.** Hear any text
+read aloud, dictate into any app, and give Windows apps running in Wine a
+voice. Everything runs on your computer.
 
-**Main version: 0.7.0b5 beta.** [Downloads and release notes](https://github.com/jg00dman/akousousin/releases).
+**[Download Akousousin 0.9](https://github.com/jg00dman/akousousin/releases/latest)** ·
+[User guide](standalone/README.md) · [Screenshots](docs/SCREENSHOTS.md) ·
+[What's new](standalone/RELEASE-NOTES.md)
 
 <!-- akousousin-screenshot:start -->
-![Akousousin 0.8.3 control panel showing the speech service, voice preview and desktop reading navigation](docs/images/control-panel.png)
+![Akousousin 0.9.0 control panel: the Home page, with reading aloud and dictation ready](docs/images/control-panel.png)
 <!-- akousousin-screenshot:end -->
 
-[More screenshots: Voice Input, recording controls and Read selection](docs/SCREENSHOTS.md).
+## The name
 
-Core speech output works through 64-bit SAPI (Wine and native Windows) and the
-native Linux Speech Dispatcher output module. On-demand startup, idle model
-unloading and control-panel update checks are included. Neither output interface
-has full API coverage.
+**ἀκούσουσιν** (*akousousin*) is Greek for “they will hear”, from John 5:25:
+*“the dead will hear the voice of the Son of God, and those who hear will live.”*
 
-This beta adds **experimental local Whisper voice input on Linux**, a Voice Input
-panel and KDE Wayland shortcut dictation. Microphone discovery, recording and
-insertion into Kate and a chat text field were desktop-tested on Kubuntu 26.04
-Wayland. SAPI recognition and native Windows microphone capture are not implemented.
-See the [Voice Input guide](recognition/PANEL-TESTING.md) and
-[dictation implementation and acceptance checks](recognition/DICTATION.md).
+Akousousin began as part of the effort to run Logos Bible Software on Linux
+through Wine. That work exposed a wider gap: Linux desktops had no good
+built-in way to hear text read aloud naturally or to dictate. Akousousin grew to
+fill it, for any app. Support for the biblical languages, Greek and Hebrew, is
+the goal for version 1.0.
 
-The name comes from Greek **ἀκούσουσιν**, “they will hear” (John 5:25).
+## What it does
 
-| API area | Implemented | Partial / remaining |
-| --- | --- | --- |
-| SAPI engine integration | COM activation, voice tokens/enumeration, `ISpTTSEngine` and `ISpObjectWithToken` | Application-facing SAPI is supplied by Windows/Wine; not a complete SAPI implementation |
-| SAPI speech output | Text/Unicode, voices, rate, volume, silence, async host use, cancellation and cold startup | Language hints and limited XML effects; full pause/resume, skip, word events, pitch, phonemes/visemes and general SSML incomplete or unsupported |
-| Speech Dispatcher output | Server audio, voice/language selection, rate/volume, text, characters/keys, cancellation and lifecycle events | Daemon owns queues/priorities; no separate speechd server |
-| Orca and reading feedback | SSML text/entities, coarse index marks, punctuation and spelling fallback | Exact word highlighting, full resume-position validation, localized symbols and sound icons remain |
-| Shared runtime and updates | Piper, voice library/preferences, on-demand loading, idle unloading, optional registration, update checks and Linux AppImage updates | AppImage-only weekly checks and stable/beta selection; other packages use their installation source; speechd pitch and functional debug/log-level controls are absent |
-| Speech input | Experimental multilingual Whisper recognition, microphone/language selectors and KDE Wayland dictation | Linux capture only; SAPI recognition, spoken punctuation commands and document proofing-language tagging are not implemented |
+- **Read aloud, anywhere.** Select text in any app and press a shortcut to hear
+  it. Press again to stop.
+- **Dictate into any app.** Press a shortcut and speak; your words are typed
+  where you are working.
+- **Voices for Windows apps in Wine.** Apps such as Logos use Akousousin through
+  SAPI, the Windows speech system, with no changes to Wine itself.
+- **Voices for Linux apps and screen readers.** Orca, Firefox and other apps
+  that use Speech Dispatcher can speak with Akousousin voices.
+- **Private by design.** Text and recordings never leave your computer. There
+  are no accounts and no tracking.
 
-See **[API coverage and implementation status](COMPATIBILITY.md)** for the
-command/interface matrix, unsupported operations and validation evidence.
-We report feature coverage rather than an invented percentage of the full APIs.
+## Why not just Piper and Whisper?
 
-Global selected-text reading is available on KDE Wayland through the Read selection
-page. It needs Speech Dispatcher and wl-clipboard; Wine applications may require
-the explicit copied-text fallback. Suggested global shortcuts are **Ctrl+Alt+R**
-(selected text / stop) and **Ctrl+Alt+Shift+R** (copied text / stop), subject to KDE
-approval. See the [setup guide](standalone/README.md#global-read-selected-text--stop)
-and [beta test checklist](standalone/BETA-TESTING.md).
+[Piper](https://github.com/OHF-Voice/piper1-gpl) makes speech and
+[Whisper](https://github.com/openai/whisper) recognises it. Both are excellent
+engines, but on their own they are command-line tools. Akousousin builds them
+into the desktop:
 
-## Download and install
+| You get | What Akousousin adds |
+| --- | --- |
+| One voice everywhere | A single voice library and settings shared by Wine apps, Linux apps, Orca and your own shortcuts |
+| Windows apps that speak | A SAPI speech engine registered in your Wine prefix, with rollback |
+| Linux apps that speak | A Speech Dispatcher module, set up for you and easy to remove |
+| Shortcuts that work in every app | Global shortcuts through your desktop's own approval (Plasma and GNOME on Wayland) |
+| Dictation that types for you | Microphone handling, speech detection and typing into the focused app |
+| 178 voices in 53 languages | Browse, preview and download voices, each with its licence |
+| Something you can just use | A control panel, a tray icon, start at login, and models kept ready |
 
-Download the [Linux AppImage (recommended)](https://github.com/jg00dman/akousousin/releases).
-A [standalone Linux tar.gz](standalone/README.md#standalone-linux-tar-installation-no-appimage-runtime-or-fuse)
-with a per-user installer is available when AppImage/FUSE support is unavailable.
-The Windows ZIP is experimental; complete Windows support is forthcoming.
-[Installation and configuration instructions](standalone/README.md) cover paths,
-voices, Wine-prefix registration, launcher commands and rollback.
+## Install
 
-The Linux package contains the voice engine, control panel, tray and Piper backend,
-including the reviewed `en_US-ljspeech-medium` starter voice (about 64 MB) for
-immediate speech on a fresh installation. Additional voices download on demand,
-or you can import a local model. A lean build without the starter remains available
-as a build option. The package does not contain Wine.
-Existing voice choices are preserved. Other models retain their own licence terms.
-The build target remains x86-64 Linux with glibc 2.35+ (Ubuntu 22.04), and existing
-working 64-bit Wine prefixes. Wine compatibility DLLs stay in the AKS directory;
-SAPI COM registrations select them without changing Wine system DLLs or PATH.
-Native Windows system SAPI is not replaced.
+Download from the [latest release](https://github.com/jg00dman/akousousin/releases/latest):
 
-Akousousin uses one configuration per user. On Linux, config is under
-`~/.config/Akousousin`, downloaded voices under `~/.local/share/Akousousin`,
-and logs under `~/.local/state/Akousousin`. The AppImage runs wherever you place
-it; `~/.local/share/Akousousin/Akousousin-x86_64.AppImage` is the recommended path.
-XDG overrides are respected. Closing the panel leaves speech available; Quit stops
-Piper and exits the resident application. SAPI can start speech on demand without
-launcher lifecycle hooks. An optional session interface remains available to clients.
+- **AppImage** (recommended): make it executable and open it. Akousousin
+  offers to install itself and add a menu entry.
+- **Linux tar.gz**, for systems without AppImage support: extract it and run
+  `./install.sh`.
+- **Windows ZIP**: experimental. Full Windows support is still to come.
 
-## Implementation and validation
+Needs 64-bit Linux with glibc 2.35 or newer (Ubuntu 22.04, SteamOS 3 and most
+current distributions), and PipeWire or PulseAudio. An English voice is included;
+others download when you choose them. See the [user guide](standalone/README.md)
+for details.
 
-The standalone [engine](engine/) implements public Windows COM/SAPI interfaces.
-Those standard API names and contracts are unchanged by the project rebrand.
-The [control panel and controller](standalone/) manage voices and backend sessions.
-The panel uses Tkinter; the tray/controller uses PySide6 (Qt 6). Speech Dispatcher
-output for Orca does not establish control-panel accessibility; comprehensive
-Orca/AT-SPI support remains future work.
-[CI](.github/workflows/standalone.yml) cross-compiles the engine and tests packages
-on Wine and Windows without compiling Wine. The CI suite checks controller and recognition lifecycle, cancellation, actual GUI
-scrolling and recording actions, portal protocol behavior, packaged panel shutdown,
-Wine/Windows integration and failures, real Piper output, registration refresh and rollback.
-Linux checks also exercise a real speechd daemon, packaged Whisper inference and verified AppImage updating.
+## Status
 
-The [Wine patches](patches/) and [Wine build workflow](.github/workflows/appimage.yml)
-remain available for custom Wine builds. Wine compilation belongs in GitHub Actions,
-not the cloud development environment. Matching sources and licence notices
-accompany downloadable packages. Engine code is LGPL-2.1-or-later; panel/service
-and Piper are GPL-3.0-or-later; dependency and voice notices are included.
+Version 0.9 is a stable release. Not yet done:
 
-The next output milestones are exact alignment-backed word events, more complete
-pause/resume behaviour and broader speech markup/accessibility support.
-SAPI recognition and a future native input framework remain separately scoped. See the
-[Speech Dispatcher desktop checklist](standalone/SPEECH-DISPATCHER.md#desktop-acceptance-checklist)
-for ongoing Orca and application testing.
+- Greek and Hebrew voices and dictation, planned for 1.0.
+- Dictation into other apps on X11. Reading shortcuts work there through a
+  desktop action you bind to keys yourself.
+- Speech recognition for Windows apps, and native Windows dictation.
 
-## Licensing
+Detailed API coverage is in [COMPATIBILITY.md](COMPATIBILITY.md).
 
-Original Akousousin project source is **GPL-3.0-or-later**, copyright 2026 John
-Goodman. The SAPI engine C implementation and API headers are **LGPL-2.1-or-later**;
-Wine copyright notices are retained. Dependencies, imported code, models and Wine
-patches retain their own licences. See [LICENSE](LICENSE), the
-[LGPL text](LICENSES/LGPL-2.1-or-later.txt), and [component licensing](LICENSING.md).
-Both application packages include the GPL/LGPL texts and upstream notices.
+## Credits and licence
+
+Speech synthesis by [Piper](https://github.com/OHF-Voice/piper1-gpl) (Open
+Home Foundation). Speech recognition models by OpenAI's Whisper, run with
+[faster-whisper](https://github.com/SYSTRAN/faster-whisper) and CTranslate2.
+Speech detection by [Silero VAD](https://github.com/snakers4/silero-vad).
+
+Akousousin is © 2026 John Goodman, licensed under the GPL-3.0-or-later. The SAPI
+engine's C code is LGPL-2.1-or-later and keeps Wine's copyright notices. Each
+voice has its own licence. See [LICENSING.md](LICENSING.md).
+
+[For developers and translators](docs/DEVELOPMENT.md)

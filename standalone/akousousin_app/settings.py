@@ -9,13 +9,14 @@ import time
 from pathlib import Path
 from akousousin_backend.recognition_config import system_language, default_model, cpu_threads, TIERS
 
-DEFAULTS = {'version': 1, 'voice': 'en_US-ljspeech-medium', 'speed': 1.0, 'volume': 0.8,
+DEFAULTS = {'version': 2, 'voice': 'en_US-ljspeech-medium', 'speed': 1.0, 'volume': 0.8,
             'noise_scale': 0.667, 'noise_w_scale': 0.8, 'book_language': '',
             'language_voices': {}, 'voices': {}, 'wine_prefix': '', 'wine': '', 'port': 5000,
-            'idle_timeout': 300, 'stt_model': default_model(system_language()), 'stt_language': system_language(),
+            'idle_timeout': 0, 'preload': True, 'login_offered': False, 'stt_model': default_model(system_language()), 'stt_language': system_language(),
             'stt_source': '', 'stt_beep': True, 'stt_mode': 'toggle',
             'stt_idle_timeout': 3600, 'stt_threshold': 250, 'stt_cpu_threads': cpu_threads(),
-            'stt_keep_loaded': True, 'stt_config_version': 2, 'update_weekly': True, 'update_betas': True}
+            'stt_keep_loaded': True, 'stt_config_version': 2, 'update_weekly': True, 'update_betas': True,
+            'network_blocked': False, 'voice_samples': True, 'tray_click': 'dictate'}
 
 
 def config_path():
@@ -41,6 +42,12 @@ def load(path):
         if stored.get('stt_idle_timeout', 300) == 300:
             value['stt_idle_timeout'] = 3600
         value['stt_config_version'] = 2
+    if stored and stored.get('version', 1) < 2:
+        # Version 2: be ready by default. The old five-minute voice unload was
+        # the default rather than a choice, so it becomes "never".
+        if stored.get('idle_timeout') == 300:
+            value['idle_timeout'] = 0
+        value['version'] = 2
     value.pop('runtime', None)
     if 'update_betas' not in stored:
         from packaging.version import Version
@@ -51,9 +58,11 @@ def load(path):
 
 
 def validate(value):
-    for key in ("update_weekly", "update_betas"):
+    for key in ("update_weekly", "update_betas", "network_blocked", "voice_samples", "preload", "login_offered"):
         if not isinstance(value.get(key, DEFAULTS[key]), bool):
-            raise ValueError("Invalid update preference: " + key)
+            raise ValueError("Invalid preference: " + key)
+    if value.get('tray_click', 'dictate') not in ('dictate', 'open'):
+        raise ValueError('Invalid tray click preference')
     if value.get('stt_mode', 'toggle') not in ('toggle', 'push-to-talk'):
         raise ValueError('Invalid dictation activation mode')
     for key, low, high in [('stt_idle_timeout', 0, 86400), ('stt_threshold', 1, 10000)]:
@@ -124,12 +133,15 @@ def register(path, prefix, wine):
     save(path, value)
 
 
-def select_voice(path, identifier):
+def select_voice(path, identifier, *, language_only=False):
     value = load(path)
     voice = value['voices'][identifier]
-    value['voice'] = identifier
+    if not language_only:
+        value['voice'] = identifier
     value['language_voices'][voice['language']] = identifier
     save(path, value)
+    if language_only:
+        return []
     # Updating a default needs no DLL replacement. Applications may cache their
     # SAPI voice until restarted, just as they do with Windows voice settings.
     from .install import Installer, VOICES, FULL_TOKEN

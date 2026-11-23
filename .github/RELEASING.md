@@ -17,8 +17,15 @@ checks pass. Normal main pushes do not publish releases. Alternatively dispatch
 Standalone Akousousin with `publish=true`, or use Publish tested standalone
 Akousousin with a completed main run ID to reuse a checked build.
 
+A plain version (such as 0.9.0) is a stable release tagged `v0.9.0` and marked
+latest; anything else is a unique prerelease. To test a stable release before
+anyone is offered it, dispatch Standalone Akousousin with `publish=true` and
+`draft=true`: the release is created as a draft, which the in-app update check
+ignores. Publish the draft once tested.
+
 Release tags contain the version, run ID and attempt; existing releases are not
 overwritten. Each published version must increase for the application's update
-checker. The AppImage, Windows ZIP, corresponding sources, checksums and guides
-are separate assets, so testers can download the program alone. Whisper model
+checker. Releases contain only the AppImage, the Linux tar.gz, the Windows ZIP and
+`SHA256SUMS`. The release body is `standalone/RELEASE-NOTES.md`, which describes
+that release only; `CHANGELOG.md` keeps the history. Whisper model
 weights remain outside the application package.

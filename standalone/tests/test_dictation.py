@@ -213,12 +213,20 @@ class DictationTests(unittest.TestCase):
         self.manager.unload()
         self.assertEqual(self.manager.status()['phase'], 'unloaded')
 
-    def test_failed_first_download_does_not_start_microphone(self):
+    def test_missing_model_is_never_downloaded_by_starting_dictation(self):
+        with patch('akousousin_backend.models.installed', return_value=False), patch.object(Recognition, 'start') as start:
+            self.manager.start(); self.wait()
+        start.assert_not_called()
+        self.assertEqual(Audio.instances, [])
+        self.assertEqual(self.manager.status()['phase'], 'error')
+        self.assertIn('not downloaded', self.manager.status()['state'])
+
+    def test_failed_requested_download_does_not_start_microphone(self):
         def fail(cancelled=None):
             self.assertTrue(self.manager.recognizer.model['download_missing'])
             raise RuntimeError('Download failed')
         with patch('akousousin_backend.models.installed', return_value=False), patch.object(Recognition, 'start', side_effect=fail):
-            self.manager.start(); self.wait()
+            self.manager.prepare(download=True); self.wait()
         self.assertEqual(Audio.instances, [])
         self.assertEqual(self.manager.status()['phase'], 'error')
         self.assertIn('Download failed', self.manager.status()['state'])

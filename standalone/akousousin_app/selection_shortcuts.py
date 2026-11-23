@@ -28,7 +28,7 @@ class ReadingShortcuts(PortalRequests):
         self.stopping = threading.Event()
 
     def start(self):
-        self.status = 'Approve the reading shortcuts in KDE…'
+        self.status = 'Approve the reading shortcuts in your desktop…'
         self.thread = threading.Thread(target=self.run, daemon=True)
         self.thread.start()
 
@@ -57,7 +57,7 @@ class ReadingShortcuts(PortalRequests):
 
     async def setup(self):
         if os.name == 'nt' or not os.environ.get('WAYLAND_DISPLAY'):
-            raise RuntimeError('Automatic global reading shortcuts currently require KDE Wayland; use the desktop action on X11')
+            raise RuntimeError('Automatic global reading shortcuts currently require a Wayland desktop with the GlobalShortcuts portal; use the desktop action on X11')
         from dbus_next.aio import MessageBus
         from dbus_next import Variant
         self.bus = await MessageBus().connect()

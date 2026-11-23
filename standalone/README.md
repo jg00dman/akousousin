@@ -3,462 +3,199 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
-# Akousousin — Neural Voice Engine
+# Akousousin user guide
 
-**akousousin:** *The unified neural speech engine for Linux, implementing Microsoft SAPI and Speech Dispatcher, based on Piper and Whisper.*
+Akousousin reads text aloud and types what you dictate, in any app on your
+Linux desktop, and gives Windows apps in Wine a voice. Everything runs on your
+computer. [Screenshots](https://github.com/jg00dman/akousousin/blob/main/docs/SCREENSHOTS.md)
 
-Akousousin 0.8.3 implements SAPI text-to-speech using Piper, native Linux Speech
-Dispatcher output and experimental local Whisper voice input on Linux. SAPI
-recognition and native Windows microphone capture are not implemented. See the
-[compatibility table](../COMPATIBILITY.md) for the implemented capabilities.
+- [Install](#install) · [First start](#first-start) · [Voices](#voices) ·
+  [Reading aloud](#reading-aloud) · [Dictation](#dictation) · [Apps](#apps)
+- [Startup and memory](#startup-and-memory) · [Privacy](#privacy) ·
+  [Updates](#updates) · [Removing Akousousin](#removing-akousousin)
+- [Files](#where-things-are-kept) · [Command line](#command-line) ·
+  [Troubleshooting](#troubleshooting)
 
+## Install
 
-[Downloads](https://github.com/jg00dman/akousousin/releases) · [Builds and validation](https://github.com/jg00dman/akousousin/actions).
+Download from the [latest release](https://github.com/jg00dman/akousousin/releases/latest).
+You need 64-bit Linux with glibc 2.35 or newer (Ubuntu 22.04, SteamOS 3 and
+most current distributions) and PipeWire or PulseAudio.
 
-One speech service and configuration per operating-system user. This release contains
-the standalone 64-bit SAPI engine, control panel, tray and Piper/Waitress backend.
-The default package includes the reviewed en_US-ljspeech-medium starter voice
-(about 64 MB) for offline first use. It contains no Whisper model weights or Wine
-runtime. Additional voices are available in Voice library. Downloads retain upstream model
-cards, checksum provenance and licence declarations. Voices stay installed in the
-user data folder across upgrades. Existing usable selected voices are preserved.
-An optional lean build omits LJSpeech and offers a first-use download instead.
+**AppImage (recommended).** Make it executable and open it:
 
-## Linux installation and storage
-
-OuDedetai installs the AppImage to `~/.local/share/Akousousin/Akousousin-x86_64.AppImage`.
-When launched from elsewhere, the control panel offers to move the AppImage to
-that location and add an application-menu shortcut with a persistent AKS icon.
-Choose No to keep running portably; Settings → AppImage installation lets you
-retry later. An existing destination requires confirmation before replacement.
-The copy is verified before registrations are refreshed and AKS restarts; the
-unchanged original is removed only after the restart command succeeds. Existing
-voices, models and preferences are kept. Launching an AppImage already at the
-recommended path creates/refreshes its menu shortcut without a move prompt.
-Custom desktop entries are preserved. The header displays the actual AKS icon.
-The Ubuntu 22.04 / x86-64 / glibc 2.35+ build target is unchanged.
-
-- Preferences: `~/.config/Akousousin/settings.json`.
-- Downloaded voices: `~/.local/share/Akousousin/voices/`.
-- Whisper models: `~/.local/share/Akousousin/models/whisper/`, retained between upgrades.
-- Imported Piper models remain in the location you explicitly select. Whisper
-  imports are copied into the persistent Whisper cache.
-- Logs: `~/.local/state/Akousousin/akousousin.log`.
-- Private session/socket/control files: `$XDG_RUNTIME_DIR/Akousousin/`, with a
-  private `/tmp/akousousin-<uid>/Akousousin/` fallback when no runtime directory exists.
-
-XDG directory overrides are respected. Piper and Python stay inside the AppImage.
-Its temporary extraction remains alive while Akousousin runs; no additional runtime
-copy is stored in the data directory. Existing `runtimes/` copies from older betas
-are no longer used. Old OuDedetai-specific settings are not copied implicitly.
-
-Close Logos before registering an existing initialized 64-bit Wine prefix:
-
-```bash
-export APPIMAGE_EXTRACT_AND_RUN=1
-IMAGE="$HOME/.local/share/Akousousin/Akousousin-x86_64.AppImage"
-chmod +x "$IMAGE"
-# Official packages include a starter voice; lean builds can download it explicitly:
-# "$IMAGE" --download-starter-voice
-"$IMAGE" --wine-prefix "$HOME/wine-bisect-prefix/data/wine64_bottle" \
-  --wine "$HOME/akousousin/wine-akousousin-piper-11.21-logos-x86_64.AppImage" --install-only
-"$IMAGE"
+```sh
+chmod +x Akousousin-x86_64.AppImage
+./Akousousin-x86_64.AppImage
 ```
 
-Startup itself never downloads weights. On a fresh installation, the bundled
-starter is copied into the persistent voice library and selected automatically.
-Lean builds instead offer Download starter voice in Overview. You can also import
-an `.onnx` file (matching `.onnx.json` alongside), or review and download one in
-Voice library. Existing working defaults are preserved; stale paths are recovered
-from the verified starter cache where possible, and an unavailable default can
-fall back to a usable installed voice. An explicitly deleted starter stays deleted.
-Select Make default to change the voice, then Settings → Install /
-apply voice registration. Overview → Start server → Play sample tests real Piper and
-playback. Next test Logos Read Aloud using the same Wine package.
+Akousousin offers to move itself to `~/.local/share/Akousousin/` and add a menu
+entry. Choose No to keep it where it is.
 
-## Removing voices and playback speed
-
-Select an installed entry in Voice library and choose **Delete voice…**. Confirm
-before deletion. AKS stops its speech service, removes the library entry and
-cleans its language preferences. Downloaded voice files in the managed cache are
-deleted; imported original files and their configuration files are retained.
-Deleting the default selects another installed voice. Deleting the last voice
-leaves speech unavailable until another is installed; the starter is not silently
-reinstalled. Use **Settings → Install / apply voice registration** afterwards to
-remove stale SAPI voice tokens, and restart applications that cache their lists.
-
-Default speed ranges from **0.5 to 4.0**, in **0.25** steps, with a stepped slider
-and a value control that avoids excessive decimal places. Application rate
-requests still combine with the shared default speed.
-
-## Tray and lifecycle
-
-The original Akousousin waveform artwork is shared by the AppImage, window and tray.
-A tray badge reports stopped, starting, running or error. Downloads add a blue
-arrow/progress ring and their byte counts/percentages to the tooltip and menu;
-failed downloads briefly show a red indicator. The control panel shows a separate
-progress bar for each download across all pages. Known-size transfers use actual
-bytes received; connection, verification and unknown-size stages show activity
-without a guessed percentage. Its menu provides
-Start/Stop Speech, Start/Stop Dictation, Default Voice (grouped by readable
-language names), Configure, Quit. Left-click toggles desktop dictation; right-click
-opens the menu. Configure opens the control panel.
-Default changes apply to subsequent speech; applications caching a SAPI voice may
-need restarting. Newly downloaded voices need registration through Settings.
-
-If Speech Dispatcher registration is saved but restarting fails, the panel offers
-a selectable command with Copy command and separate technical details. Run the
-command in your normal terminal without sudo. Registration/restart uses the host
-system libraries rather than inheriting AppImage library overrides.
-
-Closing the configuration panel leaves Akousousin/Piper running. Tray Quit stops
-Piper, microphone capture, recognition/download workers and portal sessions, closes
-control panels launched by that controller and exits Akousousin. It warns when
-application speech sessions are active. An
-application releasing the last session also stops Piper and exits Akousousin when
-Akousousin was started automatically. An independent/manual start is left running.
-On desktops without a tray, the panel and command interface remain usable.
-
-## Launcher interface, version 2
-
-```bash
-"$IMAGE" --version                                  # application version; exits without starting AKS
-"$IMAGE" --protocol-version                         # prints 2
-"$IMAGE" --configure                                # configuration, no independent ownership
-"$IMAGE" --acquire-session unique-id --owner-pid PID  # start/reuse and wait until ready
-"$IMAGE" --release-session unique-id                 # release only that session
-"$IMAGE" --status                                    # JSON status, does not start anything
-"$IMAGE" --start-server                              # independent/manual start
-"$IMAGE" --stop-server                               # explicit backend stop, tray remains
-"$IMAGE" --quit                                      # stop speech/input, close panels and exit
-"$IMAGE" --dictation-toggle                          # KDE dictation; starts permission setup if needed
-"$IMAGE" --dictation-cancel                          # discard pending dictation
-"$IMAGE" --dictation-status                          # shared voice-input status/transcripts
-"$IMAGE" --read-selection                            # read selected text, repeat to stop
-"$IMAGE" --read-clipboard                            # explicitly read copied text, repeat to stop
-"$IMAGE" --stop-reading                              # stop only the AKS reader
-"$IMAGE" --selection-status                          # reader and global-shortcut status
-"$IMAGE" --install-selection-action                  # optional manually bound desktop action
-```
-
-Use a distinct random ID per application session; repeat acquisition is idempotent.
-The owner must be a running process. Akousousin checks its creation time and reaps
-sessions whose owners exit, including launcher crashes. One session ending never
-stops another's speech. The public commands return nonzero on errors; launchers
-can still run their application without speech. Only Akousousin manipulates its own
-private controller files. `--settings` remains a diagnostic/test override.
-
-## Compatibility and rollback
-
-This release supports 64-bit callers only. Wine prefixes missing the generic
-SAPI enumeration fix use `C:\Program Files\Akousousin\compat\x64\sapi.dll`.
-The installer redirects Wine SAPI COM default values to that private DLL and sets
-`native,builtin`; Wine system DLL files and PATH remain unchanged. Original COM
-default values and the override are saved for rollback/uninstall. The bundled
-compatibility DLL is built from Wine 11.21; installation is not restricted to
-that Wine version. `--wine-compat` retains the option to force its installation.
-Remove launcher-forced `sapi=b` when the compatibility DLL is required.
-
-Settings → Uninstall & restore (or `--uninstall --wine-prefix ... --wine ...`)
-restores original registry settings/defaults and removes or restores AKS-owned
-private DLLs. It keeps voices
-and preferences. Native Windows system SAPI is never replaced: extract the
-Windows ZIP, use the same control panel/tray, and register with `--install` from
-an administrator terminal. Windows data/config are under LocalAppData/Akousousin.
-
-To remove Akousousin completely, as if it had never been installed, run
-`akousousin --purge` (add `--yes` to skip the question). It quits AKS, restores
-the Wine speech registration, removes its Speech Dispatcher module, launchers and
-the tar installation, and deletes all voices, speech models and settings.
-
-Language routing uses SAPI hints or a manually selected book language; automatic
-foreign-word detection and full localisation are not implemented. Standard Piper
-has no general pitch slider. Arabic/Hebrew auxiliary Piper output models are not distributed. This is separate
-from multilingual Whisper input, which includes those language tokens but has
-variable recognition accuracy. Model licences
-vary; upstream cards and provenance are retained when downloading.
-
-Original project code is GPL-3.0-or-later, copyright 2026 John Goodman, with
-LGPL-2.1-or-later for the SAPI engine C code/API headers. Wine, Piper, Qt/PySide
-and other dependencies retain their upstream terms and notices. Both application
-packages include the GPL and LGPL texts and the component-licensing explanation. The source archive
-includes matching Wine, Piper, eSpeak, Qt and PySide sources. Automated deterministic
-WAV checks, real Piper output and session tests do not establish audible playback
-or every Logos desktop behavior; test in a backed-up prefix.
-
-## Checking for application updates
-
-If a saved Wine executable/AppImage has been removed, registration refresh skips
-that entry with a warning and continues updating other integrations. The warning
-appears in the panel status and Updates page; its saved registration is retained
-for repair in Settings. Other registration errors still fail the update. During
-relocation the original AKS download is retained if skipped registrations might
-still reference it. Correct the Wine path and apply registration for that prefix
-before removing the old download. This behaviour is in source after beta 10.
-
-Update checks and notifications are available in every format. Only an AppImage
-launch offers installation of application updates. Standalone tar, Flatpak,
-distro packages, Windows ZIP and source installations link to the release download
-page and use their installer or software manager instead. Voice/model downloads remain
-available independently in every format. Packaging records its distribution type
-in `resources/build.json`; AppImage controls also require a valid executable
-`APPIMAGE` path. A renamed executable alone does not enable self-updating.
-
-## Standalone Linux tar installation (no AppImage runtime or FUSE)
-
-AppImage remains the recommended/default Linux download. Alternatively download
-`Akousousin-Linux-x86_64.tar.gz` (not the corresponding-sources archive). The tar
-bundle includes the same application, Python runtime, private dependencies,
-clipboard helpers and GPL/LGPL/dependency licence notices. It does not include
-Wine or voice/model weights by default. It requires x86-64 Linux with glibc 2.35+
-and the same host audio/desktop capabilities as the AppImage.
-
-Quit AKS from its tray, then extract and install without sudo:
+**Linux tar.gz**, for systems without AppImage support. No root needed:
 
 ```sh
 tar -xzf Akousousin-Linux-x86_64.tar.gz
-cd Akousousin
-./install.sh
-~/.local/bin/akousousin --configure
+Akousousin/install.sh
 ```
 
-After installation, `install.sh` offers to launch the installed control panel
-when run in a terminal. The default answer is No. Use `./install.sh --quiet` to
-skip this question during automated installation; errors are still reported.
-Non-interactive installations do not prompt or launch the application.
+It installs to `~/.local` and adds a menu entry.
 
-The installer creates the application-menu entry and icon by default. It also
-invokes the installed AKS executable's `--install-speech-dispatcher` command:
-this is the same setup implementation used by the panel, not a second installer
-configuration path. With an installed voice, AKS becomes the default output
-module; existing eSpeak, Spiel and other engines stay available. With no voice,
-the module is registered and default selection is deferred until the first voice
-download/import completes. No model is downloaded by the installer.
+**Windows ZIP.** Experimental and not yet complete; dictation and shortcuts are
+not available on Windows yet.
 
-Use `./install.sh --without-speech-dispatcher` to skip this setup. `--quiet` only
-suppresses the launch question. If the daemon is missing or cannot restart, the
-application installation remains valid and the installer prints recovery details;
-the panel also retains setup warnings. Speech Dispatcher itself is a host package
-and is not installed using sudo by AKS.
+## First start
 
-The per-user installer places executables/private libraries in
-`~/.local/lib/akousousin`, a launcher in `~/.local/bin`, and a menu entry and icon
-under `${XDG_DATA_HOME:-$HOME/.local/share}`. If `~/.local/bin` is not on PATH,
-use the full launcher path or application-menu entry. `./install.sh
---bundle-prefix /absolute/path` changes the executable prefix; XDG_DATA_HOME still
-controls desktop integration. This is a per-user installer, not a system package
-installer; root execution is rejected. It uses its own bundled runtime and does
-not require system Python.
+An English voice is included, so Akousousin can speak straight away. The first
+time the window opens, it asks whether to **start at login**. Say yes, and
+Akousousin waits in the tray with its shortcuts working, without a window.
 
-For upgrades, quit AKS, extract the new archive separately and rerun its installer
-with the same prefix and XDG environment. Installation stages a complete copy,
-preserves the previous installation for rollback during replacement, and rejects
-unowned/conflicting launcher files. Voice/model caches and configuration retain
-their existing XDG locations. Wine registration remains explicit in Settings;
-Speech Dispatcher setup uses the shared AKS command described above.
+The **Home** page shows whether reading aloud and dictation are ready. Try both
+there before setting up shortcuts.
 
-Run `~/.local/lib/akousousin/uninstall.sh` to remove this application installation.
-It removes unchanged installer-owned launchers/icons and restores any previous
-managed AKS desktop entries. Modified external files, configuration, downloaded
-models/voices and Wine registrations are preserved. Bundle removal invokes AKS's
-own removal command for Speech Dispatcher only if its managed launcher points to
-that installed executable; other engines and their original default are retained.
-If removing AKS entirely, first remove its Wine registrations using Settings.
-Quit AKS before uninstall.
-The tar update notification opens the release page; rerun the new installer to
-upgrade. It cannot perform AppImage replacement.
+## Voices
 
-On the Updates page:
+The **Voices** page lists 178 voices in 53 languages.
 
-- **Check for updates weekly** is enabled by default. Checks run quietly while AKS
-  is running and remember their timing across restarts. Failed checks retry after
-  an hour. Turning this off leaves manual Check for updates available.
-- **Show beta testing updates** defaults on for beta installations and off for
-  stable installations; saved choices survive upgrades. Turning it off offers
-  only newer stable releases. An installed `0.7.0b1` stays installed until stable
-  `0.7.0` or a later stable release is available; it never downgrades to `0.6.x`.
-- Automatic notifications offer **Update now…** (opens Updates for review and
-  installation) and **Remind me later** (one week). They wait while AKS is speaking,
-  reading or processing dictation. The tray also shows an available-update action.
-  Neither checking nor notification installs an update automatically.
+- Select a voice to hear a sample, then **Download** it. Its licence is shown
+  first.
+- **Make default voice** sets the voice used when an app doesn't say which language
+  it needs.
+- **Use for [language]** sets the voice for that language. Apps that ask for a
+  language get that language's voice.
+- Speed and volume are on the same page.
+- **Import a Piper voice…** adds a voice you already have (an `.onnx` file
+  with its `.onnx.json` beside it).
 
-Accepting an update downloads and verifies its SHA-256 and size before stopping
-speech. The shared panel/tray progress shows Downloading update with byte counts,
-then indeterminate Verifying update, Applying update and an explicit restarting
-warning for three seconds. After relaunch the panel briefly confirms the installed
-version. Close Wine applications first; voices, models and preferences are retained.
+## Reading aloud
 
-The AppImage is replaced at its registered path and saved SAPI registrations are
-refreshed. The previous image is kept alongside it as `.AppImage.previous`; a
-failed registration restores the previous image and attempts to restore its
-registrations. A second simultaneous update is refused. Speech starts on demand
-as usual. Release tags include a package version; older run-number-only tags are
-not offered as updates. Each new release must increase the package version.
+On **Shortcuts**, choose **Turn on** for the reading shortcuts and approve them
+when your desktop asks.
 
-## HTTPS certificates on SteamOS and other Linux distributions
+- **Ctrl+Alt+R** reads the text you have selected. Press it again to stop.
+- **Ctrl+Alt+Shift+R** reads copied text. Use this for apps, including some
+  Windows apps, where selecting is not enough: copy with Ctrl+C first.
 
-Downloads verify both the certificate chain and hostname. The application loads
-standard host CA bundles, including SteamOS/Arch's `/etc/ssl/cert.pem` and
-`/etc/ca-certificates/extracted/tls-ca-bundle.pem`, rather than depending only on
-Ubuntu's compiled OpenSSL paths. Explicit `SSL_CERT_FILE` / `SSL_CERT_DIR` settings
-are honoured. A missing or invalid custom trust store is not bypassed.
+You can change the keys in your desktop's shortcut settings. Turning on the
+reading shortcuts also sets up [Speech Dispatcher](#linux-apps-and-screen-readers).
+On desktops that don't offer to approve shortcuts, choose **Add desktop action**
+on the Shortcuts page and bind it to keys yourself.
 
-For an older AppImage reporting `CERTIFICATE_VERIFY_FAILED: unable to get local
-issuer certificate` on SteamOS, quit AKS fully and launch it with the host bundle:
+## Dictation
 
-```sh
-SSL_CERT_FILE=/etc/ssl/cert.pem "$HOME/.local/share/Akousousin/Akousousin-x86_64.AppImage"
-```
+Dictation types what you say into the app you are using. It needs Plasma or
+GNOME on Wayland. On GNOME, also set up the Akousousin Focus extension shown on
+the Dictation page, so dictation knows which window to type into.
 
-Use the actual AppImage path if running it from Downloads. This keeps certificate
-verification enabled and requires no root access or system changes. If a network
-uses a custom certificate authority, use its administrator-provided trust bundle
-instead of disabling verification.
+1. On **Dictation**, choose a model under **Speed and accuracy** and
+   **Download** it: Fastest, Balanced or Most accurate. Larger models are more
+   accurate but slower; Balanced suits most computers.
+2. Choose **Set up shortcut** and approve it. The suggested keys are
+   **Ctrl+Alt+Space**.
+3. Choose **Hold to talk** (speak while holding the keys) or **Press to start
+   and stop**.
+4. Check the **language** and **microphone**. The level bars move when the
+   microphone hears you.
 
-## Experimental Voice Input on Linux
+Use **Try it** on the Dictation page to dictate without typing into another
+app. You can also click or tap the tray icon to start and stop dictation.
 
-![Voice Input model and dictation setup](../docs/images/voice-input.png)
+## Apps
 
-This setup screenshot uses an isolated profile with the model unloaded. The
-[recording controls screenshot](../docs/images/voice-input-recording.png) shows
-the lower part of this scrollable page.
+### Windows apps in Wine
 
-Recognition uses **faster-whisper with CTranslate2**, CPU int8 and one killable
-worker. It does not ship the original OpenAI Whisper Python package or PyTorch.
-Base.en is the compact English default, and multilingual Base is the default for
-other supported locales. Small/Small.en are quality options. Turbo requires a
-converted local import and is not presented as a CPU speed option; a failed
-Turbo load falls back to installed Small.
+On **Apps**, choose **Add a Wine prefix…**, pick the prefix your Windows app
+is installed in, then **Register voices**. Restart the app so it sees the
+voices. Logos users: choose your Logos prefix, then use Logos Read Aloud as
+usual.
 
-Install `pulseaudio-utils` for `parec`/`paplay`; PipeWire remains your audio server
-through its PulseAudio-compatible service. Enable voice input downloads the
-selected pinned weights once if necessary and loads them. Disable stops
-recognition and frees model memory, retaining downloads. Wait for the ready state
-and two optional 300 Hz tones before speaking. Test ready sound checks playback
-separately. Tones use cached, seekable WAV audio with a short device-wake lead-in.
+Akousousin doesn't change Wine's own files. **Remove…** restores the prefix as
+it was. After downloading new voices, choose **Update** so Windows apps see
+them.
 
-Choose a named microphone or System default, and a language from the searchable,
-scrollable picker. The initial language follows the supported system locale.
-Multilingual (auto) explicitly detects the first nonempty phrase, then locks its
-language for the rest of that recording session. Starting a new session detects
-again. Start recording tests ten seconds and displays text.
+### Linux apps and screen readers
 
-Capture uses an adaptive energy endpointer with approximately 500 ms silence and
-an 8-second cap. Endpointed input skips Whisper's redundant VAD pass; standalone
-WAV transcription retains neural VAD. The read-only transcript display retains up to 200 phrases within its size limit.
-Ctrl+A selects its contents; Copy transcript includes measurements.
-Per-phrase timing shows voiced duration,
-endpoint wait, audio length, recognition queue wait, recognition time, insertion
-queue wait and insertion time. Timings also include estimated speech end to
-recognition and first/last acknowledged key.
-The speech end estimate uses the last above-threshold microphone frame; key
-acknowledgements cannot measure when another application renders its text.
-Recent transcripts stay in memory; numeric timings
-and outcomes are logged without dictated text. Spoken punctuation commands are
-not interpreted.
+On **Apps**, turn **Speech Dispatcher** on. Orca, Firefox's Read Aloud and
+other apps that use Speech Dispatcher can then use Akousousin voices. Your
+other speech engines stay available, and turning it off restores the previous
+default. Speech Dispatcher restarts when you change this, so Orca pauses for a
+moment.
 
-On KDE Wayland, enable desktop shortcuts and approve KDE's shortcut and keyboard
-input dialogs. The proposed shortcut is Ctrl+Alt+Space, subject to KDE approval.
-After successful approval, AKS remembers that desktop dictation is enabled and
-restores its shortcut session when AKS next starts. This does not turn on the
-microphone or load the model. RemoteDesktop portal version 2 supports requesting
-persistent keyboard permission; AKS saves and rotates the returned restore token.
-The desktop may still ask again if it does not support restoration or permission
-has been revoked. Explicitly disabling desktop shortcuts clears that choice and
-the token; quitting AKS preserves them. State is kept in a private
-`settings.desktop.json` file beside `settings.json`.
-Toggle listening is the default; push-to-talk is also available. A registered
-shortcut can enable/load voice input again after it was disabled. Tray Start
-Dictation can initiate permission setup when necessary. Stop/Cancel controls remain
-in the panel, and cancellation is available from the command interface.
+## Startup and memory
 
-Voice Input and Settings support wheel scrolling and visible vertical scrollbars;
-the voice library exposes vertical/horizontal scrollbars. The initial window fits
-the available screen, and Settings remains accessible at smaller sizes.
+By default your voice and dictation model load when Akousousin starts, and stay
+loaded, so there is no wait the first time you read or dictate. To save memory
+instead, go to **Advanced → Startup and memory**. There you can load them only
+when first used, unload them after a period of not being used, or turn start at
+login on or off.
 
-[Voice Input testing and cache/portal troubleshooting](https://github.com/jg00dman/akousousin/blob/main/recognition/PANEL-TESTING.md)
-explains the experimental limits. SAPI recognition, other Wayland compositors and
-a general native input framework remain future work. No automatic word-processor
-proofing-language tagging is implemented.
+Closing the window leaves Akousousin running in the tray. **Quit** in the tray
+menu stops it. It also stops when you log out.
 
-## Build with or without the starter voice
+## Privacy
 
-`python standalone/package.py` includes the reviewed LJSpeech starter voice by
-default for offline first use. Use `--no-bundle-starter-voice` for a lean package;
-`--bundle-starter-voice` remains an explicit way to select the default variant.
-The Standalone Akousousin workflow exposes the same `bundle_starter_voice`
-checkbox (on by default). Push/release builds include the starter; an explicit
-workflow run with the checkbox unticked builds the lean variant.
-Both variants retain their runtime dependencies and
-licence notices; only the optional voice weights differ. Packaging clears staged
-resources so an earlier offline build cannot leak weights into a lean build.
+Text you hear and your voice when you dictate never leave your computer. The
+recording is discarded once it has been written down. Akousousin uses the
+internet only to check weekly for updates, to download voices and models you
+choose, and to play voice samples. The **Privacy** page shows each of these,
+and can block all of them.
 
-## Global read selected text / Stop
+## Updates
 
-![Read selection setup and global shortcut controls](../docs/images/read-selection.png)
+Akousousin checks for a new version once a week, which you can turn off in
+Privacy. The AppImage can update itself from **Advanced → Updates**. For the
+tar.gz and the Windows ZIP, download the new version and install it the same
+way. Turn on **Include test versions** to try beta releases.
 
-The screenshot shows the setup page before enabling the shortcuts.
+## Removing Akousousin
 
-On KDE Wayland, download/import a voice, open Read selection and choose Enable
-global reading shortcuts. This installs Speech Dispatcher support and selects
-AKS as its default engine first, then verifies the selected voice. Only after
-success does it request KDE shortcut permission; setup errors leave shortcuts
-disabled. Already-working support is verified without restarting the daemon.
-Approve or change the suggested Ctrl+Alt+R (selected text) and Ctrl+Alt+Shift+R
-(copied text) bindings in KDE. The panel shows the bindings KDE actually assigned.
-These shortcuts work while another application has focus and while the panel is
-closed, as long as AKS remains running in the tray. After successful approval AKS
-remembers enablement and restores the session on its next launch; KDE retains the
-chosen key assignments. Explicit Disable prevents automatic restoration. Builds
-that did not save enablement require enabling once after upgrading.
+- **Everything:** **Advanced → Remove everything…** or `akousousin --purge`.
+  This removes Akousousin from your Wine prefixes, Speech Dispatcher and start
+  at login, along with its voices, models and settings.
+- **Tar install only:** `~/.local/lib/akousousin/uninstall.sh` removes the
+  program but keeps your voices, models and settings.
+- **One Wine prefix:** **Apps → Remove…**.
 
-Speech Dispatcher support can also be installed separately in Settings. eSpeak
-remains available, and removing AKS support restores the earlier default.
-The Linux AppImage bundles `wl-paste` (wl-clipboard) for Wayland and `xclip`
-for X11 with their private libraries; no system installation is needed on SteamOS.
-Source and distro packages need the corresponding system tools. Highlight text and press the shortcut once to read, again to stop
-only that reader. Some Wine applications do not publish a primary selection;
-copy their text and use the separate copied-text shortcut. There is no silent
-fallback to stale clipboard contents. Native and Wine/Logos selection availability
-still needs confirmation on the target desktop.
+## Where things are kept
 
-An optional desktop action can be installed from this page, or using
-`--install-selection-action`, for manual binding in Plasma or other desktop
-shortcut settings. It can start AKS when needed. `--read-selection`,
-`--read-clipboard`, `--stop-reading` and `--selection-status` control the same
-resident reader. Quit closes its shortcut session and stops its owned reading.
-Configure reuses the existing control panel and requests activation of that window.
+| What | Where |
+| --- | --- |
+| Settings | `~/.config/Akousousin/settings.json` |
+| Voices and dictation models | `~/.local/share/Akousousin/` |
+| Log | `~/.local/state/Akousousin/akousousin.log` |
+| Start at login | `~/.config/autostart/org.akousousin.Akousousin.desktop` |
 
-The control-panel status bar is selectable: use Ctrl+A/Ctrl+C or its Copy button
-to include the full status in a support report.
+On Windows, settings and voices are in `%LOCALAPPDATA%\Akousousin`.
 
-While dictation is recording, AKS suppresses new speech output instead of pausing
-microphone capture. This is temporary and profile-specific: saved volume and
-Piper service availability are unchanged. Ready tones bypass suppression.
-Speech requests received during recording are discarded without synthesis;
-requests spanning a recording session cannot resume afterwards. The Speech
-Dispatcher module cancels current AKS output, and previews stop their own player.
-Suppression is released after recording/transcription ends, cancellation, or an
-error; a terminated controller cannot leave a permanent mute behind.
+## Command line
 
-Dictation language now defaults to the supported system locale. Base.en is the
-compact English default; Base is the compact multilingual default with the chosen
-language passed explicitly. Small/Small.en trade memory and CPU for quality.
-Multilingual (auto) is explicit: the first nonempty phrase determines the language
-for that recording session. Stop and start another session to detect again.
-English-only models switch to their multilingual counterpart when another language
-or auto is chosen. Turbo remains importable, with no CPU speed claim.
+| Command | Does |
+| --- | --- |
+| `akousousin` | Open the window |
+| `akousousin --read-selection` / `--read-clipboard` / `--stop-reading` | Read aloud, or stop |
+| `akousousin --dictation-toggle` | Start or stop dictation |
+| `akousousin --status` | Show whether Akousousin is running |
+| `akousousin --quit` | Stop Akousousin |
+| `akousousin --purge` | Remove everything (asks first; add `--yes` to skip) |
+| `akousousin --version` | Show the version |
 
-Voice Input offers CPU threads, Keep model loaded while voice input is enabled,
-and an idle timeout (one hour by default when keep-loaded is off). More threads
-are not always faster on CPU-limited systems; see the reproducible benchmark in
-`backend/tools/benchmark_recognition.py`. Timing logs contain numeric measurements
-and outcomes, never dictated text. Model cards accompany on-demand downloads;
-model files and their upstream licences are not bundled into the AppImage.
+With the AppImage, use its path in place of `akousousin`. To register a Wine
+prefix from a script, see [CLI-REGISTRATION.md](https://github.com/jg00dman/akousousin/blob/main/standalone/CLI-REGISTRATION.md).
 
-Toggle-mode Stop cancels pending insertion immediately. Speech that finishes
-recognising afterwards is retained for copying, never automatically typed. A new
-session does not replay it. Push-to-talk submits on release. Keyboard events use
-acknowledgements and pacing; a failed key release closes the keyboard session.
-Recognition startup includes a real warm-up before Ready, so the initial prepare
-may take longer while subsequent phrases avoid that lazy initialization.
+## Troubleshooting
+
+- **Something isn't working.** **Advanced → Copy diagnostic report** copies
+  versions and settings, but nothing you have read or dictated. Include it
+  in an [issue](https://github.com/jg00dman/akousousin/issues). **Open service
+  log** shows the log.
+- **A Windows app doesn't list the voices.** Restart the app. If you downloaded
+  voices since registering, choose **Update** on Apps.
+- **Shortcuts don't respond.** Check that Akousousin is in the tray, and that
+  the keys are approved in your desktop's shortcut settings.
+- **Dictation types nothing.** Check the microphone level bars on the Dictation
+  page, and that the window you want to type into has focus.
+- **Downloads fail with a certificate error on SteamOS** (older versions):
+  start Akousousin with `SSL_CERT_FILE=/etc/ssl/cert.pem`.
+
+What each speech interface supports is listed in
+[COMPATIBILITY.md](../COMPATIBILITY.md).

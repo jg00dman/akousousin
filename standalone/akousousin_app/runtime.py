@@ -44,7 +44,7 @@ def command(*args):
     return [sys.executable, '-m', 'akousousin_app.main', *args]
 
 
-def call(path, request, launch=True):
+def call(path, request, launch=True, timeout=85):
     if os.name == 'nt':
         return windows_call(path, request, launch)
     import socket
@@ -69,7 +69,7 @@ def call(path, request, launch=True):
         if connection is None:
             raise RuntimeError(f'Akousousin could not start; see {log_path()}')
     with connection:
-        connection.settimeout(85)
+        connection.settimeout(timeout)
         connection.sendall(json.dumps(request).encode() + b'\n')
         data = bytearray()
         while b'\n' not in data and len(data) < 1024 * 1024:
@@ -78,6 +78,49 @@ def call(path, request, launch=True):
                 raise RuntimeError('Akousousin controller disconnected')
             data.extend(chunk)
     return result(data)
+
+
+def owner_gone():
+    """For a helper running from its owner's AppImage mount: whether the owner exited.
+
+    The mount, and so the helper's own files, disappears with the owner.
+    """
+    owner = os.environ.get('AKOUSOUSIN_OWNER_PID', '')
+    return owner.isdigit() and os.getppid() != int(owner)
+
+
+def replace_stale(path):
+    """Quit a controller left behind by a login session that has ended.
+
+    It would answer requests but has no screen, no tray icon and shortcuts tied
+    to the old session, so a new login must not hand over to it.
+    """
+    if os.name == 'nt':
+        return False
+    from . import login_session
+    mine = login_session.current()
+    if not mine:
+        return False
+    try:
+        status = call(path, {'command': 'status'}, launch=False, timeout=5)
+    except (OSError, RuntimeError, ValueError):
+        return False
+    theirs = (status or {}).get('login_session')
+    if not theirs or theirs == mine or login_session.running(theirs):
+        return False
+    try:
+        call(path, {'command': 'quit'}, launch=False, timeout=30)
+    except (OSError, RuntimeError, ValueError):
+        pass
+    deadline = time.monotonic() + 20
+    while time.monotonic() < deadline:
+        try:
+            if call(path, {'command': 'status'}, launch=False, timeout=2) is None:
+                return True
+        except (OSError, RuntimeError, ValueError):
+            return True
+        time.sleep(.2)
+    return True
 
 
 def environment():

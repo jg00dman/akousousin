@@ -8,8 +8,8 @@ SPDX-FileCopyrightText: 2026 John Goodman
 > **Historical evidence for the custom Wine prototype.** Current standalone
 > 0.7.0b1 Linux and Windows package checks passed in
 > [release run 42318174159](https://github.com/jg00dman/akousousin/actions/runs/42318174159).
-> See [current coverage](COMPATIBILITY.md) and the
-> [beta testing checklist](standalone/BETA-TESTING.md) for remaining desktop checks.
+> See [current coverage](../../COMPATIBILITY.md) and the
+> [beta testing checklist](../../standalone/BETA-TESTING.md) for remaining desktop checks.
 > The earlier build results below are retained as historical evidence.
 
 ## Historical Logos + Piper AppImage CI validation

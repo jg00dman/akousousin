@@ -153,6 +153,35 @@ class PortalBusTests(unittest.IsolatedAsyncioTestCase):
         await self.desktop.type_text('hé', self.desktop.guard.snapshot(), threading.Event())
         self.assertEqual(self.keys, [(104, 1), (104, 0), (233, 1), (233, 0), (32, 1), (32, 0)])
 
+    async def test_gnome_focus_switch_and_return_holds_text(self):
+        from dbus_next.service import ServiceInterface, method, signal
+
+        class Focus(ServiceInterface):
+            epoch = 1
+
+            @method()
+            def Current(self) -> 'su':
+                return ['window-1', self.epoch]
+
+            @signal()
+            def Changed(self, identity, epoch) -> 'su':
+                return [identity, epoch]
+
+        focus = Focus('org.akousousin.FocusWindow')
+        await self.server.request_name('org.gnome.Shell')
+        self.server.export('/org/akousousin/FocusWindow', focus)
+        self.desktop.gnome = True
+        self.desktop.shell_owner = self.server.unique_name
+        original = await self.desktop.confirm_focus()
+        self.assertEqual(original, ('window-1', 1))
+        focus.Changed('window-2', 2)
+        focus.epoch = 3
+        focus.Changed('window-1', 3)
+        self.desktop.enabled = True
+        with self.assertRaisesRegex(RuntimeError, 'window changed'):
+            await self.desktop.type_text('retained', original, threading.Event())
+        self.assertEqual(self.keys, [])
+
     async def test_denial_never_types(self):
         await self.desktop.register_identity()
         self.deny = True

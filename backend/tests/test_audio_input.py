@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 John Goodman
+import os
 import queue
 import subprocess
 import sys
@@ -96,15 +97,22 @@ class AudioInputTests(unittest.TestCase):
         self.assertEqual(capture.segments.qsize(), 2)
 
 
+@unittest.skipIf(os.name == 'nt', 'Linux capture')
 class StreamingProcessTests(unittest.TestCase):
-    def test_missing_capture_tool_reports_install_command_and_completes_cleanup(self):
+    def setUp(self):
+        server = patch('akousousin_backend.audio_system.server', return_value='pulseaudio')
+        which = patch('akousousin_backend.audio_system.shutil.which', side_effect=lambda name: '/usr/bin/' + name)
+        for context in (server, which):
+            context.start()
+            self.addCleanup(context.stop)
+
+    def test_missing_audio_system_names_both_options_and_completes_cleanup(self):
         ended = Mock()
         capture = Capture(ended=ended)
-        with patch('akousousin_backend.audio_input.subprocess.Popen',
-                   side_effect=FileNotFoundError(2, 'No such file or directory', 'parec')):
+        with patch('akousousin_backend.audio_system.server', return_value=''):
             capture._pump()
-        self.assertIn('sudo apt install pulseaudio-utils', capture.error)
-        self.assertIn('parec', capture.error)
+        self.assertIn('pw-record', capture.error)
+        self.assertIn('pulseaudio-utils', capture.error)
         self.assertTrue(capture.done.is_set())
         self.assertFalse(capture.ready.is_set())
         self.assertTrue(capture.segments.empty())
@@ -116,7 +124,9 @@ class StreamingProcessTests(unittest.TestCase):
         def launch(args, **kwargs):
             return original([sys.executable, '-c', emitter], **kwargs)
         capture = Capture()
-        with patch('akousousin_backend.audio_input.subprocess.Popen', side_effect=launch):
+        # A constant level is not speech to Silero; this test is about the pipe, so use loudness.
+        with patch('akousousin_backend.audio_input.subprocess.Popen', side_effect=launch), \
+                patch('akousousin_backend.voice_activity.detector', return_value=(None, 'test')):
             try:
                 capture.start()
                 segment = capture.segments.get(timeout=5)

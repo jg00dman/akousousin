@@ -168,6 +168,8 @@ class RoutingTests(unittest.TestCase):
         self.assertTrue(stopping.wait(1))
 
     def test_idle_unloads_and_next_request_reloads(self):
+        self.config['idle_timeout'] = 300
+        settings.save(self.path, self.config)
         self.router.synthesize({'text': 'Hello'})
         previous = self.router.synth
         # Keep exact boundary checks independent of host uptime/float rounding.

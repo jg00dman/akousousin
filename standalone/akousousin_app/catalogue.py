@@ -20,7 +20,9 @@ def catalogue(resource):
     return json.loads((Path(resource) / 'catalogue.json').read_text(encoding='utf-8'))
 
 
-def card(entry):
+def card(entry, path=None):
+    from .network import require
+    require(path, 'downloading voice information')
     path = next(p for p in entry['files'] if p.endswith('/MODEL_CARD'))
     with Transfer('Voice licence · ' + entry['name']) as transfer, tempfile.TemporaryDirectory() as temporary:
         transfer.phase('Downloading licence', total=entry['files'][path]['size_bytes'])
@@ -29,7 +31,9 @@ def card(entry):
         return destination.read_text(encoding='utf-8')
 
 
-def install(entry, directory, reviewed=False, publish=True):
+def install(entry, directory, reviewed=False, publish=True, path=None):
+    from .network import require
+    require(path, 'downloading voices')
     key = entry['key']
     if entry['language']['family'] in UNSUPPORTED_AUXILIARY:
         raise ValueError('Arabic/Hebrew preprocessing models are not distributed in this program-only beta')
