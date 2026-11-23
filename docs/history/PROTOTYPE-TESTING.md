@@ -5,8 +5,8 @@ SPDX-FileCopyrightText: 2026 John Goodman
 
 > **Historical Wine prototype documentation.** For the current 0.7.0b1
 > standalone AppImage and Windows package, use the
-> [installation guide](standalone/README.md) and
-> [current beta testing checklist](standalone/BETA-TESTING.md).
+> [installation guide](../../standalone/README.md) and
+> [current beta testing checklist](../../standalone/BETA-TESTING.md).
 > The instructions and evidence below apply to the older custom Wine build.
 
 # Testing the prototype
@@ -14,7 +14,7 @@ SPDX-FileCopyrightText: 2026 John Goodman
 For a prebuilt AppImage, first check the
 [GitHub build](https://github.com/jg00dman/akousousin/actions/workflows/appimage.yml)
 and [Releases](https://github.com/jg00dman/akousousin/releases), then follow
-[APPIMAGE-TESTING.md](scripts/ci/APPIMAGE-TESTING.md). A successful workflow publishes
+[APPIMAGE-TESTING.md](../../scripts/ci/APPIMAGE-TESTING.md). A successful workflow publishes
 a test package that includes the sample program; you do not need to build Wine
 locally. [Run 41372784570](https://github.com/jg00dman/akousousin/actions/runs/41372784570) succeeded and
 published [this experimental release](https://github.com/jg00dman/akousousin/releases/tag/piper-test-41372784570-1). Both sets of 13 deterministic
@@ -106,7 +106,7 @@ you intend to test playback. This full build supplies the locale data, generated
 Windows metadata, registrar, and runtime DLLs needed for prefix initialization.
 The desktop build commands above have not been executed in this headless cloud
 environment; the equivalent targeted headless build and its limitations are
-recorded in `VALIDATION.md`.
+recorded in `PROTOTYPE-VALIDATION.md`.
 
 ## 3. Build the sample and run the deterministic tests
 
@@ -203,5 +203,5 @@ sh scripts/test-wine.sh
 ```
 
 Use the prebuilt AppImage for the current test workflow. The historical source
-validation is recorded in `VALIDATION.md`; no Wine compilation is required in
+validation is recorded in `PROTOTYPE-VALIDATION.md`; no Wine compilation is required in
 the current cloud environment.

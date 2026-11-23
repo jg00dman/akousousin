@@ -5,8 +5,8 @@ SPDX-FileCopyrightText: 2026 John Goodman
 
 > **Historical Wine prototype documentation.** For the current 0.7.0b1
 > standalone AppImage and Windows package, use the
-> [installation guide](standalone/README.md) and
-> [current beta testing checklist](standalone/BETA-TESTING.md).
+> [installation guide](../../standalone/README.md) and
+> [current beta testing checklist](../../standalone/BETA-TESTING.md).
 > The instructions and evidence below apply to the older custom Wine build.
 
 # Deployment candidate status

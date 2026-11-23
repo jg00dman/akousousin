@@ -5,25 +5,23 @@ SPDX-FileCopyrightText: 2026 John Goodman
 
 # API coverage and implementation status
 
-Applies to **0.8.3**, including the reviewed LJSpeech starter voice by
-default and the new `--purge` removal command, updated on 16 November 2026.
-Speech API coverage is unchanged from 0.8.0; the exact Wine-version installation
-restriction remains removed.
-[Releases and downloads](https://github.com/jg00dman/akousousin/releases).
+For developers and integrators: what Akousousin implements of each speech
+interface, as of **0.9.0**. For using Akousousin, see the
+[user guide](standalone/README.md).
 
-**Complete native Windows app support is forthcoming, not yet working end to
-end.** The ZIP is experimental; user testing found voice installation and
-Whisper model-install failures. Windows microphone capture, global shortcuts
-and desktop dictation integration remain unimplemented. SAPI output coverage
-below describes that component, not complete application readiness. See the
-[Windows work plan](standalone/WINDOWS-PLAN.md).
+**In short**
 
-**Core speech output works through SAPI and Speech Dispatcher; neither is a
-complete implementation of its wider API. Linux Whisper voice input is experimental.
-It does not implement SAPI recognition.**
-There is no defensible overall coverage percentage: SAPI includes recognition and
-many runtime interfaces, and our Speech Dispatcher component is an output module,
-not a replacement for the daemon or its client API. Feature coverage follows.
+- **SAPI (Windows apps in Wine):** a 64-bit text-to-speech engine. Speaking,
+  voices, rate, volume and cancelling work. Word events, pitch, phonemes and
+  most speech markup do not. Speech recognition is not implemented.
+- **Speech Dispatcher (Linux apps, Orca):** an output module for voices,
+  languages, rate, volume, characters and keys, with coarse index marks.
+- **Dictation:** Linux only, typing into apps on Plasma and GNOME Wayland.
+- **Windows:** experimental. Microphone capture, shortcuts and dictation are
+  not implemented. See the [Windows plan](standalone/WINDOWS-PLAN.md).
+
+Neither speech interface is complete, so we list features rather than claim a
+percentage.
 
 ## Microsoft SAPI
 

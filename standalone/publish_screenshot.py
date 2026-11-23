@@ -30,8 +30,8 @@ head = api('/git/ref/heads/main')['object']['sha']
 parent = api('/git/commits/' + head)
 readme = base64.b64decode(api('/contents/README.md?ref=' + head)['content']).decode('utf-8')
 start, end = '<!-- akousousin-screenshot:start -->', '<!-- akousousin-screenshot:end -->'
-block = (start + '\n![Akousousin ' + version + ' control panel showing the speech service, '
-         'voice preview and desktop reading navigation](docs/images/control-panel.png)\n' + end)
+block = (start + '\n![Akousousin ' + version + ' control panel: the Home page, with reading aloud '
+         'and dictation ready](docs/images/control-panel.png)\n' + end)
 if start in readme and end in readme:
     readme = re.sub(re.escape(start) + r'.*?' + re.escape(end), block, readme, flags=re.S)
 else:
