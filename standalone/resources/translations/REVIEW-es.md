@@ -159,6 +159,9 @@ SPDX-FileCopyrightText: 2026 John Goodman
 | AppsPage | This restarts Speech Dispatcher, so Orca pauses for a moment. Continue? | Esto reinicia Speech Dispatcher, así que Orca se detiene un momento. ¿Continuar? |
 | AppsPage | Turn off | Desactivar |
 | AppsPage | Turn on | Activar |
+| AppsPage | Wine prefixes found on this computer | Prefijos de Wine encontrados en este equipo |
+| AppsPage | Found on this computer | Encontrados en este equipo |
+| AppsPage | Choose one, or pick another folder below. | Elige uno o selecciona otra carpeta abajo. |
 | Dialogs | Cancel | Cancelar |
 | Dialogs | Close | Cerrar |
 | Dialogs | Something went wrong | Algo ha fallado |

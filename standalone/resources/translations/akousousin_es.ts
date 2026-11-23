@@ -617,6 +617,18 @@
         <source>Turn on</source>
         <translation>Activar</translation>
     </message>
+    <message>
+        <source>Wine prefixes found on this computer</source>
+        <translation>Prefijos de Wine encontrados en este equipo</translation>
+    </message>
+    <message>
+        <source>Found on this computer</source>
+        <translation>Encontrados en este equipo</translation>
+    </message>
+    <message>
+        <source>Choose one, or pick another folder below.</source>
+        <translation>Elige uno o selecciona otra carpeta abajo.</translation>
+    </message>
 </context>
 <context>
     <name>Dialogs</name>
