@@ -181,7 +181,7 @@ class PanelTests(unittest.TestCase):
         self.window.go('about')
         page = self.window.pages['about']
         labels = page.findChildren(QLabel)
-        link = next(w for w in labels if 'biblia.com' in w.text())
+        link = next(w for w in labels if 'bible.com/bible/3034/JHN.5.25.BSB' in w.text())
         self.assertTrue(link.focusPolicy() & Qt.TabFocus)
         content = ' '.join(w.text() for w in labels)
         for words in ('ἀκούσουσιν', 'Greek word for “they will hear”', 'those who hear will live.', 'Logos', 'Piper', 'Whisper', 'faster-whisper'):
