@@ -13,3 +13,4 @@ __pycache__/
 
 /recognition-dist/
 standalone/resources/translations/*.qm
+/scripts/voice-script/out/
