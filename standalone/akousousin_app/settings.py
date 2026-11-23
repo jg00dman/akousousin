@@ -33,6 +33,8 @@ def data_path():
 
 def load(path):
     value = json.loads(json.dumps(DEFAULTS))
+    if os.environ.get('FLATPAK_ID'):
+        value.update(port=15041, update_weekly=False)
     stored = json.loads(Path(path).read_text(encoding='utf-8')) if Path(path).exists() else {}
     value.update(stored)
     if stored and stored.get('stt_config_version', 1) < 2:

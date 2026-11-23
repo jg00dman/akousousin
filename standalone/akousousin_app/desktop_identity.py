@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import tempfile
 
-APP_ID = 'org.akousousin.Akousousin'
+APP_ID = os.environ.get('FLATPAK_ID') or 'org.akousousin.Akousousin'
 MARKER = 'X-Akousousin-ManagedIdentity=true'
 
 

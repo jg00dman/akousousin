@@ -205,12 +205,16 @@ def settings_stamp(path):
 
 async def serve(path):
     service = spiel.service_path()
-    record, registration = spiel.load_registration()
-    command = spiel.invocation(path)
-    if not record or record['command'] != command:
-        return  # A queued activation may outlive the registration.
-    executable = Path(command[0])
-    original = executable.stat()
+    registration = None
+    if os.environ.get('FLATPAK_ID'):
+        resources.bootstrap(path)
+    else:
+        record, registration = spiel.load_registration()
+        command = spiel.invocation(path)
+        if not record or record['command'] != command:
+            return  # A queued activation may outlive the registration.
+        executable = Path(command[0])
+        original = executable.stat()
     provider = Provider(path)
     bus = await MessageBus(negotiate_unix_fd=True).connect()
     bus.add_message_handler(check_descriptors)
@@ -222,11 +226,12 @@ async def serve(path):
         changed, checked = settings_stamp(path), time.monotonic()
         while not disconnected.done():
             await asyncio.wait([disconnected], timeout=.5)
-            try:
-                if service.read_bytes() != registration or not os.path.samestat(original, executable.stat()):
+            if registration is not None:
+                try:
+                    if service.read_bytes() != registration or not os.path.samestat(original, executable.stat()):
+                        break
+                except FileNotFoundError:
                     break
-            except FileNotFoundError:
-                break
             # Voices change through settings; a slow recheck also notices deleted voice files.
             stamp = settings_stamp(path)
             if stamp != changed or time.monotonic() - checked > 30:

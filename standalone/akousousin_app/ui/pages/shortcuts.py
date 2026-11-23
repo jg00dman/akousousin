@@ -60,6 +60,9 @@ class ShortcutsPage(Page):
         return self.tr('Use Akousousin from anywhere with a few keys.')
 
     def build(self):
+        if os.environ.get('FLATPAK_ID'):
+            self.add(text(self.tr('Global desktop shortcuts require the native Linux package.'), 'muted'))
+            return
         main = Card(self.tr('Global shortcuts'))
         main.add(text(self.tr('These work in every app. Your desktop asks you to approve each one the first time, '
                               'and you can change the keys in your desktop’s settings at any time.'), 'muted'))
@@ -114,10 +117,14 @@ class ShortcutsPage(Page):
         self.status_changed(self.state.status)
 
     def settings_changed(self, config):
+        if os.environ.get('FLATPAK_ID'):
+            return
         fill(self.tray, [('dictate', self.tr('Start or stop dictation')), ('open', self.tr('Open Akousousin'))],
              config.get('tray_click', 'dictate'))
 
     def status_changed(self, status):
+        if os.environ.get('FLATPAK_ID'):
+            return
         reading = status.reading
         on = bool(reading.get('shortcuts_enabled'))
         found = reading.get('keys') or {}

@@ -14,11 +14,24 @@ def location(path):
     return runtime.directory() / (Path(runtime.name(path)).name + '.speech-gate.json')
 
 
+def active_lease(path, value):
+    if not value['active']:
+        return False
+    if os.environ.get('FLATPAK_ID'):
+        import fcntl
+        with location(path).with_suffix('.lock').open('rb') as lock:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_SH | fcntl.LOCK_NB)
+            except BlockingIOError:
+                return True
+        return False
+    return psutil.Process(value['pid']).create_time() == value['created']
+
+
 def snapshot(path):
     try:
         value = json.loads(location(path).read_text())
-        active = value['active'] and psutil.Process(value['pid']).create_time() == value['created']
-        return bool(active), value['generation']
+        return active_lease(path, value), value['generation']
     except (OSError, ValueError, KeyError, psutil.Error):
         return False, None
 
@@ -31,6 +44,7 @@ def suppressed(path, before):
 class Lease:
     def __init__(self, path):
         self.path = path
+        self.lock = None
         self.value = dict(active=True, generation=uuid.uuid4().hex,
                           pid=os.getpid(), created=psutil.Process().create_time())
 
@@ -46,9 +60,26 @@ class Lease:
             temporary.unlink(missing_ok=True)
 
     def acquire(self):
+        if os.environ.get('FLATPAK_ID'):
+            # A separately activated Spiel provider cannot inspect this process's PID.
+            import fcntl
+            self.lock = location(self.path).with_suffix('.lock').open('ab')
+            try:
+                fcntl.flock(self.lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                self.write()
+            except BaseException:
+                self.lock.close()
+                self.lock = None
+                raise
+            return
         self.write()
 
     def close(self):
-        if snapshot(self.path)[1] == self.value['generation']:
-            self.value['active'] = False
-            self.write()
+        try:
+            if snapshot(self.path)[1] == self.value['generation']:
+                self.value['active'] = False
+                self.write()
+        finally:
+            if self.lock is not None:
+                self.lock.close()
+                self.lock = None

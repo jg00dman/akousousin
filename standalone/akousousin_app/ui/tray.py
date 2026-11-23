@@ -201,6 +201,9 @@ class Tray(QObject):
         if os.name == 'nt':
             for action in (self.stop_reading, self.read_selected, self.read_copied):
                 action.setVisible(False)
+        if os.environ.get('FLATPAK_ID'):
+            for action in (self.dictate, self.stop_reading, self.read_selected, self.read_copied):
+                action.setVisible(False)
         self.icon = None
         self.create()
 
@@ -224,6 +227,9 @@ class Tray(QObject):
 
     def _activated(self, reason):
         if reason != QSystemTrayIcon.Trigger:
+            return
+        if os.environ.get('FLATPAK_ID'):
+            self.submit({'command': 'configure'})
             return
         try:
             action = settings.load(self.path).get('tray_click', 'dictate')
@@ -267,9 +273,10 @@ class Tray(QObject):
             header = self.tr('Akousousin · Ready')
         self.header.setText(header)
         self.dictate.setText(self.tr('Finish dictation') if busy else self.tr('Start dictation'))
-        self.stop_reading.setVisible(bool(reading.get('reading')) and os.name != 'nt')
-        self.read_selected.setVisible(not reading.get('reading') and os.name != 'nt')
-        self.read_copied.setVisible(not reading.get('reading') and os.name != 'nt')
+        global_reading = os.name != 'nt' and not os.environ.get('FLATPAK_ID')
+        self.stop_reading.setVisible(bool(reading.get('reading')) and global_reading)
+        self.read_selected.setVisible(not reading.get('reading') and global_reading)
+        self.read_copied.setVisible(not reading.get('reading') and global_reading)
         from ..download_status import caption
         active = [item for item in downloads if item['status'] == 'active']
         self.downloads.setVisible(bool(downloads))

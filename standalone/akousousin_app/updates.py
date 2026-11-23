@@ -314,7 +314,7 @@ class UpdateMonitor:
 
     def tick(self, quiet=False):
         config = settings.load(self.path)
-        if not config['update_weekly'] or config.get('network_blocked'):
+        if os.environ.get('FLATPAK_ID') or not config['update_weekly'] or config.get('network_blocked'):
             return None
         state = update_state(self.path)
         now = time.time()
