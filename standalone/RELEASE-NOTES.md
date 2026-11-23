@@ -3,7 +3,17 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
-# Akousousin 0.9.1 beta 3
+# Akousousin 0.9.1 beta 4
+
+Beta 3 plus the tray icon:
+
+- **The tray icon is clear on dark panels.** Its lines now follow your panel's
+  colours: light on Breeze Dark, dark on Breeze Light, and they change when
+  you switch.
+- **Speech from Windows apps animates the icon too,** such as Logos Read Aloud
+  through SAPI, not only Akousousin's own read-aloud shortcut.
+
+## From beta 3
 
 A test build for one problem: **Orca silent when Akousousin is chosen as its
 synthesizer.** It is 0.9.0 plus these changes only.
