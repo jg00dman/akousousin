@@ -3,13 +3,13 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
-# Akousousin 0.9.1 beta 4
+# Akousousin 0.9.1 beta 5
 
 Beta 3 plus the tray icon:
 
 - **The tray icon is clear on dark panels.** Its lines now follow your panel's
-  colours: light on Breeze Dark, dark on Breeze Light, and they change when
-  you switch.
+  colours: light on Breeze Dark and on Kubuntu's standard dark panel, dark
+  on Breeze Light, and they change when you switch.
 - **Speech from Windows apps animates the icon too,** such as Logos Read Aloud
   through SAPI, not only Akousousin's own read-aloud shortcut.
 

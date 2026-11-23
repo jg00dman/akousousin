@@ -46,27 +46,74 @@ def _ini(path):
     return parser
 
 
+def _dirs(home_variable, home_default, system_variable, system_default):
+    home = os.environ.get(home_variable) or str(Path.home() / home_default)
+    return [Path(home), *(Path(part) for part in (os.environ.get(system_variable) or system_default).split(':') if part)]
+
+
+def _kde_value(name, group, key):
+    """A KDE setting as KDE reads it: your file first, then the system's (/etc/xdg)."""
+    for folder in _dirs('XDG_CONFIG_HOME', '.config', 'XDG_CONFIG_DIRS', '/etc/xdg'):
+        value = _ini(folder / name).get(group, key, fallback='')
+        if value:
+            return value
+    return ''
+
+
+def _look_and_feel_default(group, key):
+    """A default from the global theme (e.g. Kubuntu's own look), which user files may not repeat."""
+    package = _kde_value('kdeglobals', 'KDE', 'LookAndFeelPackage')
+    if not package:
+        return ''
+    for folder in _dirs('XDG_DATA_HOME', '.local/share', 'XDG_DATA_DIRS', '/usr/local/share:/usr/share'):
+        value = _ini(folder / 'plasma/look-and-feel' / package / 'contents/defaults').get(group, key, fallback='')
+        if value:
+            return value
+    return ''
+
+
+def _foreground(parser):
+    text = parser.get('Colors:Window', 'ForegroundNormal', fallback='')
+    try:
+        red, green, blue = (int(part) for part in text.split(',')[:3])
+        return QColor(red, green, blue)
+    except ValueError:
+        return None
+
+
 def panel_tint():
     """Colour for the monochrome logo lines on the desktop's panel, or None for the app palette.
 
     The bundled Qt does not know the desktop's colour scheme, so its palette
     is always light and the lines came out dark on a dark panel. Follow what
-    the panel follows instead: Plasma's style (Breeze Dark is a dark panel
-    even with light apps), else the colour scheme's window text; GNOME's top
-    bar is always dark.
+    the panel follows, as Plasma does: the active Plasma style (from your
+    settings, the system's, or the global theme's defaults) and its own colours
+    if it has them (Breeze Dark, Kubuntu's dark panel); otherwise the colour
+    scheme. GNOME's top bar is always dark.
     """
-    config = Path(os.environ.get('XDG_CONFIG_HOME') or Path.home() / '.config')
-    style = _ini(config / 'plasmarc').get('Theme', 'name', fallback='default').casefold()
-    if 'dark' in style:
+    data = _dirs('XDG_DATA_HOME', '.local/share', 'XDG_DATA_DIRS', '/usr/local/share:/usr/share')
+    style = (_kde_value('plasmarc', 'Theme', 'name') or _look_and_feel_default('plasmarc][Theme', 'name')
+             or 'default')
+    for folder in data:
+        colours = folder / 'plasma/desktoptheme' / style / 'colors'
+        if colours.is_file():
+            tint = _foreground(_ini(colours))
+            if tint is not None:
+                return tint
+    if 'dark' in style.casefold():
         return QColor('#fcfcfc')
-    if 'light' in style:
+    if 'light' in style.casefold():
         return QColor('#232629')
-    foreground = _ini(config / 'kdeglobals').get('Colors:Window', 'ForegroundNormal', fallback='')
-    try:
-        red, green, blue = (int(part) for part in foreground.split(',')[:3])
-        return QColor(red, green, blue)
-    except ValueError:
-        pass
+    for folder in _dirs('XDG_CONFIG_HOME', '.config', 'XDG_CONFIG_DIRS', '/etc/xdg'):
+        tint = _foreground(_ini(folder / 'kdeglobals'))
+        if tint is not None:
+            return tint
+    scheme = _kde_value('kdeglobals', 'General', 'ColorScheme') or _look_and_feel_default('kdeglobals][General', 'ColorScheme')
+    if scheme:
+        for folder in data:
+            tint = _foreground(_ini(folder / 'color-schemes' / (scheme + '.colors')))
+            if tint is not None:
+                return tint
     if 'GNOME' in os.environ.get('XDG_CURRENT_DESKTOP', '').upper():
         return QColor('#ffffff')
     return None

@@ -19,13 +19,46 @@ class PanelTintTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
-        self.config = Path(temporary.name)
-        environment = patch.dict(os.environ, {'XDG_CONFIG_HOME': temporary.name, 'XDG_CURRENT_DESKTOP': 'KDE'})
+        root = Path(temporary.name)
+        self.config, self.system, self.data = root / 'config', root / 'etc-xdg', root / 'usr-share'
+        for folder in (self.config, self.system, self.data):
+            folder.mkdir()
+        environment = patch.dict(os.environ, {
+            'XDG_CONFIG_HOME': str(self.config), 'XDG_CONFIG_DIRS': str(self.system),
+            'XDG_DATA_HOME': str(root / 'local-share'), 'XDG_DATA_DIRS': str(self.data), 'XDG_CURRENT_DESKTOP': 'KDE'})
         environment.start()
         self.addCleanup(environment.stop)
 
-    def write(self, name, text):
-        (self.config / name).write_text(text)
+    def write(self, name, text, folder=None):
+        path = (folder or self.config) / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+
+    def test_kubuntu_default_dark_panel_with_light_apps(self):
+        # The global theme's defaults choose a dark Plasma style; the user's files say nothing about it.
+        self.write('kdeglobals', '[KDE]\nLookAndFeelPackage=org.kubuntu.desktop\n[Colors:Window]\nForegroundNormal=35,38,41\n')
+        self.write('plasma/look-and-feel/org.kubuntu.desktop/contents/defaults',
+                   '[kdeglobals][General]\nColorScheme=BreezeLight\n\n[plasmarc][Theme]\nname=kubuntu\n', self.data)
+        self.write('plasma/desktoptheme/kubuntu/colors', '[Colors:Window]\nForegroundNormal=239,240,241\n', self.data)
+        self.assertEqual(panel_tint().name(), '#eff0f1')
+
+    def test_a_system_wide_plasma_style_counts(self):
+        self.write('kdeglobals', '[Colors:Window]\nForegroundNormal=35,38,41\n')
+        self.write('plasmarc', '[Theme]\nname=breeze-dark\n', self.system)
+        self.assertEqual(panel_tint().name(), '#fcfcfc')
+
+    def test_the_users_own_choice_beats_the_system_default(self):
+        self.write('plasmarc', '[Theme]\nname=breeze-dark\n', self.system)
+        self.write('plasmarc', '[Theme]\nname=default\n')
+        self.write('kdeglobals', '[Colors:Window]\nForegroundNormal=35,38,41\n')
+        self.assertEqual(panel_tint().name(), '#232629')
+
+    def test_a_style_that_follows_the_scheme_uses_the_scheme(self):
+        self.write('plasmarc', '[Theme]\nname=default\n')
+        self.write('plasma/desktoptheme/default/metadata.json', '{}', self.data)  # Breeze: no colors file
+        self.write('kdeglobals', '[General]\nColorScheme=BreezeDark\n')
+        self.write('color-schemes/BreezeDark.colors', '[Colors:Window]\nForegroundNormal=252,252,252\n', self.data)
+        self.assertEqual(panel_tint().name(), '#fcfcfc')
 
     def test_breeze_dark_colour_scheme_gives_light_lines(self):
         self.write('kdeglobals', '[Colors:Window]\nBackgroundNormal=32,35,38\nForegroundNormal=252,252,252\n')
