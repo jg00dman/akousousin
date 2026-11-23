@@ -657,6 +657,10 @@
         <source>Make Akousousin and its current default voice the default for Spiel?</source>
         <translation>Akousousin und seine aktuelle Standardstimme als Standard für Spiel festlegen?</translation>
     </message>
+    <message>
+        <source>Not installed</source>
+        <translation>Nicht installiert</translation>
+    </message>
 </context>
 <context>
     <name>Dialogs</name>

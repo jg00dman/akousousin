@@ -148,10 +148,12 @@ class AppsPage(Page):
             self.rows.addWidget(text(self.tr('No Wine prefixes yet. Add the prefix your Windows app is installed in.'), 'muted'))
         if not self.state.windows:
             if sys.platform == 'linux':
-                from ...spiel import registered
+                from ...spiel import available, registered
                 on = registered()
-                self.spiel_status.set(self.tr('On') if on else self.tr('Off'), 'ok' if on else 'off')
-                self.spiel_on.setVisible(not on)
+                installed = on or available()  # still offer Turn off if Spiel was removed later
+                self.spiel_status.set(self.tr('On') if on else self.tr('Off') if installed else self.tr('Not installed'),
+                                      'ok' if on else 'off')
+                self.spiel_on.setVisible(installed and not on)
                 self.spiel_off.setVisible(on)
             from ...speech_dispatcher import dispatcher_paths
             on = dispatcher_paths()[1].exists()
