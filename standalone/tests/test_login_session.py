@@ -94,6 +94,56 @@ class WaitGoneTests(unittest.TestCase):
             self.assertFalse(runtime.wait_gone('settings.json', seconds=5))
 
 
+@unittest.skipIf(os.name == 'nt', 'tar installs are Linux')
+class InstallPauseTests(unittest.TestCase):
+    """Apps must not restart the old Akousousin while the installer replaces it."""
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        environment = patch.dict(os.environ, {'XDG_RUNTIME_DIR': temporary.name})
+        environment.start()
+        self.addCleanup(environment.stop)
+
+    def test_launch_waits_while_a_live_installer_holds_the_pause(self):
+        import subprocess, time
+        installer = subprocess.Popen(['sleep', '30'])
+        self.addCleanup(installer.kill)
+        marker = runtime.directory() / 'installing'
+        marker.write_text(str(installer.pid))
+        threading.Timer(.6, marker.unlink).start()
+        start = time.monotonic()
+        runtime.wait_for_install(seconds=5)
+        self.assertGreater(time.monotonic() - start, .5)
+
+    def test_a_pause_left_by_a_dead_installer_is_ignored_and_removed(self):
+        import subprocess
+        gone = subprocess.Popen(['true'])
+        gone.wait()
+        marker = runtime.directory() / 'installing'
+        marker.write_text(str(gone.pid))
+        runtime.wait_for_install(seconds=5)
+        self.assertFalse(marker.exists())
+
+    def test_pause_is_released_even_if_installing_fails(self):
+        with self.assertRaises(ValueError):
+            with runtime.launches_paused():
+                self.assertTrue((runtime.directory() / 'installing').exists())
+                raise ValueError
+        self.assertFalse((runtime.directory() / 'installing').exists())
+
+    def test_installer_quits_a_running_akousousin_itself(self):
+        from akousousin_app.main import quit_for_install
+        calls = []
+        replies = iter([{'closed': False}, {'closed': True}])
+        with patch('akousousin_app.runtime.call', side_effect=lambda p, r, **k: (calls.append(r['command']), next(replies))[1]), \
+                patch('akousousin_app.runtime.wait_gone', return_value=True):
+            quit_for_install('settings.json')
+        self.assertEqual(calls, ['status', 'quit'])
+        with patch('akousousin_app.runtime.call', return_value={'closed': False}), \
+                patch('akousousin_app.runtime.wait_gone', return_value=False), self.assertRaises(RuntimeError):
+            quit_for_install('settings.json')
+
+
 class ControllerLockTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()

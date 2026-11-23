@@ -12,6 +12,17 @@ from . import __version__, resources, runtime, settings
 from .install import Installer
 
 
+def quit_for_install(path):
+    """Quit a running Akousousin (launches are paused, so nothing restarts it)."""
+    status = runtime.call(path, {'command': 'status'}, launch=False, timeout=10)
+    if not status:
+        return
+    if not status.get('closed'):
+        runtime.call(path, {'command': 'quit'}, launch=False, timeout=60)
+    if not runtime.wait_gone(path):
+        raise RuntimeError('Akousousin did not quit. Quit it from its tray, then run this again.')
+
+
 def main():
     multiprocessing.freeze_support()
     if len(sys.argv) > 1 and sys.argv[1] == '--whisper':
@@ -89,13 +100,13 @@ def main():
             raise RuntimeError('Tar installation requires Linux')
         if os.geteuid() == 0:
             raise RuntimeError('Run this per-user installer without sudo')
-        status = runtime.call(args.settings, {'command': 'status'}, launch=False)
-        if status and not (status.get('closed') and runtime.wait_gone(args.settings)):
-            raise RuntimeError('Quit Akousousin from its tray (or run akousousin --quit) before installing or removing it')
         from .linux_bundle import install, uninstall, speech_setup
         if args.install_bundle:
-            target = install(args.install_bundle, args.bundle_prefix)
-            print('Installed: ' + str(target))
+            with runtime.launches_paused():
+                quit_for_install(args.settings)
+                target = install(args.install_bundle, args.bundle_prefix)
+                print('Installed: ' + str(target))
+            # After the pause ends, so Speech Dispatcher can start the new module.
             if not args.without_speech_dispatcher:
                 try:
                     speech_setup(target, args.settings)  # also restarts Speech Dispatcher
@@ -110,10 +121,12 @@ def main():
                     executable = str(target / 'akousousin')
                     os.execve(executable, [executable, '--configure'], dict(os.environ, PYINSTALLER_RESET_ENVIRONMENT='1'))
         else:
-            speech_setup(args.uninstall_bundle, args.settings, remove=True)
-            from . import startup
-            startup.disable_if_inside(args.uninstall_bundle)  # it would start a program that is gone
-            print(uninstall(args.uninstall_bundle))
+            with runtime.launches_paused():
+                quit_for_install(args.settings)
+                speech_setup(args.uninstall_bundle, args.settings, remove=True)
+                from . import startup
+                startup.disable_if_inside(args.uninstall_bundle)  # it would start a program that is gone
+                print(uninstall(args.uninstall_bundle))
         return
     if args.protocol_version:
         print('2')
