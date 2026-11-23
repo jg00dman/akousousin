@@ -5,6 +5,7 @@ import io
 import json
 import logging
 import math
+import os
 import hmac
 from collections import deque
 from pathlib import Path
@@ -75,6 +76,8 @@ class Router:
         self.speaking_until = 0
         self.playback = deque()
         self.processing = False
+        self.settings_stamp = None
+        self.cached_timeout = 0
 
     def speaking(self):
         if speech_gate.snapshot(self.path)[0]:
@@ -82,18 +85,34 @@ class Router:
         with self.control_lock:
             return self.processing or time.monotonic() < self.speaking_until
 
+    def idle_timeout(self):
+        """The unload delay, reread only when the settings file has changed."""
+        stamp = settings.stamp(self.path)
+        if stamp != self.settings_stamp:
+            self.settings_stamp = stamp
+            self.cached_timeout = settings.load(self.path)['idle_timeout']
+        return self.cached_timeout
+
+    def until_expiry(self, now=None):
+        """Seconds until the loaded voice should unload, or None if it stays loaded."""
+        timeout = self.idle_timeout()
+        if not self.synth or not timeout:
+            return None
+        current = time.monotonic() if now is None else now
+        return max(0, self.last_activity + timeout - current)
+
     def expire(self, now=None):
         # Do not take the synthesis lock on every event-loop tick: dispatching
         # a new HTTP request and idle maintenance happen together, and that can
         # otherwise report a ready backend as busy. Recheck after taking it.
-        timeout = settings.load(self.path)['idle_timeout']
+        timeout = self.idle_timeout()
         current = time.monotonic() if now is None else now
         if not self.synth or not timeout or current - self.last_activity < timeout:
             return False
         if not self.lock.acquire(False):
             return False
         try:
-            timeout = settings.load(self.path)['idle_timeout']
+            timeout = self.idle_timeout()
             if self.synth and timeout and current - self.last_activity >= timeout:
                 self.close()
                 return True
@@ -317,11 +336,56 @@ def application(router, instance, control="", stopping=None):
     return app
 
 
+class Stopping(threading.Event):
+    """Stop request that also wakes the server loop, which otherwise sleeps until it has work."""
+    wake = None
+
+    def set(self):
+        super().set()
+        if self.wake:
+            self.wake()
+
+
+# The loop sleeps until a request arrives, the voice is due to unload, or the
+# owner exits; this only bounds a missed wake-up.
+LONGEST_SLEEP = 300
+
+
+def watch_owner(stopping, wasyncore, server_map):
+    """Wake the loop when the Akousousin that started this service exits.
+
+    Returns False where the kernel cannot report it, so the caller checks instead."""
+    from .runtime import owner_gone
+    owner = os.environ.get('AKOUSOUSIN_OWNER_PID', '')
+    if not owner.isdigit() or not hasattr(os, 'pidfd_open'):
+        return not owner.isdigit()
+    if owner_gone():
+        stopping.set()
+        return True
+    try:
+        descriptor = os.pidfd_open(int(owner))
+    except OSError:
+        return False
+
+    class Owner(wasyncore.file_dispatcher):
+        def writable(self):
+            return False
+
+        def handle_read(self):
+            logging.getLogger(__name__).warning('Akousousin exited; stopping the voice service')
+            self.close()
+            stopping.set()
+
+    Owner(descriptor, map=server_map)
+    os.close(descriptor)  # file_dispatcher keeps its own duplicate
+    return True
+
+
 def serve(path, instance, control_file):
     from waitress import create_server, wasyncore
     router = Router(path)
     config = settings.load(path)
-    stopping = threading.Event()
+    stopping = Stopping()
     control = Path(control_file).read_text() if control_file else ''
     server = None
     try:
@@ -330,10 +394,14 @@ def serve(path, instance, control_file):
                                port=config['port'], threads=4, connection_limit=16, backlog=8,
                                channel_timeout=70, max_request_body_size=MAX_BODY)
         from .runtime import owner_gone
+        stopping.wake = server.trigger.pull_trigger
+        watched = watch_owner(stopping, wasyncore, server._map)
         while not stopping.is_set():
-            wasyncore.loop(timeout=.1, count=1, map=server._map)
+            due = router.until_expiry()
+            longest = LONGEST_SLEEP if watched else 1
+            wasyncore.loop(timeout=longest if due is None else min(longest, due + .05), count=1, map=server._map)
             router.expire()
-            if owner_gone():
+            if not watched and owner_gone():
                 logging.getLogger(__name__).warning('Akousousin exited; stopping the voice service')
                 break
     finally:

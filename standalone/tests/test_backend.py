@@ -2,6 +2,10 @@
 # SPDX-FileCopyrightText: 2026 John Goodman
 import copy
 import io
+import os
+import subprocess
+import sys
+import time
 from pathlib import Path
 import tempfile
 import threading
@@ -190,6 +194,27 @@ class RoutingTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 settings.validate(dict(self.config, idle_timeout=invalid))
 
+    def test_settings_are_read_again_only_after_a_save(self):
+        self.router.start()
+        with patch('akousousin_app.backend.settings.load', wraps=settings.load) as load:
+            for _ in range(20):
+                self.router.expire()
+            self.assertEqual(load.call_count, 1)
+            self.config['idle_timeout'] = 300
+            settings.save(self.path, self.config)
+            self.router.expire()
+            self.assertEqual(load.call_count, 2)
+        self.assertEqual(self.router.idle_timeout(), 300)
+
+    def test_the_service_sleeps_until_the_voice_is_due_to_unload(self):
+        self.router.start()
+        self.assertIsNone(self.router.until_expiry())  # kept loaded: nothing to wake for
+        self.config['idle_timeout'] = 300
+        settings.save(self.path, self.config)
+        self.router.last_activity = 100.0
+        self.assertEqual(self.router.until_expiry(150.0), 250)
+        self.assertEqual(self.router.until_expiry(500.0), 0)
+
     def test_cancel_only_matches_current_request(self):
         self.router.active_request = 'private-id'
         self.assertFalse(self.router.cancel('other-client'))
@@ -281,3 +306,31 @@ class RoutingTests(unittest.TestCase):
             active.join(1)
         self.assertCountEqual(results, [('dispatcher', 'cancelled'), ('sapi', 'ok')])
         self.router.synthesize({'text': 'recovered'}, 'next')
+
+
+@unittest.skipUnless(hasattr(os, 'pidfd_open'), 'Linux reports process exit through pidfd')
+class OwnerWatchTests(unittest.TestCase):
+    def test_the_owner_exiting_wakes_the_sleeping_service(self):
+        from waitress import wasyncore
+        from akousousin_app import backend
+        owner = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])
+        self.addCleanup(owner.kill)
+        stopping, server_map = backend.Stopping(), {}
+        with patch.dict(os.environ, {'AKOUSOUSIN_OWNER_PID': str(owner.pid)}), \
+                patch('akousousin_app.runtime.owner_gone', return_value=False):
+            self.assertTrue(backend.watch_owner(stopping, wasyncore, server_map))
+        threading.Timer(.2, owner.kill).start()
+        started = time.monotonic()
+        while not stopping.is_set() and time.monotonic() - started < 5:
+            wasyncore.loop(timeout=backend.LONGEST_SLEEP, count=1, map=server_map)
+        self.assertTrue(stopping.is_set())
+        self.assertLess(time.monotonic() - started, 2)
+        owner.wait()
+
+    def test_a_stop_request_wakes_the_loop(self):
+        from akousousin_app import backend
+        woken = []
+        stopping = backend.Stopping()
+        stopping.wake = lambda: woken.append(True)
+        stopping.set()
+        self.assertEqual(woken, [True])

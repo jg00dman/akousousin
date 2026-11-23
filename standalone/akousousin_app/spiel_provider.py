@@ -196,13 +196,6 @@ def check_descriptors(message):
     return True if message.unix_fds else None
 
 
-def settings_stamp(path):
-    try:
-        return os.stat(path).st_mtime_ns
-    except OSError:
-        return None
-
-
 async def serve(path):
     service = spiel.service_path()
     record, registration = spiel.load_registration()
@@ -219,7 +212,7 @@ async def serve(path):
     try:
         if await bus.request_name(spiel.BUS_NAME, NameFlag.DO_NOT_QUEUE) != RequestNameReply.PRIMARY_OWNER:
             return
-        changed, checked = settings_stamp(path), time.monotonic()
+        changed, checked = settings.stamp(path), time.monotonic()
         while not disconnected.done():
             await asyncio.wait([disconnected], timeout=.5)
             try:
@@ -228,7 +221,7 @@ async def serve(path):
             except FileNotFoundError:
                 break
             # Voices change through settings; a slow recheck also notices deleted voice files.
-            stamp = settings_stamp(path)
+            stamp = settings.stamp(path)
             if stamp != changed or time.monotonic() - checked > 30:
                 changed, checked = stamp, time.monotonic()
                 provider.refresh()
