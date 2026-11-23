@@ -121,16 +121,38 @@ class TrayStateTests(unittest.TestCase):
 
     def test_lines_are_light_on_breeze_dark(self):
         (self.config / 'kdeglobals').write_text('[Colors:Window]\nForegroundNormal=252,252,252\n')
+        self.tray.colours_changed()  # the controller's watch on the settings folder reports the save
         self.update()
         self.assertGreater(self.middle_bar_colour().lightness(), 200)
+
+    def test_colours_are_looked_up_only_after_a_change(self):
+        with patch('akousousin_app.ui.tray.panel_tint', return_value=None) as lookup:
+            self.tray.colours_changed()
+            for _ in range(5):
+                self.update()
+            self.assertEqual(lookup.call_count, 1)
+            self.tray.colours_changed()
+            self.update()
+            self.assertEqual(lookup.call_count, 2)
 
     def test_switching_scheme_recolours_without_restarting(self):
         (self.config / 'kdeglobals').write_text('[Colors:Window]\nForegroundNormal=35,38,41\n')
         self.update()
         self.assertLess(self.middle_bar_colour().lightness(), 80)
         (self.config / 'kdeglobals').write_text('[Colors:Window]\nForegroundNormal=252,252,252\n')
+        self.tray.colours_changed()  # the controller's watch on the settings folder reports the save
         self.update()
         self.assertGreater(self.middle_bar_colour().lightness(), 200)
+
+    def test_colours_are_looked_up_only_after_a_change(self):
+        with patch('akousousin_app.ui.tray.panel_tint', return_value=None) as lookup:
+            self.tray.colours_changed()
+            for _ in range(5):
+                self.update()
+            self.assertEqual(lookup.call_count, 1)
+            self.tray.colours_changed()
+            self.update()
+            self.assertEqual(lookup.call_count, 2)
 
     def test_speech_from_windows_apps_animates_like_read_aloud(self):
         self.update(speaking=True)

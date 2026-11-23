@@ -55,6 +55,10 @@ def main():
     parser.add_argument('--install-speech-dispatcher', action='store_true', help='Register the output module in your user Speech Dispatcher configuration')
     parser.add_argument('--uninstall-speech-dispatcher', action='store_true', help='Remove your user output-module registration')
     parser.add_argument('--speech-dispatcher', action='store_true', help='Run a Speech Dispatcher output module on stdin/stdout')
+    spiel_flags = parser.add_mutually_exclusive_group()
+    spiel_flags.add_argument('--install-spiel', action='store_true', help='Register the Spiel provider and select its default voice')
+    spiel_flags.add_argument('--uninstall-spiel', action='store_true', help='Remove your Spiel provider registration')
+    spiel_flags.add_argument('--spiel-provider', action='store_true', help=argparse.SUPPRESS)
     reading = parser.add_mutually_exclusive_group()
     reading.add_argument('--read-selection', action='store_true', help='Read highlighted Linux desktop text; repeat to stop')
     reading.add_argument('--read-clipboard', action='store_true', help='Read copied text; repeat to stop')
@@ -124,6 +128,8 @@ def main():
             with runtime.launches_paused():
                 quit_for_install(args.settings)
                 speech_setup(args.uninstall_bundle, args.settings, remove=True)
+                from . import spiel
+                spiel.configure(args.settings, remove=True, executable=args.uninstall_bundle / 'akousousin')
                 from . import startup
                 startup.disable_if_inside(args.uninstall_bundle)  # it would start a program that is gone
                 print(uninstall(args.uninstall_bundle))
@@ -152,6 +158,24 @@ def main():
         from .speech_dispatcher import Module
         resources.bootstrap(args.settings)
         Module(args.settings).run()
+        return
+    if args.install_spiel or args.uninstall_spiel or args.spiel_provider:
+        from . import spiel
+        if args.spiel_provider:
+            if sys.platform != 'linux':
+                parser.error('Spiel integration is available on Linux')
+            import asyncio
+            import logging
+            from .spiel_provider import serve
+            logging.basicConfig(filename=str(runtime.log_path()), level=logging.WARNING,
+                                format='%(asctime)s Spiel provider: %(levelname)s %(message)s')
+            asyncio.run(serve(args.settings))
+        else:
+            if args.install_spiel:
+                resources.bootstrap(args.settings)
+            spiel.configure(args.settings, remove=args.uninstall_spiel)
+            print('Akousousin Spiel support removed.' if args.uninstall_spiel else
+                  'Akousousin Spiel support installed and selected as the default.')
         return
     config = resources.bootstrap(args.settings)
     if args.download_starter_voice:

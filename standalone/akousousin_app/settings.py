@@ -99,6 +99,15 @@ def validate(value):
         raise ValueError('Invalid voice preferences')
 
 
+
+def stamp(path):
+    """Identifies one saved version of the settings file; saves replace the file, so it changes every time."""
+    try:
+        info = Path(path).stat()
+    except OSError:
+        return None
+    return info.st_ino, info.st_mtime_ns, info.st_size
+
 def save(path, value):
     validate(value)
     path = Path(path)

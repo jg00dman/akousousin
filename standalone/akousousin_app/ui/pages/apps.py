@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 John Goodman
-"""Apps: where Akousousin's voices are available — Wine prefixes and Speech Dispatcher."""
+"""Apps: where Akousousin's voices are available."""
 import os
 from pathlib import Path
+import sys
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QFileDialog, QHBoxLayout, QLineEdit, QListWidget,
@@ -97,13 +98,22 @@ class AppsPage(Page):
 
         if not windows:
             speechd = Card(self.tr('Linux apps and screen readers'))
+            if sys.platform == 'linux':
+                self.spiel_status = StatusLine()
+                self.spiel_on = button(self.tr('Turn on…'), lambda: self.toggle_spiel(False))
+                self.spiel_off = button(self.tr('Turn off…'), lambda: self.toggle_spiel(True))
+                self.spiel_on.setAccessibleName(self.tr('Turn on Spiel'))
+                self.spiel_off.setAccessibleName(self.tr('Turn off Spiel'))
+                speechd.add(SettingRow(self.tr('Spiel'),
+                                       self.tr('Makes Akousousin voices available to Linux apps and screen readers that use Spiel.'),
+                                       self.spiel_status, self.spiel_on, self.spiel_off, first=True))
             self.dispatcher_status = StatusLine()
             self.dispatcher_on = button(self.tr('Turn on…'), lambda: self.speechd(False))
             self.dispatcher_off = button(self.tr('Turn off…'), lambda: self.speechd(True))
             speechd.add(SettingRow(self.tr('Speech Dispatcher'),
                                    self.tr('Lets Orca, Firefox and other Linux apps speak with Akousousin voices. '
                                            'Changing this restarts Speech Dispatcher, so Orca pauses for a moment.'),
-                                   self.dispatcher_status, self.dispatcher_on, self.dispatcher_off, first=True))
+                                   self.dispatcher_status, self.dispatcher_on, self.dispatcher_off, first=sys.platform != 'linux'))
             self.add(speechd)
         self.settings_changed(self.state.config)
 
@@ -137,6 +147,12 @@ class AppsPage(Page):
         if not entries:
             self.rows.addWidget(text(self.tr('No Wine prefixes yet. Add the prefix your Windows app is installed in.'), 'muted'))
         if not self.state.windows:
+            if sys.platform == 'linux':
+                from ...spiel import registered
+                on = registered()
+                self.spiel_status.set(self.tr('On') if on else self.tr('Off'), 'ok' if on else 'off')
+                self.spiel_on.setVisible(not on)
+                self.spiel_off.setVisible(on)
             from ...speech_dispatcher import dispatcher_paths
             on = dispatcher_paths()[1].exists()
             self.dispatcher_status.set(self.tr('On') if on else self.tr('Off'), 'ok' if on else 'off')
@@ -247,6 +263,13 @@ class AppsPage(Page):
                             + (' ' + self.tr('A private speech component was added for this Wine version.') if compatibility else ''))
 
         self.run(apply, done, key='register', busy=self.tr('Working on %1…').replace('%1', target))
+
+    def toggle_spiel(self, remove):
+        from ...spiel import configure
+        message = (self.tr('Remove Akousousin from Spiel and restore the previous default if it still uses Akousousin?')
+                   if remove else self.tr('Make Akousousin and its current default voice the default for Spiel?'))
+        if self.confirm(self.tr('Spiel'), message, self.tr('Turn off') if remove else self.tr('Turn on')):
+            self.run(lambda: configure(self.state.path, remove=remove), lambda _: self.state.reload(), key='spiel')
 
     def speechd(self, remove):
         from ...speech_dispatcher import configure

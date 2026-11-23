@@ -177,6 +177,7 @@ class Tray(QObject):
         self.mode = 'ready'
         self.extras = {}
         self.phase = 0.0
+        self.tint, self.tint_stale = None, True
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._frame)
         self.menu = QMenu()
@@ -247,6 +248,17 @@ class Tray(QObject):
         if not groups:
             self.voices.addAction(self.tr('No voices installed yet')).setEnabled(False)
 
+    def colours_changed(self):
+        """The desktop's settings changed; look up the panel's colours at the next update."""
+        self.tint_stale = True
+
+    def panel_colours(self):
+        if os.name == 'nt':
+            return None
+        if self.tint_stale:
+            self.tint, self.tint_stale = panel_tint(), False
+        return self.tint
+
     def update(self, *, running, dictation, reading, pending, downloads, available, problem, speaking=False):
         """Refresh text, visibility and icon state from the controller's status.
 
@@ -283,7 +295,7 @@ class Tray(QObject):
         elif active:
             progress = .1
         extras = {'badge': CAUTION if problem or any(item['status'] == 'error' for item in downloads) else None,
-                  'progress': progress, 'tint': panel_tint() if os.name != 'nt' else None}
+                  'progress': progress, 'tint': self.panel_colours()}
         tooltip = {'listening': self.tr('Akousousin — dictation listening'),
                    'reading': self.tr('Akousousin — reading aloud')}.get(mode, self.tr('Akousousin — ready'))
         if self.icon.toolTip() != tooltip:

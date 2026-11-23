@@ -11,6 +11,7 @@ from pathlib import Path
 import logging
 import os
 import re
+import select
 import sys
 import subprocess
 import threading
@@ -25,6 +26,7 @@ import shlex
 
 from . import speech_gate, runtime, settings
 from .transport import fetch
+from .waiting import Interrupt
 
 MAX_MESSAGE = 65536
 
@@ -103,7 +105,7 @@ class Module:
         self.lock = threading.RLock()
         self.options = {}
         self.task = None
-        self.cancelled = threading.Event()
+        self.cancelled = Interrupt()
         self.request_id = ''
         self.audio_server = False
         self.busy = False
@@ -184,7 +186,7 @@ class Module:
             if not text or not self.audio_server or self.busy:
                 self.send('301 ERROR CANT SPEAK\n')
                 return
-            self.cancelled = threading.Event()
+            self.cancelled = Interrupt()  # wakes a request waiting for audio the moment it is stopped
             self.request_id = uuid.uuid4().hex
             self.request_gate = speech_gate.snapshot(self.path)
             self.audio_pending = False
@@ -280,8 +282,19 @@ class Module:
                     self.send('703 STOP\n')
 
     def watch_gate(self, stopped):
+        """Stop speech the moment dictation starts. Sleeps until the gate file changes."""
+        watch = speech_gate.watch(self.path)  # before the snapshot, so no change is missed
         previous = speech_gate.snapshot(self.path)
-        while not stopped.wait(.025):
+        while not stopped.is_set():
+            if watch is None:
+                stopped.wait(.025)
+            else:
+                waiters = [watch, stopped] if hasattr(stopped, 'fileno') else [watch]
+                select.select(waiters, [], [], None if len(waiters) > 1 else .5)
+                if not watch.drain():
+                    continue
+            if stopped.is_set():
+                break
             current = speech_gate.snapshot(self.path)
             if current[0] and not previous[0] or current[1] != previous[1]:
                 with self.lock:
@@ -306,7 +319,7 @@ class Module:
             self.send('399 ERR EXPECTED INIT\n')
             return
         self.send('299-Akousousin neural voice engine\n299 OK LOADED SUCCESSFULLY\n')
-        stopped = threading.Event()
+        stopped = Interrupt()
         watcher = threading.Thread(target=self.watch_gate, args=(stopped,), daemon=True)
         watcher.start()
         try:

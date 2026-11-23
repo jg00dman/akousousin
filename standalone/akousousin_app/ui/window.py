@@ -224,10 +224,10 @@ class MainWindow(QMainWindow):
             self.hide()
             event.ignore()
             return
-        self.state.timer.stop()
+        self.state.stop_polling()
         super().closeEvent(event)
 
     def _idle(self):
         if self.quit_when_idle:
-            self.state.timer.stop()
+            self.state.stop_polling()
             QApplication.instance().quit()

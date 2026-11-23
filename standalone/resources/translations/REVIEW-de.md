@@ -163,6 +163,12 @@ SPDX-FileCopyrightText: 2026 John Goodman
 | AppsPage | This restarts Speech Dispatcher, so Orca pauses for a moment. Continue? | Dadurch wird Speech Dispatcher neu gestartet und Orca kurzzeitig unterbrochen. Fortfahren? |
 | AppsPage | Turn off | Deaktivieren |
 | AppsPage | Turn on | Aktivieren |
+| AppsPage | Turn on Spiel | Spiel aktivieren |
+| AppsPage | Turn off Spiel | Spiel deaktivieren |
+| AppsPage | Spiel | Spiel |
+| AppsPage | Makes Akousousin voices available to Linux apps and screen readers that use Spiel. | Stellt Akousousin-Stimmen für Linux-Anwendungen und Bildschirmleser bereit, die Spiel verwenden. |
+| AppsPage | Remove Akousousin from Spiel and restore the previous default if it still uses Akousousin? | Akousousin aus Spiel entfernen und die vorherige Standardeinstellung wiederherstellen, falls Spiel noch Akousousin verwendet? |
+| AppsPage | Make Akousousin and its current default voice the default for Spiel? | Akousousin und seine aktuelle Standardstimme als Standard für Spiel festlegen? |
 | Dialogs | Cancel | Abbrechen |
 | Dialogs | Close | Schließen |
 | Dialogs | Something went wrong | Ein Fehler ist aufgetreten |

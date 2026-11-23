@@ -633,6 +633,30 @@
         <source>Turn on</source>
         <translation>開啟</translation>
     </message>
+    <message>
+        <source>Turn on Spiel</source>
+        <translation>開啟 Spiel</translation>
+    </message>
+    <message>
+        <source>Turn off Spiel</source>
+        <translation>關閉 Spiel</translation>
+    </message>
+    <message>
+        <source>Spiel</source>
+        <translation>Spiel</translation>
+    </message>
+    <message>
+        <source>Makes Akousousin voices available to Linux apps and screen readers that use Spiel.</source>
+        <translation>讓使用 Spiel 的 Linux 應用程式和螢幕閱讀器使用 Akousousin 的語音。</translation>
+    </message>
+    <message>
+        <source>Remove Akousousin from Spiel and restore the previous default if it still uses Akousousin?</source>
+        <translation>要從 Spiel 移除 Akousousin 嗎？如果 Spiel 仍在使用 Akousousin，將還原先前的預設值。</translation>
+    </message>
+    <message>
+        <source>Make Akousousin and its current default voice the default for Spiel?</source>
+        <translation>要將 Akousousin 及其目前的預設語音設為 Spiel 的預設值嗎？</translation>
+    </message>
 </context>
 <context>
     <name>Dialogs</name>

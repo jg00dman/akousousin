@@ -163,6 +163,12 @@ SPDX-FileCopyrightText: 2026 John Goodman
 | AppsPage | This restarts Speech Dispatcher, so Orca pauses for a moment. Continue? | 这将重启 Speech Dispatcher，Orca 会短暂停止。是否继续？ |
 | AppsPage | Turn off | 关闭 |
 | AppsPage | Turn on | 开启 |
+| AppsPage | Turn on Spiel | 开启 Spiel |
+| AppsPage | Turn off Spiel | 关闭 Spiel |
+| AppsPage | Spiel | Spiel |
+| AppsPage | Makes Akousousin voices available to Linux apps and screen readers that use Spiel. | 让使用 Spiel 的 Linux 应用和屏幕阅读器使用 Akousousin 的语音。 |
+| AppsPage | Remove Akousousin from Spiel and restore the previous default if it still uses Akousousin? | 要从 Spiel 中移除 Akousousin 吗？如果 Spiel 仍在使用 Akousousin，将恢复之前的默认设置。 |
+| AppsPage | Make Akousousin and its current default voice the default for Spiel? | 要将 Akousousin 及其当前默认语音设为 Spiel 的默认值吗？ |
 | Dialogs | Cancel | 取消 |
 | Dialogs | Close | 关闭 |
 | Dialogs | Something went wrong | 出现问题 |

@@ -14,17 +14,33 @@ def fetch(port, payload, cancelled, identifier, timeout=65):
     deadline = time.monotonic() + timeout
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as connection:
         connection.setblocking(False)
+        # A cancellation that can be waited on (see waiting.Interrupt) wakes this
+        # at once; a plain event is checked every 50 ms instead.
+        wakers = cancelled.descriptors() if hasattr(cancelled, 'descriptors') else None
+
         def ready(write=False, end=deadline):
             while True:
                 if cancelled.is_set():
                     raise InterruptedError('Speech cancelled')
-                if time.monotonic() >= min(deadline, end):
+                remaining = min(deadline, end) - time.monotonic()
+                if remaining <= 0:
                     raise TimeoutError('Speech response timed out')
-                reads, writes, errors = select.select([] if write else [connection],
-                    [connection] if write else [], [connection], .05)
-                if errors:
-                    raise ConnectionError('Speech connection failed')
-                if reads or writes:
+                if wakers is None:
+                    reads, writes, errors = select.select([] if write else [connection],
+                        [connection] if write else [], [connection], .05)
+                    if errors:
+                        raise ConnectionError('Speech connection failed')
+                    happened = bool(reads or writes)
+                else:
+                    poller = select.poll()
+                    poller.register(connection, select.POLLOUT if write else select.POLLIN)
+                    for descriptor, mask in wakers:
+                        poller.register(descriptor, mask)
+                    flags = dict(poller.poll(remaining * 1000)).get(connection.fileno(), 0)
+                    if flags & select.POLLNVAL:
+                        raise ConnectionError('Speech connection failed')
+                    happened = bool(flags)
+                if happened:
                     error = connection.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
                     if error:
                         raise OSError(error, 'Speech connection failed')

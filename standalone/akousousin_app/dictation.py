@@ -48,6 +48,7 @@ class Dictation:
         self.sequence = 0
         self.results = []
         self.last_activity = time.monotonic()
+        self.on_change = None  # told of every state change, from any thread
         self.insert = None
         self.enabled = False
         self.closed = False
@@ -65,6 +66,8 @@ class Dictation:
             self.state = state
             if phase:
                 self.phase = phase
+        if self.on_change:
+            self.on_change()
 
     def prepare(self, download=False):
         self._launch(False, None, download=download)
@@ -153,7 +156,9 @@ class Dictation:
             self.trim_history()
             if outcome in ('displayed', 'retained'):
                 log_timings(record)
-            return record
+        if self.on_change:
+            self.on_change()  # a new transcript for the control panel
+        return record
 
     def trim_history(self):
         # Leave room for status metadata inside the existing 1 MiB IPC limit.
@@ -167,6 +172,8 @@ class Dictation:
             self.sequence += 1
             if values.get('output') in ('inserted', 'retained', 'cancelled'):
                 log_timings(record)
+        if self.on_change:
+            self.on_change()
 
     def _run(self, record, target, seconds, config):
         timer = None
@@ -357,6 +364,16 @@ class Dictation:
         finally:
             with self.lock:
                 self.unloading = False
+
+    def until_expiry(self):
+        """Seconds until an idle dictation model unloads, or None if nothing is due."""
+        config = settings.load(self.path)
+        if self.enabled and config.get('stt_keep_loaded', True):
+            return None
+        timeout = config.get('stt_idle_timeout', 3600)
+        if not timeout or not self.recognizer or self.status()['busy']:
+            return None
+        return max(0, self.last_activity + timeout - time.monotonic())
 
     def expire(self):
         config = settings.load(self.path)

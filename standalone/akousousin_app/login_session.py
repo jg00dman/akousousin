@@ -70,3 +70,38 @@ def current():
         if session and running(session):
             return session
     return None
+
+
+class Monitor:
+    """A descriptor that becomes readable when any login session starts, changes or ends.
+
+    Lets the controller wait to be told about logout instead of asking
+    repeatedly. Raises OSError where sd-login cannot provide one.
+    """
+    def __init__(self):
+        library = _sd()
+        if library is None:
+            raise OSError('sd-login is unavailable')
+        for function, result in (('sd_login_monitor_new', ctypes.c_int), ('sd_login_monitor_get_fd', ctypes.c_int),
+                                 ('sd_login_monitor_flush', ctypes.c_int), ('sd_login_monitor_unref', ctypes.c_void_p)):
+            getattr(library, function).restype = result
+        for function in ('sd_login_monitor_get_fd', 'sd_login_monitor_flush', 'sd_login_monitor_unref'):
+            getattr(library, function).argtypes = [ctypes.c_void_p]
+        self._library = library
+        self._handle = ctypes.c_void_p()
+        if library.sd_login_monitor_new(b'session', ctypes.byref(self._handle)) < 0:
+            raise OSError('Could not watch login sessions')
+        self.fd = library.sd_login_monitor_get_fd(self._handle)
+        if self.fd < 0:
+            self.close()
+            raise OSError('Could not watch login sessions')
+
+    def flush(self):
+        """Acknowledge the pending changes, so the descriptor waits for the next ones."""
+        if self._handle:
+            self._library.sd_login_monitor_flush(self._handle)
+
+    def close(self):
+        if self._handle:
+            self._library.sd_login_monitor_unref(self._handle)
+            self._handle = None

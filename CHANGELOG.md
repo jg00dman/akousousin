@@ -8,6 +8,13 @@ SPDX-FileCopyrightText: 2026 John Goodman
 Stable releases. Each beta's notes are on its
 [release page](https://github.com/jg00dman/akousousin/releases).
 
+## 0.9.1.2
+
+- Spiel speech provider, alongside Speech Dispatcher.
+- French, German, Portuguese, Korean, Simplified and Traditional Chinese.
+- No polling while idle: the tray, voice service, control panel, Speech
+  Dispatcher module and Spiel provider wait for changes instead of checking.
+
 ## 0.9.1
 
 - Whisper Base is included, so dictation works without a download.

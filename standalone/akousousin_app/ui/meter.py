@@ -107,9 +107,8 @@ class LevelMeter(QWidget):
         self.state = None
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.setMinimumWidth(140)
-        self.decay = QTimer(self)
+        self.decay = QTimer(self)  # runs only while the bars are falling or 'hearing' is shown
         self.decay.timeout.connect(self._fall)
-        self.decay.start(50)
         self._describe('off')
 
     def sizeHint(self):
@@ -122,6 +121,8 @@ class LevelMeter(QWidget):
             self.heard_at = time.monotonic()
         self._describe('hearing' if time.monotonic() - self.heard_at < .8 else 'quiet')
         self.update()
+        if not self.decay.isActive():
+            self.decay.start(50)
 
     def set_unavailable(self):
         self.value = 0.0
@@ -134,6 +135,8 @@ class LevelMeter(QWidget):
             self.update()
         if self.state == 'hearing' and time.monotonic() - self.heard_at >= .8:
             self._describe('quiet')
+        if self.value <= 0 and self.state != 'hearing':
+            self.decay.stop()  # settled: nothing moves until the microphone hears something
 
     def _describe(self, state):
         if state != self.state:

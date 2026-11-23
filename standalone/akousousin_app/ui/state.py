@@ -8,11 +8,47 @@ Pages listen to those signals and update themselves.
 """
 from dataclasses import dataclass, field
 import os
+import threading
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
 from .. import download_status, resources, runtime, settings
 from ..service import Service
+
+
+class ChangeWatcher(QObject):
+    """Waits in the background for the controller to report a change."""
+    changed = Signal()
+
+    def __init__(self, path, parent=None):
+        super().__init__(parent)
+        self.path = path
+        self.stopping = threading.Event()
+
+    def start(self):
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def stop(self):
+        self.stopping.set()
+
+    def _run(self):
+        generation = None
+        while not self.stopping.is_set():
+            try:
+                reply = runtime.call(self.path, {'command': 'wait', 'after': generation, 'timeout': 25},
+                                     launch=False, timeout=35)
+            except (OSError, RuntimeError, ValueError):
+                reply = None
+            if self.stopping.is_set():
+                return
+            if not isinstance(reply, dict) or not isinstance(reply.get('generation'), int):
+                # No controller to wait on: show that, and look again in a moment.
+                self.changed.emit()
+                self.stopping.wait(2)
+                continue
+            if reply['generation'] != generation:
+                generation = reply['generation']
+                self.changed.emit()
 
 
 @dataclass
@@ -48,11 +84,24 @@ class AppState(QObject):
         self.status = Status()
         self.last_activation = None
         self.polling = False
-        self.timer = QTimer(self)
+        self.repoll = False
+        # The panel reads its status when the controller says something changed.
+        self.timer = QTimer(self)  # kept for callers that stop it; no longer started
         self.timer.timeout.connect(self.poll)
-        if poll:
-            self.timer.start(1000)
+        self.watcher = None
+        if poll and os.name == 'nt':
+            self.timer.start(1000)  # Windows keeps asking every second, as before
             QTimer.singleShot(0, self.poll)
+        elif poll:
+            self.watcher = ChangeWatcher(path, self)
+            self.watcher.changed.connect(self.poll)
+            self.watcher.start()
+            QTimer.singleShot(0, self.poll)
+
+    def stop_polling(self):
+        self.timer.stop()
+        if self.watcher:
+            self.watcher.stop()
 
     # Settings -------------------------------------------------------------
     def save(self, **changes):
@@ -87,7 +136,10 @@ class AppState(QObject):
 
     # Polling --------------------------------------------------------------
     def poll(self):
-        if self.polling or self.tasks.closing:
+        if self.tasks.closing:
+            return
+        if self.polling:
+            self.repoll = True  # read again when this one finishes, so the change is not missed
             return
         self.polling = True
         port = self.config['port']
@@ -98,8 +150,14 @@ class AppState(QObject):
                           runtime.call(self.path, {'command': 'stt-status'}, launch=False),
                           download_status.current())
 
-        def apply(status):
+        def again():
             self.polling = False
+            if self.repoll:
+                self.repoll = False
+                QTimer.singleShot(0, self.poll)
+
+        def apply(status):
+            again()
             if not self.tasks.busy():
                 try:
                     self._set_config(settings.load(self.path))
@@ -118,7 +176,7 @@ class AppState(QObject):
                     self.activated.emit(panel.get('page') or '')
 
         def failed(error):
-            self.polling = False
+            again()
             self.status = Status(error=str(error))
             self.status_changed.emit(self.status)
 

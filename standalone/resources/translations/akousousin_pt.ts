@@ -633,6 +633,30 @@
         <source>Turn on</source>
         <translation>Ativar</translation>
     </message>
+    <message>
+        <source>Turn on Spiel</source>
+        <translation>Ativar o Spiel</translation>
+    </message>
+    <message>
+        <source>Turn off Spiel</source>
+        <translation>Desativar o Spiel</translation>
+    </message>
+    <message>
+        <source>Spiel</source>
+        <translation>Spiel</translation>
+    </message>
+    <message>
+        <source>Makes Akousousin voices available to Linux apps and screen readers that use Spiel.</source>
+        <translation>Disponibiliza as vozes do Akousousin às aplicações Linux e aos leitores de ecrã que usam o Spiel.</translation>
+    </message>
+    <message>
+        <source>Remove Akousousin from Spiel and restore the previous default if it still uses Akousousin?</source>
+        <translation>Remover o Akousousin do Spiel e repor a predefinição anterior, se o Spiel ainda usar o Akousousin?</translation>
+    </message>
+    <message>
+        <source>Make Akousousin and its current default voice the default for Spiel?</source>
+        <translation>Tornar o Akousousin e a sua voz predefinida atual a predefinição do Spiel?</translation>
+    </message>
 </context>
 <context>
     <name>Dialogs</name>
