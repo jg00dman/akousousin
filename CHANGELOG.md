@@ -8,6 +8,12 @@ SPDX-FileCopyrightText: 2026 John Goodman
 Stable releases. Each beta's notes are on its
 [release page](https://github.com/jg00dman/akousousin/releases).
 
+## 0.9.1.3
+
+- Apps page says when Spiel isn't installed; turning Spiel off works after
+  Spiel is removed.
+- About page verse link fixed.
+
 ## 0.9.1.2
 
 - Spiel speech provider, alongside Speech Dispatcher.

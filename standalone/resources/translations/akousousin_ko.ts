@@ -657,6 +657,10 @@
         <source>Make Akousousin and its current default voice the default for Spiel?</source>
         <translation>Akousousin과 현재 기본 음성을 Spiel의 기본값으로 설정할까요?</translation>
     </message>
+    <message>
+        <source>Not installed</source>
+        <translation>설치되지 않음</translation>
+    </message>
 </context>
 <context>
     <name>Dialogs</name>

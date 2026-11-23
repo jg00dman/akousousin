@@ -3,26 +3,14 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
-# Akousousin 0.9.1.2
+# Akousousin 0.9.1.3
 
-Spiel support, six new languages, and an Akousousin that rests when you are
-not using it. Your voices, models and settings carry over.
+Two small fixes. Your voices, models and settings carry over.
 
-**Spiel.** Apps and screen readers that speak through
-[Spiel](https://project-spiel.org/) can now use Akousousin voices. Install
-Spiel, then turn it on in **Apps → Linux apps and screen readers**. Akousousin
-and your default voice become Spiel's default; turning it off restores the
-voice you had before. Speech Dispatcher support is unchanged, and both can be
-on at once.
+- **Spiel when it isn't installed.** The Apps page now says Spiel isn't
+  installed, instead of offering a switch that could only fail. If you remove
+  Spiel after turning it on, turning it off still works.
+- **The verse link on the About page** opens John 5:25 on Bible.com; the old
+  link no longer worked.
 
-**Languages.** The control panel and tray now follow your desktop in French,
-German, Portuguese, Korean, and Simplified and Traditional Chinese, as well as
-English and Spanish.
-
-**Idle means idle.** Waiting in the tray, Akousousin used to wake your
-computer dozens of times a second to check whether anything had changed. It
-now waits to be told, and wakes only when you use it, which helps battery life
-on laptops and the Steam Deck. The tray, the control panel, Speech Dispatcher
-and Spiel respond as quickly as before.
-
-[What's in 0.9.1](https://github.com/jg00dman/akousousin/releases/tag/v0.9.1)
+[What's in 0.9.1.2](https://github.com/jg00dman/akousousin/releases/tag/v0.9.1.2)
