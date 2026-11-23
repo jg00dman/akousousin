@@ -66,7 +66,9 @@ def purge(settings_path, wine_prefix=None, wine=None, bundle_prefix=None, report
     if os.name == 'posix' and speech_dispatcher.dispatcher_paths()[1].exists():
         step('Speech Dispatcher', lambda: speech_dispatcher.configure(settings_path, remove=True))
     from . import startup
+    from .ui import tray_icons
     step('start at login', startup.disable)
+    step('tray icons', tray_icons.remove)
     for entry in desktop_entries():
         step(str(entry), entry.unlink)
     target = bundle_target(bundle_prefix)

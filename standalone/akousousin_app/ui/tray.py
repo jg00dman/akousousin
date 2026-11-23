@@ -117,8 +117,31 @@ class Tray(QObject):
         if os.name == 'nt':
             for action in (self.stop_reading, self.read_selected, self.read_copied):
                 action.setVisible(False)
+        self.themed = self._install_themed_icons()
+        self.shown = None
         self.icon = None
         self.create()
+
+    @staticmethod
+    def _install_themed_icons():
+        """Use desktop-recoloured icons for the monochrome states when the theme can find them."""
+        if os.name == 'nt':
+            return False
+        from . import tray_icons
+        try:
+            folder = tray_icons.install()
+        except OSError:
+            return False
+        icons = str(folder.parents[2])  # .../icons
+        paths = QIcon.themeSearchPaths()
+        if icons not in paths:
+            QIcon.setThemeSearchPaths([icons, *paths, '/usr/share/icons'])
+        if not QIcon.themeName():
+            QIcon.setThemeName('hicolor')
+        if not QIcon.fallbackThemeName():
+            QIcon.setFallbackThemeName('hicolor')
+        icon = QIcon.fromTheme(tray_icons.READY)
+        return not icon.isNull() and icon.name() == tray_icons.READY
 
     def create(self):
         """(Re)create the system tray icon, e.g. when the desktop's tray appears late."""
@@ -126,6 +149,7 @@ class Tray(QObject):
             self.icon.hide()
             self.icon.deleteLater()
         self.icon = QSystemTrayIcon()
+        self.shown = None
         self.icon.setContextMenu(self.menu)
         self.icon.activated.connect(self._activated)
         self._paint()
@@ -215,4 +239,20 @@ class Tray(QObject):
         self._paint()
 
     def _paint(self):
+        name = self._themed_name()
+        if name:
+            if name != self.shown:  # the animation ticks faster than its frames change
+                self.shown = name
+                self.icon.setIcon(QIcon.fromTheme(name))
+            return
+        self.shown = None
         self.icon.setIcon(draw(self.mode, self.phase, **self.extras))
+
+    def _themed_name(self):
+        """The installed icon for this state, or None when it must be drawn (microphone, badges)."""
+        if not self.themed or self.mode == 'listening' or any(self.extras.values()):
+            return None
+        from . import tray_icons
+        if self.mode == 'reading':
+            return tray_icons.reading(int(self.phase * tray_icons.FRAMES) % tray_icons.FRAMES)
+        return tray_icons.READY
