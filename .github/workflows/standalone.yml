@@ -16,6 +16,10 @@ on:
         description: Publish a unique experimental prerelease after all tests pass
         type: boolean
         default: false
+      draft:
+        description: With publish, create the release as a draft to test before anyone is offered it
+        type: boolean
+        default: false
   push:
     branches: [main, whisper, codex/read-selection, codex/on-demand-voices, codex/private-sapi-probe, codex/project-licensing, codex/standalone-control-panel, codex/speech-dispatcher-on-demand, codex/linux-speech-dispatcher, codex/control-panel-updates]
     paths: [engine/**, standalone/**, backend/**, tests/**, .github/workflows/standalone.yml]
@@ -226,6 +230,7 @@ jobs:
       - name: Publish standalone beta with the selected voice option
         env:
           GH_TOKEN: ${{ github.token }}
+          DRAFT: ${{ github.event_name == 'workflow_dispatch' && inputs.draft }}
         run: |
           version=$(sed -n 's/^version = "\([^"]*\)"/\1/p' standalone/pyproject.toml)
           # A plain version (0.8.0) is a stable release, tagged v<version> as the in-app
@@ -234,6 +239,10 @@ jobs:
             tag="v${version}" kind=(--latest)
           else
             tag="standalone-beta-${version}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" kind=(--prerelease)
+          fi
+          # A draft is invisible to the in-app update check until it is published.
+          if [[ "$DRAFT" == true ]]; then
+            kind=(--draft)
           fi
           if actual=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha' 2>/dev/null); then
             [[ "$actual" == "$GITHUB_SHA" ]]
