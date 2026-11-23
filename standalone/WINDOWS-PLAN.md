@@ -20,8 +20,13 @@ interactive desktop readiness.
   Preserve existing settings on failure, clean up staging and avoid shared
   settings.tmp collisions. Local regression tests pass; Windows desktop retest
   of starter voice installation is still required.
-- [ ] Provide a console-free GUI launch while preserving CLI, SAPI service and
+- [x] Provide a console-free GUI launch while preserving CLI, SAPI service and
   multiprocessing behaviour. Avoid merely hiding exceptions; retain diagnostics.
+  (23 Nov: GUI build; CLI writes to the calling terminal; errors go to stderr
+  and the log instead of a blocking dialog.)
+- [x] Installer: Program Files, Start menu, uninstall restores speech settings
+  (Inno Setup, tested silently in CI). Voice registration asks for UAC.
+- [x] Read-aloud plays to the end (miniaudio, drained) instead of a timed stop.
 - [ ] Investigate QObject timer shutdown warnings and ensure Qt-owned resources
   and timers are stopped/destroyed on their owning thread.
 - [ ] Surface useful model-install/load failure details in selectable UI text.
