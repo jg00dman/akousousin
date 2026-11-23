@@ -28,7 +28,16 @@ print('Status:', status.stdout.strip(), status.stderr.strip(), flush=True)
 assert status.returncode == 0 and status.stdout.strip().startswith('{'), 'No command-line output from the GUI build'
 print('PASS: installer adds the program and Start menu entry; command-line output works', flush=True)
 
-subprocess.run([str(uninstaller), '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'], check=True, timeout=300)
+removal_log = log.with_name('windows-uninstaller.log')
+try:
+    subprocess.run([str(uninstaller), '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', f'/LOG={removal_log}'],
+                   check=True, timeout=300)
+except subprocess.TimeoutExpired:
+    # A hidden dialog would block here; show what is still running.
+    print(subprocess.run(['tasklist', '/V'], capture_output=True, text=True).stdout, flush=True)
+    if removal_log.exists():
+        print(removal_log.read_text(errors='replace'), flush=True)
+    raise
 deadline = time.monotonic() + 60  # the uninstaller finishes in a copy of itself
 while (executable.exists() or menu.exists()) and time.monotonic() < deadline:
     time.sleep(1)

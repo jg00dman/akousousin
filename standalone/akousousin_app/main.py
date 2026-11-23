@@ -24,10 +24,26 @@ def main():
         del sys.argv[index:index + 2]
     try:
         run(sys.argv[1:])
-    except BaseException as error:
-        if report is not None and not (isinstance(error, SystemExit) and not error.code):
-            report.write_text(str(error) or type(error).__name__, encoding='utf-8')
+    except SystemExit as error:
+        if report is not None and error.code not in (0, None):
+            report.write_text(str(error.code), encoding='utf-8')
         raise
+    except Exception as error:
+        if report is not None:
+            report.write_text(str(error) or type(error).__name__, encoding='utf-8')
+        if os.name != 'nt':
+            raise
+        # The Windows build has no console: an uncaught error would open a
+        # modal "Unhandled exception" box that blocks silent callers (the
+        # uninstaller, SAPI clients waking speech). Report it and exit instead.
+        import traceback
+        try:
+            with runtime.log_path().open('a', encoding='utf-8') as log:
+                log.write(f'Akousousin {" ".join(sys.argv[1:])} failed:\n{traceback.format_exc()}')
+        except OSError:
+            pass
+        print(f'Akousousin: {error}', file=sys.stderr)
+        raise SystemExit(1)
 
 
 def run(arguments):
