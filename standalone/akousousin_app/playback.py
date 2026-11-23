@@ -27,7 +27,15 @@ class PlaybackError(RuntimeError):
 
 def play_wav(path, cancelled=lambda: False, timeout=120):
     # PipeWire natively when it is the audio server, otherwise PulseAudio.
-    from akousousin_backend.audio_system import AudioUnavailable, play_command
+    from akousousin_backend.audio_system import AudioUnavailable, lead_in, play_command, played, wav_seconds, with_lead_in
+    try:
+        data = Path(path).read_bytes()
+        padded = with_lead_in(data, lead_in())
+        if padded is not data:
+            Path(path).write_bytes(padded)
+        played(wav_seconds(padded))
+    except (OSError, EOFError, ValueError):
+        pass  # not a WAV we can read; play it as it is
     try:
         command = play_command(path, 'Voice preview', 'Accessibility')
     except AudioUnavailable as error:
