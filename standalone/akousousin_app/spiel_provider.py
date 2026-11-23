@@ -11,7 +11,6 @@ import os
 from pathlib import Path
 import select
 import stat
-import threading
 import time
 import urllib.error
 import urllib.request
@@ -28,6 +27,7 @@ from dbus_next.service import ServiceInterface, dbus_property, method
 from . import resources, runtime, settings, speech_gate, spiel
 from .speech_dispatcher import MAX_MESSAGE, chunks
 from .transport import fetch
+from .waiting import Interrupt, Watch
 
 SAMPLE_RATE = 22050
 FORMAT = f'audio/x-raw,format=S16LE,channels=1,rate={SAMPLE_RATE}'
@@ -51,27 +51,59 @@ def pipeline_text(text, is_ssml):
 
 
 class OutputPipe:
+    """Spiel's pipe for one utterance, and everything that stops it.
+
+    Speech stops when Spiel closes the pipe, dictation starts, or the provider
+    exits. Each wakes a waiting writer at once; nothing is checked on a timer.
+    """
     def __init__(self, fd, path):
         self.fd = fd
         self.path = path
+        self.gate_watch = speech_gate.watch(path)  # before the snapshot, so no change is missed
         self.gate = speech_gate.snapshot(path)
-        self.stopped = threading.Event()
+        self.stopped = Interrupt()
         self.poll = select.poll()
         self.poll.register(fd, select.POLLERR | select.POLLHUP)
 
+    def descriptors(self):
+        """What a waiter should watch: the stop signal, the pipe closing and the dictation gate."""
+        found = [*self.stopped.descriptors(), (self.fd, 0)]  # a closed pipe always reports POLLERR
+        if self.gate_watch is not None:
+            found.append((self.gate_watch.fileno(), select.POLLIN))
+        return found
+
     def is_set(self):
-        return self.stopped.is_set() or bool(self.poll.poll(0)) or speech_gate.suppressed(self.path, self.gate)
+        if self.stopped.is_set():
+            return True
+        if self.poll.poll(0):
+            self.stopped.set()
+        # Without a file watch, read the gate every time, as before.
+        elif (self.gate_watch is None or self.gate_watch.drain()) and speech_gate.suppressed(self.path, self.gate):
+            self.stopped.set()
+        return self.stopped.is_set()
 
     def write(self, pcm):
         data = memoryview(pcm)
         deadline = time.monotonic() + 65
+        waiter = select.poll()
+        waiter.register(self.fd, select.POLLOUT)
+        for descriptor, mask in self.descriptors():
+            if descriptor != self.fd:
+                waiter.register(descriptor, mask)
         while data and not self.is_set():
-            if time.monotonic() >= deadline:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
                 raise TimeoutError('Spiel client did not read its speech pipe')
             try:
                 data = data[os.write(self.fd, data[:8192]):]
             except BlockingIOError:
-                self.stopped.wait(.025)
+                waiter.poll(remaining * 1000)  # until Spiel reads, or speech is stopped
+
+    def close(self):
+        os.close(self.fd)
+        self.stopped.close()
+        if self.gate_watch is not None:
+            self.gate_watch.close()
 
 
 def cancel_backend_request(port, request_id):
@@ -123,7 +155,7 @@ def render(pipe, text, voice, rate, port):
         LOG.exception('Spiel synthesis failed')
     finally:
         cancelled = pipe.is_set()
-        os.close(pipe.fd)
+        pipe.close()
         if started and cancelled:
             cancel_backend_request(port, request_id)
 
@@ -212,19 +244,39 @@ async def serve(path):
     try:
         if await bus.request_name(spiel.BUS_NAME, NameFlag.DO_NOT_QUEUE) != RequestNameReply.PRIMARY_OWNER:
             return
-        changed, checked = settings.stamp(path), time.monotonic()
-        while not disconnected.done():
-            await asyncio.wait([disconnected], timeout=.5)
-            try:
-                if service.read_bytes() != registration or not os.path.samestat(original, executable.stat()):
+        # Sleep until the registration, the program, the settings or the voices
+        # folder changes: an update or removal ends this provider, and a new or
+        # removed voice is announced to Spiel.
+        try:
+            watch = Watch(service.parent, Path(path).resolve().parent, executable.parent, settings.data_path() / 'voices')
+        except OSError:
+            watch = None
+        changes = asyncio.Event()
+        loop = asyncio.get_running_loop()
+        if watch is not None:
+            loop.add_reader(watch.fileno(), changes.set)
+        try:
+            while not disconnected.done():
+                if watch is None:
+                    await asyncio.wait([disconnected], timeout=5)
+                else:
+                    waiter = asyncio.ensure_future(changes.wait())
+                    await asyncio.wait([disconnected, waiter], return_when=asyncio.FIRST_COMPLETED)
+                    waiter.cancel()
+                    changes.clear()
+                    watch.drain()
+                if disconnected.done():
                     break
-            except FileNotFoundError:
-                break
-            # Voices change through settings; a slow recheck also notices deleted voice files.
-            stamp = settings.stamp(path)
-            if stamp != changed or time.monotonic() - checked > 30:
-                changed, checked = stamp, time.monotonic()
+                try:
+                    if service.read_bytes() != registration or not os.path.samestat(original, executable.stat()):
+                        break
+                except FileNotFoundError:
+                    break
                 provider.refresh()
+        finally:
+            if watch is not None:
+                loop.remove_reader(watch.fileno())
+                watch.close()
     finally:
         for pipe in provider.requests.values():
             pipe.stopped.set()

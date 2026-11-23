@@ -4,6 +4,7 @@ import io
 from pathlib import Path
 import tempfile
 import threading
+import time
 import unittest
 import wave
 from unittest.mock import patch
@@ -86,3 +87,44 @@ class GateTests(unittest.TestCase):
             self.assertNotIn(b'703 STOP', module.output.getvalue())
         finally:
             stopped.set(); watcher.join(1)
+
+
+class WatchedGateTests(unittest.TestCase):
+    """Dictation stops speech at once, with the watcher asleep until the gate changes."""
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.path = Path(folder.name) / 'settings.json'
+        from akousousin_app import settings
+        settings.save(self.path, dict(settings.DEFAULTS, voice='english', voices={
+            'english': {'language':'en_US', 'sample_rate':22050}}))
+        self.lease = speech_gate.Lease(self.path)
+        self.addCleanup(self.lease.close)
+
+    @patch('akousousin_app.speech_dispatcher.runtime.call')
+    def test_dictation_interrupts_speech_waiting_for_audio(self, wake):
+        from akousousin_app.waiting import Interrupt
+        entered = threading.Event()
+        def slow_fetch(port, data, cancelled, identifier):
+            entered.set()
+            from akousousin_app import transport
+            # Wait the way the real request does: on the interrupt, not a timer.
+            import select
+            select.select([cancelled], [], [], 5)
+            raise InterruptedError('Speech cancelled')
+        module = Module(self.path, output=io.BytesIO()); module.audio_server = True
+        stopped = Interrupt()
+        watcher = threading.Thread(target=module.watch_gate, args=(stopped,))
+        watcher.start()
+        try:
+            with patch('akousousin_app.speech_dispatcher.fetch', side_effect=slow_fetch):
+                module.speak('A long sentence that dictation should cut off')
+                self.assertTrue(entered.wait(2))
+                started = time.monotonic()
+                self.lease.acquire()
+                module.task.join(2)
+                self.assertLess(time.monotonic() - started, .5)
+            self.assertNotIn(b'705-AUDIO', module.output.getvalue())
+        finally:
+            stopped.set(); watcher.join(1)
+        self.assertFalse(watcher.is_alive())

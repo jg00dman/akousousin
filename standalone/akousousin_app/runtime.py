@@ -20,9 +20,11 @@ def directory(path=None):
         base = Path(os.environ.get('XDG_RUNTIME_DIR', f'/tmp/akousousin-{os.getuid()}')) / 'Akousousin'
     base.mkdir(parents=True, exist_ok=True, mode=0o700)
     if os.name != 'nt':
-        if base.stat().st_uid != os.getuid() or base.is_symlink():
+        info = base.stat()
+        if info.st_uid != os.getuid() or base.is_symlink():
             raise RuntimeError('Unsafe Akousousin runtime directory')
-        base.chmod(0o700)
+        if info.st_mode & 0o777 != 0o700:
+            base.chmod(0o700)  # only when needed: each chmod wakes everything watching this folder
     return base
 
 

@@ -14,6 +14,16 @@ def location(path):
     return runtime.directory() / (Path(runtime.name(path)).name + '.speech-gate.json')
 
 
+def watch(path):
+    """A file watch that becomes readable when the gate may have changed; None where unavailable."""
+    from .waiting import Watch
+    try:
+        gate = location(path)
+        return Watch(gate.parent, names=[gate.name])
+    except OSError:
+        return None
+
+
 def snapshot(path):
     try:
         value = json.loads(location(path).read_text())
