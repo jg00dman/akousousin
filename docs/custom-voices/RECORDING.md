@@ -14,6 +14,7 @@ The scripts are real Bible passages, chosen so that every sound of the language
 turns up often enough for the voice to learn it:
 
 - [Hebrew script](hebrew/README.md): four sessions, about 75 minutes of reading in all
+- [Greek script](greek/README.md) (draft): six sessions, about 95 minutes, mostly whole books
 
 ## How to read
 
@@ -23,8 +24,8 @@ turns up often enough for the voice to learn it:
 - **Keep the same pace and loudness** in every session. The voice copies
   whatever you do, including getting tired or rushing, so take breaks.
 - **Pronounce carefully and consistently.** Every pronunciation habit you have
-  becomes the voice's habit. For Hebrew, see the
-  [pronunciation notes](hebrew/README.md#pronunciation).
+  becomes the voice's habit. See the pronunciation notes for
+  [Hebrew](hebrew/README.md#pronunciation) and [Greek](greek/README.md#pronunciation).
 - **Pause for about a second after each verse.**
 - **If you stumble, stop, pause, and re-read the whole verse.** Don't patch the
   middle of a verse and don't stop the recording; the last take of each verse is
@@ -32,7 +33,7 @@ turns up often enough for the voice to learn it:
 - **Read in the order of the script** and don't skip verses. If you need to
   skip one, say so on the recording ("skipping Psalm 23 verse 4").
 - **Say the passage name at the start of each file** (for example "Psalm 23").
-- Session 4 jumps between single verses. Read each as a complete sentence
+- The last session of each script jumps between single verses. Read each as a complete sentence
   on its own, in the same storytelling tone.
 
 ## Setup
@@ -70,7 +71,7 @@ verses automatically and matched to the script.
 
 ## Before the full sessions
 
-Record **Jonah 1** first (about two minutes) and send it in. From that we check
+Record a short test first (**Jonah 1** for Hebrew, **Philemon** for Greek; a couple of minutes each) and send it in. From that we check
 the levels and room noise, test the automatic splitting, measure your real
 reading pace and can train a rough trial voice, before you commit hours to it.
 

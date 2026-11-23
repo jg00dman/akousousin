@@ -16,17 +16,24 @@ from collections import Counter
 
 SYL_PER_SEC = 4.0      # unhurried storytelling pace; recalibrate after a test session
 PAUSE_PER_VERSE = 0.7  # seconds
+VOWELS = {"a", "e", "i", "o", "u", "y", "ɛ", "ɔ",
+          "ai", "ei", "oi", "yi", "au", "eu", "ɛu"}   # Hebrew uses the first five
+ACCENTS = {"ˈ", "ˆ"}   # stress / acute, and Greek circumflex
+# Count sound pairs with accents kept (Hebrew) or stripped (Greek, where three
+# accent states per vowel would multiply the pairs without helping much).
+PAIR_ACCENTS = True
 
 
 def fold(tokens):
-    """Merge stress marks into the following vowel; words separated by '#'."""
-    out, stress = [], False
+    """Merge accent marks into the following vowel."""
+    out, accent = [], ""
     for t in tokens:
-        if t == "ˈ":
-            stress = True
+        if t in ACCENTS:
+            accent = t
             continue
-        if stress and t in "aeiou":
-            out.append("ˈ" + t); stress = False
+        if accent and t in VOWELS:
+            out.append(accent + t)
+            accent = ""
         else:
             out.append(t)
     return out
@@ -37,12 +44,13 @@ def units(phone_words):
     for w in phone_words:
         seq += fold(w) + ["#"]
     c = Counter(p for p in seq if p != "#")
-    c.update(("D", a, b) for a, b in zip(seq, seq[1:]) if not (a == "#" and b == "#"))
+    pseq = seq if PAIR_ACCENTS else [p.lstrip("".join(ACCENTS)) for p in seq]
+    c.update(("D", a, b) for a, b in zip(pseq, pseq[1:]) if not (a == "#" and b == "#"))
     return c
 
 
 def seconds(phone_words, n_verses):
-    syl = sum(1 for w in phone_words for t in w if t in "aeiou")
+    syl = sum(1 for w in phone_words for t in w if t in VOWELS)
     return syl / SYL_PER_SEC + n_verses * PAUSE_PER_VERSE
 
 
@@ -103,7 +111,7 @@ def select(fixed, candidates, phone_min=60, di_min=4, di_rare_min=1, rare_cut=4,
             # coverage met; keep adding for quantity, preferring varied (triphone-rich) text
             best = max(remaining, key=lambda p: len(p.units) / p.secs)
         else:
-            best = max(remaining, key=lambda p: gain(p) / p.secs)
+            best = max(remaining, key=lambda p: getattr(p, "bonus", 1.0) * gain(p) / p.secs)
             if gain(best) == 0:
                 break
         remaining.remove(best); chosen.append(best); have.update(best.units)

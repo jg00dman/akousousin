@@ -11,7 +11,7 @@ are making our own: Hebrew first, then Greek.
 
 - **Want to help by reading?** Start with the [recording instructions](RECORDING.md).
 - [Hebrew recording script](hebrew/README.md)
-- Greek: pronunciation table in progress; script to follow.
+- [Greek recording script](greek/README.md) (draft: pronunciation details to confirm)
 
 ## Pronunciation
 
@@ -31,7 +31,7 @@ not liturgical or chanted reading.
 
 1. **Script.** Real Bible passages, chosen by
    [`scripts/voice-script`](../../scripts/voice-script/) so every sound and pair of
-   sounds is covered, in about 75 minutes of reading.
+   sounds is covered: about 75 minutes of reading for Hebrew and 95 for Greek.
 2. **Recording.** One reader per language, with the same setup every session
    ([instructions](RECORDING.md)).
 3. **Splitting.** The recordings are split into one clip per verse
@@ -55,4 +55,5 @@ style, and a voice that can be freely distributed with Akousousin.
 ## Licensing
 
 Readers license their recordings and the resulting voice openly (CC BY 4.0 or
-CC0). The Hebrew text is the public-domain Westminster Leningrad Codex.
+CC0). The Hebrew text is the public-domain Westminster Leningrad Codex; the Greek text
+is the SBL Greek New Testament (CC BY 4.0).
