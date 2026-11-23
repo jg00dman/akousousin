@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 John Goodman
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -15,9 +16,20 @@ class PreferenceTests(unittest.TestCase):
             path.write_text(json.dumps({'stt_model':'small', 'stt_language':'', 'stt_idle_timeout':300}))
             with patch('akousousin_app.settings.system_language', return_value='en'):
                 value = settings.load(path)
-            self.assertEqual((value['stt_model'], value['stt_language']), ('base.en', 'en'))
+            self.assertEqual((value['stt_model'], value['stt_language']), ('base', 'en'))
             self.assertEqual(value['stt_idle_timeout'], 3600)
             self.assertTrue(value['stt_keep_loaded'])
+
+    def test_an_english_only_default_never_downloaded_becomes_the_bundled_model(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'settings.json'
+            path.write_text(json.dumps({'stt_model': 'base.en', 'stt_language': 'en', 'stt_config_version': 2}))
+            with patch.dict(os.environ, {'XDG_DATA_HOME': folder}):
+                self.assertEqual(settings.load(path)['stt_model'], 'base')
+                model = Path(folder) / 'Akousousin/models/whisper/base.en/model.bin'
+                model.parent.mkdir(parents=True)
+                model.write_bytes(b'x')
+                self.assertEqual(settings.load(path)['stt_model'], 'base.en', 'a downloaded English-only model is kept')
 
     def test_explicit_quality_language_and_current_auto_survive(self):
         with tempfile.TemporaryDirectory() as folder:

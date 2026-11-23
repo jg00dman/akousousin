@@ -50,6 +50,17 @@ def download_starter(path):
     return config
 
 
+def bundled_dictation_model():
+    """The dictation model shipped in this package, or None (lean and Windows builds)."""
+    from akousousin_backend.recognition_config import BUNDLED_MODEL
+    folder = root() / 'models/whisper'
+    try:
+        from akousousin_backend.models import installed
+    except ImportError:
+        return None
+    return folder / BUNDLED_MODEL if installed(BUNDLED_MODEL, folder) else None
+
+
 def root():
     if os.environ.get('AKOUSOUSIN_RESOURCES'):
         return Path(os.environ['AKOUSOUSIN_RESOURCES'])

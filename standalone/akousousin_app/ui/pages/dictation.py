@@ -137,15 +137,22 @@ class DictationPage(Page):
     # Models -----------------------------------------------------------------
     def tiers(self, language):
         english = language == 'en'
-        return {'fast': 'base.en' if english else 'base', 'balanced': 'small.en' if english else 'small', 'accurate': 'turbo'}
+        # Fastest is the multilingual model that comes with Akousousin.
+        return {'fast': 'base', 'balanced': 'small.en' if english else 'small', 'accurate': 'turbo'}
 
     @staticmethod
     def installed(model):
         try:
             from akousousin_backend import models
-            return models.installed(model)
+            return models.installed(model) or DictationPage.included(model)
         except ImportError:
             return False
+
+    @staticmethod
+    def included(model):
+        from ...resources import bundled_dictation_model
+        bundled = bundled_dictation_model()
+        return bundled is not None and bundled.name == model
 
     def choose_model(self, tier):
         self.state.save(stt_model=self.tiers(self.state.config['stt_language'])[tier])
@@ -189,7 +196,7 @@ class DictationPage(Page):
         self.mode.select(config['stt_mode'])
         tiers = self.tiers(config['stt_language'])
         for tier, model in tiers.items():
-            state = self.tr('Downloaded') if self.installed(model) else (
+            state = self.tr('Included') if self.included(model) else self.tr('Downloaded') if self.installed(model) else (
                 self.tr('Import only') if model == 'turbo' else self.tr('Download'))
             self.model.items[tier].set_detail(f"Whisper {model.replace('.en', '').title()} · {SIZES[model]} · {state}")
         current = next((tier for tier, model in tiers.items() if model == config['stt_model']), None)
@@ -199,7 +206,8 @@ class DictationPage(Page):
         self.get_model.setVisible(missing)
         self.get_model.setText(self.tr('Import model…') if model == 'turbo' else
                                self.tr('Download · %1').replace('%1', SIZES[model]))
-        self.model_note.setText(self.tr('Faster settings suit older computers. Models download only when you choose Download.'))
+        self.model_note.setText(self.tr('Fastest comes with Akousousin. The others are more accurate but slower, '
+                                        'and download only when you choose Download.'))
         self.beep.blockSignals(True)
         self.beep.setChecked(config['stt_beep'])
         self.beep.blockSignals(False)

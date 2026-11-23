@@ -98,6 +98,14 @@ class Dictation:
         if model.endswith('.en') and config['stt_language'] != 'en':
             raise ValueError('English-only models require English; select Base or Small for other languages or auto detection')
         missing = not models.installed(model) and not (model == 'turbo' and models.installed('small'))
+        if missing:
+            from .resources import bundled_dictation_model
+            bundled = bundled_dictation_model()
+            if bundled is not None and bundled.name == model:
+                # Shipped with Akousousin: a local copy, no download and no network.
+                self.change('Preparing dictation…', 'loading')
+                models.install(model, source=bundled)
+                missing = False
         if missing and not config.get('_download'):
             raise RuntimeError(f'The {model} dictation model is not downloaded yet. '
                                'Open Akousousin › Dictation and choose Download.')
