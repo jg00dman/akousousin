@@ -217,12 +217,12 @@ jobs:
             manifest="$PWD/release-input/akousousin-evidence-$platform-$GITHUB_RUN_ID/standalone-dist/SHA256SUMS"
             (cd release-assets && sha256sum --check "$manifest")
           done
-          cp "release-input/akousousin-evidence-Linux-$GITHUB_RUN_ID/build/standalone-ci/control-panel.png" release-assets/
-          test -f release-assets/control-panel.png
-          sed 's#../COMPATIBILITY.md#COMPATIBILITY.md#g' standalone/README.md > release-assets/TESTING.md
-          cp COMPATIBILITY.md release-assets/COMPATIBILITY.md
-          cp patches/wine-piper.patch release-assets/wine-piper-original.patch
-          (cd release-assets && sha256sum -- *.AppImage *.zip *.tar.gz TESTING.md COMPATIBILITY.md *.patch *.png > SHA256SUMS)
+          # Releases carry only the three packages and their checksums. The
+          # screenshot stays outside release-assets for the homepage step.
+          mkdir -p screenshot
+          cp "release-input/akousousin-evidence-Linux-$GITHUB_RUN_ID/build/standalone-ci/control-panel.png" screenshot/
+          (cd release-assets && sha256sum -- Akousousin-x86_64.AppImage Akousousin-Linux-x86_64.tar.gz Akousousin-Windows-x86_64.zip > SHA256SUMS)
+          test "$(ls release-assets | wc -l)" -eq 4
       - name: Publish standalone beta with the selected voice option
         env:
           GH_TOKEN: ${{ github.token }}
@@ -247,7 +247,7 @@ jobs:
         if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 standalone/publish_screenshot.py release-assets/control-panel.png
+        run: python3 standalone/publish_screenshot.py screenshot/control-panel.png
 
   whisper-test-build:
     if: ${{ !cancelled() && (github.ref == 'refs/heads/whisper' || github.ref == 'refs/heads/codex/private-sapi-probe' || github.ref == 'refs/heads/codex/on-demand-voices') && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish)) && (inputs.reuse_run_id != '' || needs.package.result == 'success') }}
