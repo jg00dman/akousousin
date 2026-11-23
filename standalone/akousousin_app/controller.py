@@ -37,22 +37,27 @@ class Sessions:
         self.input_owned = False
         self._speech_check = 0
         self._speaking = False
+        self.reading_setup = threading.Lock()
+        self.login_session = None  # the desktop login this controller serves, when known
 
     def restore_desktop_shortcuts(self):
-        """Restore opted-in sessions, never start microphone capture on launch."""
-        with self.lock:
-            try:
-                saved = self.desktop_preferences.load()
-            except Exception as error:
-                self.error = 'Could not restore desktop shortcuts: ' + str(error)
-                return
-            for key, command in (('dictation_enabled', 'stt-desktop-enable'),
-                                 ('reading_enabled', 'selection-shortcuts-enable')):
-                if saved[key] and not self.closed:
-                    try:
-                        self.request({'command': command})
-                    except Exception as error:
-                        self.error = 'Could not restore desktop shortcuts: ' + str(error)
+        """Restore opted-in sessions, never start microphone capture on launch.
+
+        Each command takes the controller lock only for as long as it needs
+        it; holding it across both would stall the tray and every request.
+        """
+        try:
+            saved = self.desktop_preferences.load()
+        except Exception as error:
+            self.error = 'Could not restore desktop shortcuts: ' + str(error)
+            return
+        for key, command in (('dictation_enabled', 'stt-desktop-enable'),
+                             ('reading_enabled', 'selection-shortcuts-enable')):
+            if saved[key] and not self.closed:
+                try:
+                    self.request({'command': command})
+                except Exception as error:
+                    self.error = 'Could not restore desktop shortcuts: ' + str(error)
 
     def get_ready(self):
         """Load the voice and the dictation model now, if the user wants them ready.
@@ -152,6 +157,15 @@ class Sessions:
         return result
 
     def request(self, request):
+        if request.get('command') == 'selection-shortcuts-enable' and os.name != 'nt':
+            # Checking Speech Dispatcher (and restarting it if it lacks our
+            # module) can take many seconds and touches no controller state,
+            # so it runs outside the lock the tray and other requests wait on.
+            if self.closed:
+                raise RuntimeError('Akousousin is shutting down')
+            with self.reading_setup:
+                self.selection.enable()
+            return self.selection.status()
         with self.lock:
             operation = request['command']
             self.panels = [panel for panel in self.panels if panel.poll() is None]
@@ -216,6 +230,7 @@ class Sessions:
             elif operation != 'status':
                 raise ValueError('Unknown Akousousin command')
             return {'sessions': len(self.owners), 'running': bool(self.service.health(port)),
+                    'login_session': self.login_session,
                     'independent': self.independent, 'closed': self.closed,
                     'panels': [panel.pid for panel in self.panels]}
 
@@ -375,9 +390,11 @@ def run(path):
         read()
     server.newConnection.connect(accept)
     tray_watcher = None
-    if graphical and app.platformName() == 'xcb':
-        # On X11 Qt chooses XEmbed if the desktop's D-Bus tray is still
-        # starting. That icon cannot switch to StatusNotifier on its own.
+    if graphical and os.name != 'nt':
+        # Qt picks its tray backend when the icon is created. If the desktop's
+        # D-Bus tray is still starting (as at login), X11 falls back to an
+        # XEmbed icon that never moves to StatusNotifier, and Wayland, which
+        # has no fallback, shows nothing at all. Recreate it once the tray is up.
         from PySide6.QtDBus import QDBusConnection, QDBusServiceWatcher
         bus = QDBusConnection.sessionBus()
         watcher_name = 'org.kde.StatusNotifierWatcher'
@@ -463,6 +480,21 @@ def run(path):
     tick()
     if graphical and os.name != 'nt' and os.environ.get('WAYLAND_DISPLAY'):
         QTimer.singleShot(0, lambda: threading.Thread(target=state.restore_desktop_shortcuts, daemon=True).start())
+    if graphical and os.name != 'nt':
+        # Leave with the desktop. Plasma asks Qt to survive a compositor exit,
+        # so at logout nothing else would stop this controller; the next login
+        # would then reach a controller with no screen, tray or live shortcuts.
+        from . import login_session
+        state.login_session = login_session.current()
+        if state.login_session:
+            def check_login():
+                if not state.closed and not login_session.running(state.login_session):
+                    import logging
+                    logging.warning('Login session %s ended; quitting', state.login_session)
+                    submit({'command': 'quit'})
+            session_timer = QTimer()
+            session_timer.timeout.connect(check_login)
+            session_timer.start(3000)
     # Let the tray appear first, then load models in the background.
     QTimer.singleShot(1000, lambda: threading.Thread(target=state.get_ready, daemon=True).start())
     try:

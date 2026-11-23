@@ -329,9 +329,13 @@ def serve(path, instance, control_file):
         server = create_server(application(router, instance, control, stopping), host='127.0.0.1',
                                port=config['port'], threads=4, connection_limit=16, backlog=8,
                                channel_timeout=70, max_request_body_size=MAX_BODY)
+        from .runtime import owner_gone
         while not stopping.is_set():
             wasyncore.loop(timeout=.1, count=1, map=server._map)
             router.expire()
+            if owner_gone():
+                logging.getLogger(__name__).warning('Akousousin exited; stopping the voice service')
+                break
     finally:
         router.close()
         if server:

@@ -3,6 +3,23 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
+# Akousousin 0.9.0b7 beta
+
+- **Akousousin now quits when you log out.** On Plasma, apps are asked to
+  survive the desktop restarting, so at logout Akousousin kept running with no
+  screen. At the next login, start-at-login handed over to that leftover copy:
+  no tray icon, and shortcuts tied to the old login. Akousousin now watches
+  your login session and quits cleanly when it ends. A copy left over from
+  an earlier version is replaced at login.
+- **The tray icon appears on Wayland when starting at login.** If Plasma's tray
+  was not running yet, the icon was never shown. It now waits for the tray, as
+  it already did on X11.
+- **Restoring read-aloud shortcuts no longer holds everything up.** Checking
+  Speech Dispatcher at start-up could hold up the tray, other shortcuts and
+  model loading.
+- The voice service stops if Akousousin itself exits unexpectedly, instead of
+  running on without its files.
+
 # Akousousin 0.9.0b6 beta
 
 - **Ready when you are.** Akousousin now loads your voice and dictation model

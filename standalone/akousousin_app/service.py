@@ -59,9 +59,13 @@ class Service:
         with self.log.open('ab') as output:
             options = {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == 'nt' else {
                 'start_new_session': True}
+            environment = os.environ.copy()
+            if getattr(sys, 'frozen', False) and os.environ.get('APPIMAGE'):
+                # It runs from this process's AppImage mount, which ends with us.
+                environment['AKOUSOUSIN_OWNER_PID'] = str(os.getpid())
             self.process = subprocess.Popen(invocation + ['--serve', '--settings', str(self.settings),
                                                     '--instance', self.instance, '--control-file', str(self.control)], stdin=subprocess.DEVNULL,
-                                            stdout=output, stderr=output, **options)
+                                            stdout=output, stderr=output, env=environment, **options)
         deadline = time.monotonic() + 65
         while self.process.poll() is None and time.monotonic() < deadline:
             status = self.health(port)

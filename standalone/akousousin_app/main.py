@@ -202,6 +202,8 @@ def main():
         request = {'command': operation}
     elif not args.panel and not args.smoke_test:
         request = {'command': 'configure', 'independent': not args.configure}
+    if request and request['command'] in ('background', 'configure'):
+        runtime.replace_stale(args.settings)
     if request:
         response = runtime.call(args.settings, request, launch=request['command'] not in ('release', 'stop', 'quit', 'status', 'stt-status', 'stt-cancel', 'selection-status', 'selection-stop'))
         print(json.dumps(response or {'running': False, 'sessions': 0}))
