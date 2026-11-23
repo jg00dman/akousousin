@@ -15,6 +15,11 @@ class Selection:
         self.cancelled = threading.Event()
         self.state = 'Ready to read selected text'
         self.closed = False
+        self.on_change = None  # told when reading starts, from any thread
+
+    def changed(self):
+        if self.on_change:
+            self.on_change()
 
     def status(self):
         with self.lock:
@@ -44,6 +49,7 @@ class Selection:
                     selection.notify(str(error))
             self.thread = threading.Thread(target=read, daemon=True)
             self.thread.start()
+        self.changed()
 
     def stop(self):
         if self.thread and self.thread.is_alive():

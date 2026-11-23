@@ -79,6 +79,16 @@ class Router:
         self.settings_stamp = None
         self.cached_timeout = 0
 
+    def announce(self):
+        """Tell the controller speech has begun, so its tray shows it without asking repeatedly."""
+        def tell():
+            from . import runtime
+            try:
+                runtime.call(self.path, {'command': 'activity'}, launch=False, timeout=2)
+            except (OSError, RuntimeError, ValueError):
+                pass
+        threading.Thread(target=tell, daemon=True).start()
+
     def speaking(self):
         if speech_gate.snapshot(self.path)[0]:
             return False
@@ -241,7 +251,10 @@ class Router:
                     self.waiters.pop(identifier, None)
                 self.active_request = identifier
                 self.cancelled = cancelled
+                quiet = not self.processing and time.monotonic() >= self.speaking_until
                 self.processing = True
+            if quiet:
+                self.announce()
             if cancelled.is_set():
                 raise InterruptedError('Speech cancelled')
             if speech_gate.suppressed(self.path, gate):

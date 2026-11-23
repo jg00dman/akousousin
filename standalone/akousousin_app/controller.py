@@ -209,6 +209,8 @@ class Sessions:
             elif operation == 'wake':
                 self.service.start(port)
                 self.on_demand = True
+            elif operation == 'activity':
+                pass  # the voice service started speaking; the reply refreshes the tray
             elif operation == 'background':
                 # Started at login: stay running in the tray with no window.
                 self.independent = True
@@ -342,6 +344,7 @@ def run(path):
 
     class Events(QObject):
         result = Signal(object, object)
+        changed = Signal()  # something the tray shows may have changed
     events = Events()
     connections = set()
 
@@ -360,6 +363,8 @@ def run(path):
             # cleanup. A restarting caller must connect to a fresh controller.
             server.close()
             QTimer.singleShot(250, app.quit)
+        else:
+            events.changed.emit()  # requests change what the tray shows
 
     events.result.connect(finish)
 
@@ -450,38 +455,152 @@ def run(path):
         update_dialog = box
         box.show()  # Nonmodal: notifications must not block controller requests.
 
-    def tick():
+    # The tray is refreshed when something tells it of a change: a request,
+    # dictation or reading changing state, the voice service starting to
+    # speak, a download, a settings or update file, or the desktop's colours.
+    # Only while something is in progress does it also refresh on a timer, to
+    # follow it to the end. Idle, the controller sleeps.
+    from PySide6.QtCore import QFileSystemWatcher, QSocketNotifier
+    from .download_status import current as current_downloads
+    from akousousin_backend.downloads import directory as downloads_directory
+    refresh_pending = False
+    owner_watches = {}  # session -> (notifier, pidfd)
+    watched_service = None
+    reaping = threading.Lock()
+
+    def changed():
+        nonlocal refresh_pending
+        if not refresh_pending:
+            refresh_pending = True
+            QTimer.singleShot(50, refresh)  # one refresh for a burst of changes
+    events.changed.connect(changed)
+
+    def poke():  # from any thread
+        events.changed.emit()
+    state.input.on_change = poke
+    state.selection.on_change = poke
+
+    def reap():
         # Reaping can stop inference, so never run it in Qt's GUI thread.
-        if not getattr(tick, 'busy', False):
-            tick.busy = True
-            def reap():
+        if reaping.acquire(False):
+            def work():
                 try:
                     state.reap()
                 finally:
-                    tick.busy = False
-            threading.Thread(target=reap, daemon=True).start()
+                    reaping.release()
+                    poke()
+            threading.Thread(target=work, daemon=True).start()
+
+    def watch_owners():
+        """Be told when an app using the voice exits; returns False where the kernel can't tell us."""
+        if not hasattr(os, 'pidfd_open'):
+            return False
+        with state.lock:
+            owners = dict(state.owners)
+        for session in [session for session in owner_watches if session not in owners]:
+            notifier, descriptor = owner_watches.pop(session)
+            notifier.setEnabled(False)
+            notifier.deleteLater()
+            os.close(descriptor)
+        added = False
+        for session, (pid, _created) in owners.items():
+            if session in owner_watches:
+                continue
+            try:
+                descriptor = os.pidfd_open(pid)
+            except OSError:
+                reap()  # already gone
+                continue
+            notifier = QSocketNotifier(descriptor, QSocketNotifier.Read)
+            def exited(*_, notifier=notifier):
+                notifier.setEnabled(False)  # stays readable once the process has exited
+                reap()
+            notifier.activated.connect(exited)
+            owner_watches[session] = (notifier, descriptor)
+            added = True
+        if added:
+            reap()  # a reused process ID is caught by the start-time check
+        return True
+
+    def watch_service():
+        nonlocal watched_service
+        process = state.service.process
+        if process is not None and process is not watched_service:
+            watched_service = process
+            threading.Thread(target=lambda: (process.wait(), poke()), daemon=True).start()
+
+    unload_timer = QTimer()
+    unload_timer.setSingleShot(True)
+    unload_timer.timeout.connect(reap)  # reaping unloads an idle dictation model
+
+    def schedule_unload():
+        due = state.input.until_expiry()
+        if due is None:
+            unload_timer.stop()
+        else:
+            unload_timer.start(int(due * 1000) + 100)
+
+    def refresh():
+        nonlocal refresh_pending
+        refresh_pending = False
         if state.closed and not connections:
             QTimer.singleShot(500, app.quit)
+        watching_owners = watch_owners()
+        watch_service()
+        schedule_unload()
+        active = bool(state.owners) and not watching_owners
+        if active:
+            reap()
         if tray:
             config = settings.load(path)
             health = state.service.health(config['port'])
             running = bool(health and health.get('ready'))
-            failed = state.service.process is not None and state.service.process.poll() not in (None, 0) and not running
+            process = state.service.process
+            failed = process is not None and process.poll() not in (None, 0) and not running
+            starting = process is not None and process.poll() is None and not running
             input_status = state.input.status()
             reading = state.selection.status()
-            candidate = update_monitor.tick(quiet=bool(input_status['busy'] or (health and health.get('speaking')) or reading.get('reading')))
+            speaking = bool(health and health.get('speaking'))
+            candidate = update_monitor.tick(quiet=bool(input_status['busy'] or speaking or reading.get('reading')))
             if candidate:
                 notify_update(candidate)
-            from .download_status import current
+            downloads = current_downloads()
+            pending = bool(state.desktop and state.desktop.start_requested)
             tray.update(running=running, dictation=input_status, reading=reading,
-                        pending=bool(state.desktop and state.desktop.start_requested), downloads=current(),
+                        pending=pending, downloads=downloads,
                         available=updates.available_update(path),
                         problem=bool((state.error and not running) or failed or input_status.get('phase') == 'error'),
-                        speaking=bool(health and health.get('speaking')))
+                        speaking=speaking)
+            active |= bool(input_status['busy'] or pending or reading.get('reading') or speaking
+                           or downloads or starting or update_monitor.busy)
+        if not active:
+            timer.stop()
+        elif not timer.isActive():
+            timer.start(1500)
+
     timer = QTimer()
-    timer.timeout.connect(tick)
-    timer.start(1500)
-    tick()
+    timer.timeout.connect(refresh)
+    files = QFileSystemWatcher(app)
+    files.directoryChanged.connect(lambda _folder: changed())
+    for folder in (Path(path).resolve().parent, downloads_directory()):
+        try:
+            folder.mkdir(parents=True, exist_ok=True, mode=0o700)
+            files.addPath(str(folder))
+        except OSError:
+            pass
+    if tray and os.name != 'nt':
+        # Plasma saves its colour and theme settings here; the tray's lines follow them.
+        desktop_settings = QFileSystemWatcher(app)
+        desktop_settings.addPath(os.environ.get('XDG_CONFIG_HOME') or str(Path.home() / '.config'))
+        def colours_changed(_folder):
+            tray.colours_changed()
+            changed()
+        desktop_settings.directoryChanged.connect(colours_changed)
+    # A rare check for what no file or signal announces, such as the weekly update check.
+    hourly = QTimer()
+    hourly.timeout.connect(changed)
+    hourly.start(3600 * 1000)
+    refresh()
     if graphical and os.name != 'nt' and os.environ.get('WAYLAND_DISPLAY'):
         QTimer.singleShot(0, lambda: threading.Thread(target=state.restore_desktop_shortcuts, daemon=True).start())
     if graphical and os.name != 'nt':
@@ -496,9 +615,18 @@ def run(path):
                     import logging
                     logging.warning('Login session %s ended; quitting', state.login_session)
                     submit({'command': 'quit'})
-            session_timer = QTimer()
-            session_timer.timeout.connect(check_login)
-            session_timer.start(3000)
+            try:
+                # logind tells us when sessions change; no need to keep asking.
+                session_monitor = login_session.Monitor()
+                session_notifier = QSocketNotifier(session_monitor.fd, QSocketNotifier.Read, app)
+                def sessions_changed(*_):
+                    session_monitor.flush()
+                    check_login()
+                session_notifier.activated.connect(sessions_changed)
+            except OSError:
+                session_timer = QTimer()
+                session_timer.timeout.connect(check_login)
+                session_timer.start(3000)
     # Let the tray appear first, then load models in the background.
     QTimer.singleShot(1000, lambda: threading.Thread(target=state.get_ready, daemon=True).start())
     try:
