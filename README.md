@@ -16,7 +16,8 @@ SPDX-FileCopyrightText: 2026 John Goodman
 [More screenshots: Voice Input, recording controls and Read selection](docs/SCREENSHOTS.md).
 
 Core speech output works through 64-bit SAPI (Wine and native Windows) and the
-native Linux Speech Dispatcher output module. On-demand startup, idle model
+native Linux Speech Dispatcher output module. Optional start at login with
+models loaded ahead of use (the default), on-demand startup, optional idle model
 unloading and control-panel update checks are included. Neither output interface
 has full API coverage.
 

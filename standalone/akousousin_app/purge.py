@@ -3,7 +3,7 @@
 """--purge: remove Akousousin and everything it keeps, as if it was never installed.
 
 Unlike --uninstall (Wine registrations only) and --uninstall-bundle (application
-files only), this also deletes voices, speech models and settings."""
+files and the start-at-login entry), this also deletes voices, speech models and settings."""
 import os
 from pathlib import Path
 import shutil
@@ -65,6 +65,8 @@ def purge(settings_path, wine_prefix=None, wine=None, bundle_prefix=None, report
              .uninstall())
     if os.name == 'posix' and speech_dispatcher.dispatcher_paths()[1].exists():
         step('Speech Dispatcher', lambda: speech_dispatcher.configure(settings_path, remove=True))
+    from . import startup
+    step('start at login', startup.disable)
     for entry in desktop_entries():
         step(str(entry), entry.unlink)
     target = bundle_target(bundle_prefix)

@@ -9,7 +9,7 @@ from PySide6.QtCore import QDateTime, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QApplication, QCheckBox, QSpinBox
 
-from ... import __version__, appimage_install, diagnostics, runtime, settings, updates
+from ... import __version__, appimage_install, diagnostics, runtime, settings, startup, updates
 from ..flow import Columns
 from ..lang import number
 from ..widgets import Card, SettingRow, StatusLine, ValueSlider, button, combo, fill, row, spread, text
@@ -44,10 +44,29 @@ class AdvancedPage(Page):
     def build(self):
         config = self.state.config
 
+        ready = Card(self.tr('Startup and memory'))
+        self.login = QCheckBox(self.tr('On'))
+        self.login.toggled.connect(self.save_login)
+        ready.add(SettingRow(self.tr('Start at login'),
+                             self.tr('The tray icon and shortcuts work straight away, without opening this window.'),
+                             self.login, first=True))
+        self.preload = combo()
+        self.preload.activated.connect(lambda _: self.state.save(preload=self.preload.currentData()))
+        ready.add(SettingRow(self.tr('Load voices and dictation'),
+                             self.tr('Loading at start means no wait the first time you read or dictate.'), self.preload))
+        self.idle = combo(self.idle_choices(), config['idle_timeout'])
+        self.idle.activated.connect(lambda _: self.state.save(idle_timeout=self.idle.currentData()))
+        ready.add(SettingRow(self.tr('Free voice memory when idle'),
+                             self.tr('The voice reloads in about a second when it is next needed.'), self.idle))
+        self.memory = combo()
+        self.memory.activated.connect(lambda _: self.save_memory())
+        ready.add(SettingRow(self.tr('Free dictation memory when idle'),
+                             self.tr('The dictation model takes a few seconds to reload.'), self.memory))
+
         service = Card(self.tr('Speech service'))
         self.service_status = StatusLine()
         restart = button(self.tr('Restart'), self.restart)
-        service.add(SettingRow(self.tr('Status'), self.tr('Starts by itself when an app needs speech.'),
+        service.add(SettingRow(self.tr('Status'), self.tr('Also starts by itself when an app needs speech.'),
                                self.service_status, restart, first=True))
         if not self.state.windows:
             from akousousin_backend import audio_system
@@ -56,10 +75,6 @@ class AdvancedPage(Page):
                                    self.tr('Akousousin records and plays sounds through PipeWire directly when it is running, otherwise through PulseAudio.'),
                                    self.audio))
             self.tasks.run(audio_system.describe, self.show_audio, failed=lambda _e: None, background=True)
-        self.idle = combo(self.idle_choices(), config['idle_timeout'])
-        self.idle.activated.connect(lambda _: self.state.save(idle_timeout=self.idle.currentData()))
-        service.add(SettingRow(self.tr('Free memory when idle'),
-                               self.tr('Voices are unloaded after this long without speech and reload in about a second.'), self.idle))
         self.port = QSpinBox()
         self.port.setRange(1024, 65535)
         self.port.setValue(config['port'])
@@ -73,10 +88,6 @@ class AdvancedPage(Page):
         self.threads.activated.connect(lambda _: self.state.save(stt_cpu_threads=self.threads.currentData()))
         dictation.add(SettingRow(self.tr('Processor threads'),
                                  self.tr('More threads can be faster but leave less for other apps.'), self.threads, first=True))
-        self.memory = combo()
-        self.memory.activated.connect(lambda _: self.save_memory())
-        dictation.add(SettingRow(self.tr('Free memory when idle'),
-                                 self.tr('The dictation model is unloaded after this long without use.'), self.memory))
 
         self.updates = Card(self.tr('Updates'))
         self.version = text('', 'h3')
@@ -108,7 +119,7 @@ class AdvancedPage(Page):
                                self.tr('Deletes voices, models and settings, and unregisters it from every app.'),
                                button(self.tr('Remove everything…'), self.purge, kind='danger')))
 
-        self.add(Columns([[service, dictation, self.updates], [voice, trouble]], minimum=440))
+        self.add(Columns([[ready, service, dictation], [self.updates, voice, trouble]], minimum=440))
         self.settings_changed(config)
         self.status_changed(self.state.status)
 
@@ -132,6 +143,9 @@ class AdvancedPage(Page):
                 (900, self.tr('After 15 minutes')), (1800, self.tr('After 30 minutes')), (3600, self.tr('After 1 hour'))]
 
     def settings_changed(self, config):
+        fill(self.preload, [(True, self.tr('When Akousousin starts')), (False, self.tr('When first used'))],
+             config['preload'])
+        self.show_login(startup.enabled())
         fill(self.idle, self.idle_choices(), config['idle_timeout'])
         from akousousin_backend.recognition_config import cpu_threads
         automatic = cpu_threads()
@@ -184,6 +198,35 @@ class AdvancedPage(Page):
             self.state.save(port=self.port.value())
             self.notice(self.tr('Port saved. Restart the service, then update registrations in Apps.'))
 
+    def show_login(self, on):
+        self.login.blockSignals(True)
+        self.login.setChecked(on)
+        self.login.blockSignals(False)
+
+    def save_login(self, on):
+        def failed(problem):
+            self.show_login(not on)
+            self.error(problem)
+        self.run(lambda: startup.set_enabled(on), self.show_login, key='login', failed=failed)
+
+    def first_run(self):
+        """Offers made once, the first time the window opens."""
+        if self.offer_install():
+            return  # Akousousin restarts from its new place and offers the rest then
+        self.offer_login()
+
+    def offer_login(self):
+        if self.state.config.get('login_offered') or not startup.supported():
+            return
+        self.state.save(login_offered=True)
+        if startup.enabled():
+            return
+        if self.confirm(self.tr('Start Akousousin when you log in?'),
+                        self.tr('Reading and dictation shortcuts then work as soon as you log in, and your voice '
+                                'is ready without a wait. Akousousin stays in the tray; you can change this in Advanced.'),
+                        self.tr('Start at login'), cancel=self.tr('Not now'), recommended=True):
+            self.save_login(True)
+
     def save_memory(self):
         value = self.memory.currentData()
         if value == 'never':
@@ -217,12 +260,13 @@ class AdvancedPage(Page):
                      key='updates', busy=self.tr('Installing the update…'))
 
     def offer_install(self, manual=False):
+        """Offer to move a downloaded AppImage into place. True when Akousousin will restart."""
         if not updates.is_appimage():
-            return
+            return False
         if not appimage_install.needs_move():
             if manual:
                 self.run(appimage_install.create_menu_entry, key='appimage')
-            return
+            return False
         target = appimage_install.recommended_path()
         replace = target.exists()
         message = self.tr('Move the AppImage to %1, add it to the application menu and restart Akousousin?').replace('%1', str(target))
@@ -230,6 +274,8 @@ class AdvancedPage(Page):
             message += ' ' + self.tr('This replaces the AppImage already there.')
         if self.confirm(self.tr('Install the AppImage'), message, self.tr('Install')):
             self.run(lambda: appimage_install.install(self.state.path, replace=replace), lambda _: self.window().close(), key='appimage')
+            return True
+        return False
 
     def open_log(self):
         log = self.state.service.log

@@ -78,7 +78,7 @@ class MainWindow(QMainWindow):
         first = updates.completed_update(self.path) or self.state.config.get('speechd_setup_warning') or self.tr('Ready')
         self.notice(first)
         if offer_install:
-            QTimer.singleShot(700, lambda: self.pages['advanced'].offer_install())
+            QTimer.singleShot(700, lambda: self.pages['advanced'].first_run())
 
     def _build_pages(self):
         for page_class in PAGES:

@@ -6,6 +6,7 @@ import os
 import subprocess
 import threading
 import time
+from pathlib import Path
 
 import psutil
 
@@ -52,6 +53,37 @@ class Sessions:
                         self.request({'command': command})
                     except Exception as error:
                         self.error = 'Could not restore desktop shortcuts: ' + str(error)
+
+    def get_ready(self):
+        """Load the voice and the dictation model now, if the user wants them ready.
+
+        Runs once when the controller starts, off the GUI thread. Nothing is
+        downloaded here, and a missing voice or model is simply skipped: the
+        app is then ready as soon as the user has chosen one.
+        """
+        config = settings.load(self.path)
+        if not config.get('preload', True) or self.closed:
+            return
+        voice = config['voices'].get(config['voice'])
+        if voice and Path(voice['path']).is_file():
+            # Same lock as 'acquire', so an app starting speech now cannot launch a second service.
+            with self.lock:
+                try:
+                    if not self.closed:
+                        self.service.start(config['port'])
+                except Exception as error:
+                    self.error = 'Could not load the voice: ' + str(error)
+        if os.name == 'nt' or self.closed:
+            return  # dictation is Linux-only for now
+        from akousousin_backend import models
+        model = config['stt_model']
+        if models.installed(model) or (model == 'turbo' and models.installed('small')):
+            try:
+                self.input.prepare()
+            except BlockingIOError:
+                pass  # the user is already dictating, which loads it anyway
+            except Exception as error:
+                self.error = 'Could not load dictation: ' + str(error)
 
     def speaking(self):
         now = time.monotonic()
@@ -161,6 +193,9 @@ class Sessions:
             elif operation == 'wake':
                 self.service.start(port)
                 self.on_demand = True
+            elif operation == 'background':
+                # Started at login: stay running in the tray with no window.
+                self.independent = True
             elif operation == 'start':
                 self.service.start(port)
                 self.independent = True
@@ -428,6 +463,14 @@ def run(path):
     tick()
     if graphical and os.name != 'nt' and os.environ.get('WAYLAND_DISPLAY'):
         QTimer.singleShot(0, lambda: threading.Thread(target=state.restore_desktop_shortcuts, daemon=True).start())
+    # Let the tray appear first, then load models in the background.
+    QTimer.singleShot(1000, lambda: threading.Thread(target=state.get_ready, daemon=True).start())
+    try:
+        from . import startup
+        startup.refresh()
+    except Exception:
+        import logging
+        logging.exception('Could not update the start-at-login entry')
     try:
         app.exec()
     finally:

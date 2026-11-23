@@ -3,6 +3,21 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
+# Akousousin 0.9.0b6 beta
+
+- **Ready when you are.** Akousousin now loads your voice and dictation model
+  as soon as it starts and keeps them loaded, so the first read or dictation
+  has no wait. Unloading when idle and loading only when first used are still
+  available in Advanced → Startup and memory.
+- **Start at login.** The first time the window opens, Akousousin offers to
+  start when you log in. It then sits in the tray with its shortcuts working,
+  with no window and models loading in the background. Turn it on or off in
+  Advanced at any time. Your desktop's own autostart settings list it too.
+- Advanced now groups startup and memory settings in one place instead of two
+  separate "Free memory when idle" rows.
+- If voices were set to unload after 5 minutes (the old default), that becomes
+  "Never" once. Any other choice you made is kept.
+
 # Akousousin 0.9.0b5 beta
 
 - **Dictation now tells speech from noise.** Phrases were found by loudness,

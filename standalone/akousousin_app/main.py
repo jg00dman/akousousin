@@ -39,6 +39,7 @@ def main():
     parser.add_argument('--acquire-session', metavar='ID', help='Start/reuse speech for this application session')
     parser.add_argument('--release-session', metavar='ID', help='Release an application session')
     parser.add_argument('--owner-pid', type=int, help='Process owning the acquired session')
+    parser.add_argument('--background', action='store_true', help='Start in the tray without a window (used at login)')
     parser.add_argument('--api-start', action='store_true', help='Wake speech on demand without pinning a model in memory')
     parser.add_argument('--install-speech-dispatcher', action='store_true', help='Register the output module in your user Speech Dispatcher configuration')
     parser.add_argument('--uninstall-speech-dispatcher', action='store_true', help='Remove your user output-module registration')
@@ -106,6 +107,8 @@ def main():
                     os.execve(executable, [executable, '--configure'], dict(os.environ, PYINSTALLER_RESET_ENVIRONMENT='1'))
         else:
             speech_setup(args.uninstall_bundle, args.settings, remove=True)
+            from . import startup
+            startup.disable_if_inside(args.uninstall_bundle)  # it would start a program that is gone
             print(uninstall(args.uninstall_bundle))
         return
     if args.protocol_version:
@@ -188,6 +191,8 @@ def main():
         request = {'command': 'stt-toggle' if args.dictation_toggle else 'stt-cancel' if args.dictation_cancel else 'stt-status'}
     elif args.api_start:
         request = {'command': 'wake'}
+    elif args.background:
+        request = {'command': 'background'}
     elif args.acquire_session:
         request = {'command': 'acquire', 'session': args.acquire_session, 'pid': args.owner_pid or os.getppid()}
     elif args.release_session:

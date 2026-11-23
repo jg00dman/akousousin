@@ -469,8 +469,21 @@ for that recording session. Stop and start another session to detect again.
 English-only models switch to their multilingual counterpart when another language
 or auto is chosen. Turbo remains importable, with no CPU speed claim.
 
-Dictation → Recognition options offers CPU threads, Keep model loaded while voice input is enabled,
-and an idle timeout (one hour by default when keep-loaded is off). More threads
+## Startup and memory
+
+Akousousin assumes you want it ready. By default it loads the selected voice
+and the downloaded dictation model as soon as it starts, and keeps both loaded.
+The first time the window opens it offers to start at login (an XDG autostart
+entry, `~/.config/autostart/org.akousousin.Akousousin.desktop`, or the per-user
+Run key on Windows). That entry runs `akousousin --background`: the tray icon
+and shortcuts start, no window opens, and models load in the background.
+Advanced → Startup and memory changes all of this: start at login, load models
+"When Akousousin starts" or "When first used", and free voice or dictation
+memory after a period of idleness. Nothing is downloaded at startup; a missing
+voice or model is skipped. Purge and tar uninstall remove the login entry, and
+an AppImage that moves updates it on its next start.
+
+Advanced → Dictation performance sets CPU threads. More threads
 are not always faster on CPU-limited systems; see the reproducible benchmark in
 `backend/tools/benchmark_recognition.py`. Timing logs contain numeric measurements
 and outcomes, never dictated text. Model cards accompany on-demand downloads;

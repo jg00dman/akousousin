@@ -20,8 +20,12 @@ def _dialog(parent, title):
     return dialog, layout
 
 
-def confirm(parent, title, message, action, *, details=None):
-    """Ask before doing something with consequences. Cancel is the default."""
+def confirm(parent, title, message, action, *, details=None, cancel=None, recommended=False):
+    """Ask before doing something with consequences.
+
+    Cancel is the default unless the action is recommended (an offer rather
+    than a risk); ``cancel`` relabels the cancel button, e.g. "Not now".
+    """
     dialog, layout = _dialog(parent, title)
     layout.addWidget(text(title, 'h2'))
     if details or len(message) > 600:
@@ -38,8 +42,8 @@ def confirm(parent, title, message, action, *, details=None):
     box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
     box.button(QDialogButtonBox.Ok).setText(action)
     box.button(QDialogButtonBox.Ok).setProperty('kind', 'primary')
-    box.button(QDialogButtonBox.Cancel).setText(translate('Dialogs', 'Cancel'))
-    box.button(QDialogButtonBox.Cancel).setDefault(True)
+    box.button(QDialogButtonBox.Cancel).setText(cancel or translate('Dialogs', 'Cancel'))
+    box.button(QDialogButtonBox.Ok if recommended else QDialogButtonBox.Cancel).setDefault(True)
     box.accepted.connect(dialog.accept)
     box.rejected.connect(dialog.reject)
     layout.addWidget(box)

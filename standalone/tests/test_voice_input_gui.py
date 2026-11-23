@@ -148,6 +148,35 @@ class PanelTests(unittest.TestCase):
         with self.assertRaises(network.NetworkBlocked):
             updates.perform_check(self.path)
 
+    @unittest.skipIf(os.name == 'nt', 'XDG autostart is for Linux desktops')
+    def test_start_at_login_is_offered_once_and_can_be_turned_off(self):
+        from akousousin_app import startup
+        page = self.window.pages['advanced']
+        with patch.object(page, 'confirm', return_value=True) as asked, \
+                patch('akousousin_app.ui.pages.advanced.updates.is_appimage', return_value=False):
+            page.first_run()
+            page.first_run()
+        asked.assert_called_once()
+        self.assertTrue(startup.enabled())
+        self.assertTrue(settings.load(self.path)['login_offered'])
+        self.window.go('advanced')
+        self.assertTrue(page.login.isChecked())
+        page.login.click()
+        self.assertFalse(startup.enabled())
+        page.preload.setCurrentIndex(page.preload.findData(False))
+        page.preload.activated.emit(page.preload.currentIndex())
+        self.assertFalse(settings.load(self.path)['preload'])
+
+    def test_declining_start_at_login_is_remembered(self):
+        from akousousin_app import startup
+        page = self.window.pages['advanced']
+        with patch.object(page, 'confirm', return_value=False) as asked, \
+                patch('akousousin_app.ui.pages.advanced.updates.is_appimage', return_value=False):
+            page.first_run()
+            page.first_run()
+        asked.assert_called_once()
+        self.assertFalse(startup.enabled())
+
     def test_about_explains_the_name_with_a_keyboard_link(self):
         self.window.go('about')
         page = self.window.pages['about']
