@@ -454,6 +454,10 @@
         <source>Not now</source>
         <translation>Ahora no</translation>
     </message>
+    <message>
+        <source>Could not open the page. Visit %1</source>
+        <translation>No se pudo abrir la página. Visita %1</translation>
+    </message>
 </context>
 <context>
     <name>AppsPage</name>
@@ -616,6 +620,18 @@
     <message>
         <source>Turn on</source>
         <translation>Activar</translation>
+    </message>
+    <message>
+        <source>Wine prefixes found on this computer</source>
+        <translation>Prefijos de Wine encontrados en este equipo</translation>
+    </message>
+    <message>
+        <source>Found on this computer</source>
+        <translation>Encontrados en este equipo</translation>
+    </message>
+    <message>
+        <source>Choose one, or pick another folder below.</source>
+        <translation>Elige uno o selecciona otra carpeta abajo.</translation>
     </message>
 </context>
 <context>
@@ -820,10 +836,6 @@
         <translation>Descargar · %1</translation>
     </message>
     <message>
-        <source>Faster settings suit older computers. Models download only when you choose Download.</source>
-        <translation>Las opciones más rápidas van mejor en equipos antiguos. Los modelos solo se descargan cuando eliges Descargar.</translation>
-    </message>
-    <message>
         <source>Finish test recording</source>
         <translation>Terminar grabación de prueba</translation>
     </message>
@@ -874,6 +886,14 @@
     <message>
         <source>Microphone level unavailable: %1</source>
         <translation>Nivel del micrófono no disponible: %1</translation>
+    </message>
+    <message>
+        <source>Included</source>
+        <translation>Incluido</translation>
+    </message>
+    <message>
+        <source>Fastest comes with Akousousin. The others are more accurate but slower, and download only when you choose Download.</source>
+        <translation>El más rápido viene con Akousousin. Los demás son más precisos pero más lentos, y solo se descargan cuando eliges Descargar.</translation>
     </message>
 </context>
 <context>

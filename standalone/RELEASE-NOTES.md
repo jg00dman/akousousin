@@ -3,41 +3,33 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
-# Akousousin 0.9
+# Akousousin 0.9.1
 
-A new control panel, more reliable dictation, and an app that is ready when you
-are. Your voices, models, Wine registrations and Speech Dispatcher setup carry
-over from 0.8.
+Fixes for 0.9, and dictation that works on first use. Your voices, models and
+settings carry over.
 
-**New control panel.** Eight clear pages: Home, Voices, Dictation, Shortcuts,
-Apps, Advanced, Privacy and About. It follows your desktop's light or dark
-colours and language, and works well with a keyboard and screen reader. Spanish
-is the first translation. [See it](https://github.com/jg00dman/akousousin/blob/main/docs/SCREENSHOTS.md)
+**Dictation works straight away.** A dictation model (Whisper Base, about
+145 MB) now comes with Akousousin, so there is nothing to download first. It
+works in every language and is the **Fastest** choice. Balanced and Most
+accurate are still a download away.
 
-**Dictation**
+**Orca and other screen readers**
 
-- Fixed text being typed over and over ("Okay. Okay. Okay.").
-- Background noise, such as fans, hum, music and typing, no longer turns into
-  stray words.
-- Uses PipeWire directly where available; PulseAudio still works.
-- A live microphone level on the Dictation page.
+- Orca speaks when Akousousin is chosen as its synthesizer. Before, it could
+  stay silent if it asked for a voice or language Akousousin didn't have; now
+  the best installed voice is used.
+- After an update, Orca and other apps use the new version straight away,
+  without logging out.
 
-**Ready when you are**
+**Fixes**
 
-- Akousousin can start at login and wait in the tray with its shortcuts
-  working. It asks the first time you open it.
-- Your voice and dictation model stay loaded, so there is no wait. To save
-  memory instead, see Advanced → Startup and memory.
-- It quits cleanly when you log out.
+- The first word is no longer cut off, and the ready sound plays every time.
+- The tray icon is clear on dark panels, including Breeze Dark and Kubuntu's
+  standard dark panel, and animates for speech from Windows apps such as Logos.
+- Adding a Windows app lists the Wine prefixes found on your computer, and
+  **Browse** shows hidden folders such as `.wine`.
+- The tar.gz installer quits a running Akousousin itself, instead of asking you
+  to, and `akousousin --quit` waits until it has fully exited.
+- Links and update pages open in your browser from the tar.gz.
 
-**Also**
-
-- Privacy page: what stays on your computer, the few uses of the internet, and
-  a switch to block them all. Models download only when you ask.
-- Tray: click or tap to dictate, or right-click or press and hold for the menu.
-- `akousousin --version`.
-
-Windows support remains experimental.
-
-[Full history](https://github.com/jg00dman/akousousin/blob/main/CHANGELOG.md) ·
-[User guide](https://github.com/jg00dman/akousousin/blob/main/standalone/README.md)
+[What's in 0.9](https://github.com/jg00dman/akousousin/releases/tag/v0.9.0)

@@ -16,8 +16,12 @@ def system_language():
     return {'iw':'he', 'in':'id', 'ji':'yi'}.get(token, token) if token in LANGUAGES or token in ('iw', 'in', 'ji') else 'en'
 
 
+BUNDLED_MODEL = 'base'  # shipped in Linux packages, so dictation works from the first start
+
+
 def default_model(language):
-    return 'base.en' if language == 'en' else 'base'
+    """The bundled multilingual model, for every language (English-only models remain a choice)."""
+    return BUNDLED_MODEL
 
 
 def cpu_threads(value=None):

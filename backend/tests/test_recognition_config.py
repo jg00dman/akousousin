@@ -8,8 +8,9 @@ from akousousin_backend.recognition_config import cpu_threads, default_model, sy
 
 class ConfigTests(unittest.TestCase):
     def test_locale_and_model_defaults(self):
-        for locale, language, model in [('en_GB.UTF-8','en','base.en'), ('fr_FR.UTF-8','fr','base'),
-                                        ('he_IL.UTF-8','he','base'), ('C.UTF-8','en','base.en')]:
+        # The bundled multilingual model is the default for every language.
+        for locale, language, model in [('en_GB.UTF-8','en','base'), ('fr_FR.UTF-8','fr','base'),
+                                        ('he_IL.UTF-8','he','base'), ('C.UTF-8','en','base')]:
             with patch.dict(os.environ, {'LANG':locale}, clear=True):
                 self.assertEqual(system_language(), language)
                 self.assertEqual(default_model(language), model)
@@ -30,7 +31,7 @@ class ConfigTests(unittest.TestCase):
     def test_cli_download_defaults_follow_locale_and_auto_is_explicit(self):
         from akousousin_backend.recognition import main
         import tempfile
-        for language, expected in [('en', 'base.en'), ('de', 'base')]:
+        for language, expected in [('en', 'base'), ('de', 'base')]:
             with tempfile.TemporaryDirectory() as folder, \
                     patch('akousousin_backend.recognition.system_language', return_value=language), \
                     patch('sys.argv', ['akousousin-whisper','--download-model','--models',folder]), \

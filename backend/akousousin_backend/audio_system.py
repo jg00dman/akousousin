@@ -13,6 +13,7 @@ Set AKOUSOUSIN_AUDIO=pipewire or AKOUSOUSIN_AUDIO=pulseaudio to override.
 from functools import lru_cache
 import json
 import os
+import time
 from pathlib import Path
 import shutil
 import subprocess
@@ -108,6 +109,68 @@ def record_command(source=None, stream='Dictation'):
 
 
 PULSE_ROLES = {'Notification': 'event', 'Accessibility': 'a11y'}
+
+
+# PipeWire (WirePlumber) and PulseAudio suspend an output after 5 s without
+# sound, and many outputs (HDMI and DisplayPort monitors, USB, Bluetooth) need
+# a few hundred milliseconds to wake: whatever plays then is lost, such as the
+# first word of a sentence or a short cue. A sound after a quiet spell starts
+# with enough silence to cover the wake-up; one soon after another does not.
+WAKE_AFTER = 4.0
+WAKE_LEAD_IN = .5
+
+
+def _last_sound():
+    base = Path(os.environ.get('XDG_RUNTIME_DIR') or f'/tmp/akousousin-{os.getuid()}')
+    return base / 'Akousousin' / 'last-sound'
+
+
+def lead_in():
+    """Seconds of silence to put before a sound so a sleeping output is awake for its start."""
+    if os.name == 'nt':
+        return 0.0
+    try:
+        quiet = time.time() - _last_sound().stat().st_mtime
+    except OSError:
+        return WAKE_LEAD_IN
+    return WAKE_LEAD_IN if quiet >= WAKE_AFTER else 0.0
+
+
+def played(seconds):
+    """Record that a sound of this length starts now; shared by every Akousousin process."""
+    if os.name == 'nt':
+        return
+    marker = _last_sound()
+    try:
+        marker.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        marker.touch()
+        end = time.time() + max(0.0, seconds)
+        os.utime(marker, (end, end))
+    except OSError:
+        pass
+
+
+def with_lead_in(data, seconds):
+    """A 16-bit WAV with this much silence added at the start."""
+    if seconds <= 0:
+        return data
+    import io
+    import wave
+    with wave.open(io.BytesIO(data), 'rb') as source:
+        params = source.getparams()
+        frames = source.readframes(source.getnframes())
+    output = io.BytesIO()
+    with wave.open(output, 'wb') as target:
+        target.setparams(params)
+        target.writeframes(b'\0' * (int(params.framerate * seconds) * params.nchannels * params.sampwidth) + frames)
+    return output.getvalue()
+
+
+def wav_seconds(data):
+    import io
+    import wave
+    with wave.open(io.BytesIO(data), 'rb') as audio:
+        return audio.getnframes() / float(audio.getframerate() or 1)
 
 
 def play_command(path, stream='Akousousin', role='Accessibility'):

@@ -20,15 +20,7 @@ DEFAULT_NOISE, DEFAULT_WIDTH = settings.DEFAULTS['noise_scale'], settings.DEFAUL
 
 def open_file(path):
     """Open a file in the desktop's own viewer, without the AppImage's libraries."""
-    if os.name == 'nt':
-        os.startfile(str(path))
-        return True
-    try:
-        subprocess.Popen(['xdg-open', str(path)], env=runtime.host_environment(),
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
-        return True
-    except OSError:
-        return QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+    return runtime.open_external(path) or QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
 
 
 class AdvancedPage(Page):
@@ -251,7 +243,8 @@ class AdvancedPage(Page):
         if not updates.is_appimage():
             if self.confirm(self.tr('Update available'),
                             self.tr('Open the download page for %1?').replace('%1', candidate['version']), self.tr('Open page')):
-                QDesktopServices.openUrl(QUrl(updates.download_page(candidate)))
+                if not runtime.open_external(updates.download_page(candidate)):
+                    self.notice(self.tr('Could not open the page. Visit %1').replace('%1', updates.download_page(candidate)))
             return
         if self.confirm(self.tr('Install update'),
                         self.tr('Install %1? Close Windows apps that are speaking first. Akousousin restarts afterwards.').replace('%1', candidate['version']),

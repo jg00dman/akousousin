@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 John Goodman
 import io
+import os
 import json
 from pathlib import Path
 import tempfile
@@ -85,10 +86,35 @@ class DispatcherTests(unittest.TestCase):
         self.assertTrue(all(0 < len(piece) <= 241 for piece in pieces))
         self.assertEqual(escaped(b'\x00\n}\x80'), b'\x00}*}]\x80')
 
-    def test_bad_settings_and_unsupported_audio_are_rejected(self):
+    def test_unsupported_audio_is_rejected(self):
         output = io.BytesIO()
-        Module(self.path, io.BytesIO(b'INIT\nSET\nrate=101\n.\nAUDIO\naudio_output_method=alsa\n.\nQUIT\n'), output).run()
-        self.assertEqual(output.getvalue().count(b'303 ERROR'), 2)
+        Module(self.path, io.BytesIO(b'INIT\nAUDIO\naudio_output_method=alsa\n.\nQUIT\n'), output).run()
+        self.assertEqual(output.getvalue().count(b'303 ERROR'), 1)
+
+    def test_a_bad_setting_does_not_drop_the_voice_and_language(self):
+        # Rejecting the whole block left Orca silent; keep what is usable.
+        output = io.BytesIO()
+        module = Module(self.path, io.BytesIO(
+            b'INIT\nSET\nrate=101\npitch=abc\npunctuation_mode=sometimes\nlanguage=en-GB\nsynthesis_voice=x\n.\nQUIT\n'), output)
+        with self.assertLogs('akousousin_app.speech_dispatcher', 'WARNING') as logs:
+            module.run()
+        self.assertNotIn(b'303 ERROR', output.getvalue())
+        self.assertEqual((module.options['rate'], module.options['language'], module.options['synthesis_voice']),
+                         ('100', 'en-GB', 'x'))
+        self.assertNotIn('pitch', module.options)
+        self.assertNotIn('punctuation_mode', module.options)
+        self.assertEqual(len(logs.output), 2)
+
+    def test_voice_list_for_a_regional_language_includes_the_family(self):
+        config = settings.load(self.path)
+        config['voices'] = {'en_US-ljspeech-medium': {'language': 'en_US', 'path': '/x'},
+                            'es_ES-davefx-medium': {'language': 'es_ES', 'path': '/y'}}
+        settings.save(self.path, config)
+        output = io.BytesIO()
+        Module(self.path, io.BytesIO(b'INIT\nLIST VOICES en-GB\nQUIT\n'), output).run()
+        listed = output.getvalue().decode()
+        self.assertIn('200-en_US-ljspeech-medium\ten-US', listed)
+        self.assertNotIn('es_ES', listed)
 
     @patch('akousousin_app.speech_dispatcher.runtime.call')
     @patch('akousousin_app.speech_dispatcher.fetch')
@@ -430,3 +456,41 @@ class DispatcherTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 configure(self.path)
         run.assert_not_called()
+
+
+class ReloadModuleTests(unittest.TestCase):
+    """After an update Speech Dispatcher must run the new module, not the one it kept."""
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+
+    def paths(self, registered):
+        launcher = self.root / 'speech-dispatcher-module'
+        if registered:
+            launcher.write_text('#!/bin/sh\n')
+        return patch('akousousin_app.speech_dispatcher.dispatcher_paths',
+                     return_value=(self.root / 'speechd.conf', launcher, self.root / 'sd_akousousin'))
+
+    @unittest.skipIf(os.name == 'nt', 'Speech Dispatcher is Linux')
+    def test_restarts_a_running_dispatcher_when_registered(self):
+        from akousousin_app.speech_dispatcher import reload_module
+        with self.paths(True), patch('akousousin_app.speech_dispatcher.subprocess.run') as run:
+            self.assertTrue(reload_module())
+        self.assertEqual(run.call_args.args[0], ['systemctl', '--user', 'try-restart', 'speech-dispatcher.service'])
+
+    def test_leaves_speech_dispatcher_alone_when_not_registered(self):
+        from akousousin_app.speech_dispatcher import reload_module
+        with self.paths(False), patch('akousousin_app.speech_dispatcher.subprocess.run') as run:
+            self.assertFalse(reload_module())
+        run.assert_not_called()
+
+    @unittest.skipIf(os.name == 'nt', 'Speech Dispatcher is Linux')
+    def test_a_failed_restart_is_logged_not_fatal(self):
+        import subprocess
+        from akousousin_app.speech_dispatcher import reload_module
+        with self.paths(True), patch('akousousin_app.speech_dispatcher.subprocess.run',
+                                     side_effect=subprocess.CalledProcessError(1, 'systemctl')), \
+                self.assertLogs('akousousin_app.speech_dispatcher', 'WARNING'):
+            self.assertFalse(reload_module())
+

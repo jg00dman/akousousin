@@ -209,6 +209,8 @@ def refresh_registrations(path):
         _, launcher, _ = dispatcher_paths()
         if launcher.is_file():
             register_dispatcher(path, set_default=False)
+            from .speech_dispatcher import reload_module
+            reload_module()  # the running module is still the previous version
     save_update_state(path, registration_warnings=warnings)
     return warnings
 

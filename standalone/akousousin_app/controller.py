@@ -82,7 +82,9 @@ class Sessions:
             return  # dictation is Linux-only for now
         from akousousin_backend import models
         model = config['stt_model']
-        if models.installed(model) or (model == 'turbo' and models.installed('small')):
+        from .resources import bundled_dictation_model
+        bundled = bundled_dictation_model()
+        if models.installed(model) or (model == 'turbo' and models.installed('small')) or (bundled and bundled.name == model):
             try:
                 self.input.prepare()
             except BlockingIOError:
@@ -322,6 +324,8 @@ def run(path):
         app.setDesktopFileName(APP_ID)
     if graphical:
         app.setQuitOnLastWindowClosed(False)
+        from .qt_locale import install_link_handler
+        install_link_handler(app)
         app.setWindowIcon(QIcon(str(resources.root() / 'akousousin.png')))
     lock = QLockFile(str(runtime.directory() / (os.path.basename(runtime.name(path)) + '.lock')))
     if not lock.tryLock(10000):
@@ -440,8 +444,7 @@ def run(path):
                 if updates.is_appimage():
                     submit({'command': 'configure', 'page': 'Updates'})
                 else:
-                    import webbrowser
-                    webbrowser.open(updates.download_page(candidate))
+                    runtime.open_external(updates.download_page(candidate))
             update_dialog = None
         box.finished.connect(finished)
         update_dialog = box
@@ -473,7 +476,8 @@ def run(path):
             tray.update(running=running, dictation=input_status, reading=reading,
                         pending=bool(state.desktop and state.desktop.start_requested), downloads=current(),
                         available=updates.available_update(path),
-                        problem=bool((state.error and not running) or failed or input_status.get('phase') == 'error'))
+                        problem=bool((state.error and not running) or failed or input_status.get('phase') == 'error'),
+                        speaking=bool(health and health.get('speaking')))
     timer = QTimer()
     timer.timeout.connect(tick)
     timer.start(1500)

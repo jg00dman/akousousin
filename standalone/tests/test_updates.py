@@ -253,14 +253,17 @@ class UpdateTests(unittest.TestCase):
         path = self.root / 'settings.json'
         settings.save(path, dict(settings.DEFAULTS))
         with patch.dict(os.environ, {'XDG_DATA_HOME': str(self.root / 'data')}), \
-                patch('akousousin_app.speech_dispatcher.install') as register:
+                patch('akousousin_app.speech_dispatcher.install') as register, \
+                patch('akousousin_app.speech_dispatcher.reload_module') as reload:
             updates.refresh_registrations(path)
             register.assert_not_called()
+            reload.assert_not_called()
             _, launcher, _ = dispatcher_paths()
             launcher.parent.mkdir(parents=True, exist_ok=True)
             launcher.write_text('#!/bin/sh\nexec /old.AppImage --speech-dispatcher\n')
             updates.refresh_registrations(path)
             register.assert_called_once_with(path, set_default=False)
+            reload.assert_called_once_with()  # Speech Dispatcher must run the updated module
 
     def test_refresh_does_not_reinstall_uninstalled_or_deleted_prefixes(self):
         active, removed = self.root / 'active', self.root / 'removed'

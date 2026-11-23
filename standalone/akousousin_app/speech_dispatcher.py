@@ -9,6 +9,7 @@ import io
 import json
 from pathlib import Path
 import logging
+import os
 import re
 import sys
 import subprocess
@@ -139,13 +140,18 @@ class Module:
                 raise ValueError('Only Speech Dispatcher server audio is supported')
             self.audio_server = True
         elif command == 'SET':
+            # Accept what we can and say what we could not: rejecting the whole
+            # block would also drop the language and voice, leaving apps silent.
             for key, allowed in {'punctuation_mode': ('none', 'some', 'most', 'all'), 'spelling_mode': ('on', 'off'),
                                  'cap_let_recogn': ('none', 'spell', 'icon')}.items():
                 if key in pending and pending[key] not in allowed:
-                    raise ValueError('Invalid speech setting')
+                    logging.getLogger(__name__).warning('Ignored Speech Dispatcher setting %s=%r', key, pending.pop(key))
             for key in ('rate', 'volume', 'pitch', 'pitch_range'):
-                if key in pending and not -100 <= int(pending[key]) <= 100:
-                    raise ValueError('Invalid speech parameter')
+                if key in pending:
+                    try:
+                        pending[key] = str(max(-100, min(100, int(pending[key]))))
+                    except ValueError:
+                        logging.getLogger(__name__).warning('Ignored Speech Dispatcher setting %s=%r', key, pending.pop(key))
             self.options.update(pending)
         self.send('203 OK SETTINGS RECEIVED\n')
 
@@ -201,24 +207,13 @@ class Module:
                         self.send('702 END\n')
                 return
             config = settings.load(self.path)
-            voice = options.get('synthesis_voice')
-            if voice in (None, 'NULL'):
-                language = options.get('language', '').replace('-', '_').casefold()
-                preferred = {key.replace('-', '_').casefold(): value
-                             for key, value in config['language_voices'].items()}
-                voice = preferred.get(language)
-                if not voice:
-                    voice = next((key for key, entry in config['voices'].items()
-                                  if entry['language'].replace('-', '_').casefold() == language), None)
-                if not voice and language:
-                    family = language.split('_')[0]
-                    voice = next((key for code, key in preferred.items() if code.split('_')[0] == family), None)
-                if not voice:
-                    voice = next((key for key, entry in config['voices'].items()
-                                  if entry['language'].split('_')[0].casefold() == language.split('_')[0]),
-                                 config['voice'])
-            if voice not in config['voices']:
-                raise ValueError('Voice not installed')
+            requested = options.get('synthesis_voice')
+            # A voice the app names or a language it asks for falls back to an
+            # installed voice; only no voice at all is an error.
+            voice = settings.usable_voice(config, None if requested in (None, 'NULL') else requested,
+                                          language=options.get('language', ''))
+            if voice is None:
+                raise ValueError('No voice installed')
             rate = int(options.get('rate', 0)) / 100
             scale = 1 / (1 + rate) if rate >= 0 else 1 - rate
             for marker, part in speech_parts(text):
@@ -254,6 +249,9 @@ class Module:
                     if not pcm or len(pcm) != wav.getnframes() * 2:
                         raise ValueError('Truncated audio')
                     sample_rate = wav.getframerate()
+                from akousousin_backend.audio_system import lead_in, played
+                pcm = b'\0\0' * int(sample_rate * lead_in()) + pcm  # so a sleeping output wakes in time
+                played(len(pcm) / 2 / sample_rate)
                 if speech_gate.suppressed(self.path, gate):
                     self.stop()
                     return
@@ -330,9 +328,12 @@ class Module:
                     elif command.startswith('LIST VOICES'):
                         config = settings.load(self.path)
                         language = command.split()[2:3]
+                        wanted = language[0].replace('_', '-').casefold() if language else ''
                         for key, voice in config['voices'].items():
-                            code = voice['language'].replace('_', '-')
-                            if language and code.casefold() != language[0].casefold() and code.split('-')[0].casefold() != language[0].casefold():
+                            code = voice['language'].replace('_', '-').casefold()
+                            # en-GB also lists other English voices: an installed
+                            # voice in the family beats none at all.
+                            if wanted and code != wanted and code.split('-')[0] != wanted.split('-')[0]:
                                 continue
                             if any(c in key + voice['language'] for c in '\t\r\n'):
                                 continue
@@ -348,7 +349,8 @@ class Module:
                         self.send('200 OK DEBUGGING OFF\n')
                     else:
                         self.send('300 ERR UNKNOWN COMMAND\n')
-                except (ValueError, UnicodeError, ET.ParseError):
+                except (ValueError, UnicodeError, ET.ParseError) as error:
+                    logging.getLogger(__name__).warning('Speech Dispatcher %s rejected: %s', command, error)
                     self.send('303 ERROR INVALID PARAMETER OR VALUE\n')
         except EOFError:
             return
@@ -530,6 +532,25 @@ def configure(path, remove=False):
         settings.save(path, preferences)
         raise warning from error
     return config
+
+
+def reload_module():
+    """After an update, make Speech Dispatcher run the new module.
+
+    It keeps each module running until it restarts, so without this Orca and
+    other apps keep talking to the previous version. Restarts only a running
+    Speech Dispatcher (try-restart) and only when our module is registered;
+    clients such as Orca reconnect by themselves. Returns whether it restarted.
+    """
+    if os.name == 'nt' or not dispatcher_paths()[1].is_file():
+        return False
+    try:
+        subprocess.run(['systemctl', '--user', 'try-restart', 'speech-dispatcher.service'],
+                       check=True, capture_output=True, timeout=20, env=runtime.host_environment())
+        return True
+    except (OSError, subprocess.SubprocessError) as error:
+        logging.getLogger(__name__).warning('Could not reload the Speech Dispatcher module: %s', error)
+        return False
 
 
 def complete_pending_setup(path):

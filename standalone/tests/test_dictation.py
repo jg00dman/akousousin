@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 John Goodman
+import os
 import queue
 import tempfile
 import threading
@@ -220,6 +221,23 @@ class DictationTests(unittest.TestCase):
         self.assertEqual(Audio.instances, [])
         self.assertEqual(self.manager.status()['phase'], 'error')
         self.assertIn('not downloaded', self.manager.status()['state'])
+
+    def test_the_bundled_model_is_copied_without_a_download(self):
+        self.installed.stop()
+        settings.save(self.path, dict(settings.load(self.path), stt_model='base'))
+        with tempfile.TemporaryDirectory() as package, tempfile.TemporaryDirectory() as data:
+            bundled = Path(package) / 'models/whisper/base'
+            bundled.mkdir(parents=True)
+            for name in ('model.bin', 'config.json', 'tokenizer.json', 'vocabulary.txt', 'README.md', 'LICENSE.txt'):
+                (bundled / name).write_text('{}' if name.endswith('.json') else 'x')
+            with patch.dict(os.environ, {'AKOUSOUSIN_RESOURCES': package, 'XDG_DATA_HOME': data}), \
+                    patch('akousousin_app.network.require', side_effect=AssertionError('no network for the bundled model')):
+                self.manager.prepare(); self.wait()
+                from akousousin_backend import models
+                self.assertTrue(models.installed('base'))
+            self.assertEqual(self.manager.status()['phase'], 'ready')
+            self.assertFalse(Recognition.instances[-1].model.get('download_missing'))
+        self.installed.start()
 
     def test_failed_requested_download_does_not_start_microphone(self):
         def fail(cancelled=None):

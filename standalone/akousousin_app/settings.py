@@ -15,7 +15,7 @@ DEFAULTS = {'version': 2, 'voice': 'en_US-ljspeech-medium', 'speed': 1.0, 'volum
             'idle_timeout': 0, 'preload': True, 'login_offered': False, 'stt_model': default_model(system_language()), 'stt_language': system_language(),
             'stt_source': '', 'stt_beep': True, 'stt_mode': 'toggle',
             'stt_idle_timeout': 3600, 'stt_threshold': 250, 'stt_cpu_threads': cpu_threads(),
-            'stt_keep_loaded': True, 'stt_config_version': 2, 'update_weekly': True, 'update_betas': True,
+            'stt_keep_loaded': True, 'stt_config_version': 3, 'update_weekly': True, 'update_betas': True,
             'network_blocked': False, 'voice_samples': True, 'tray_click': 'dictate'}
 
 
@@ -42,6 +42,13 @@ def load(path):
         if stored.get('stt_idle_timeout', 300) == 300:
             value['stt_idle_timeout'] = 3600
         value['stt_config_version'] = 2
+    if stored and stored.get('stt_config_version', 1) < 3:
+        # Version 3: the bundled multilingual model is the default. An English-only
+        # default that was never downloaded would otherwise block dictation.
+        english_only = data_path() / 'models/whisper/base.en/model.bin'
+        if value.get('stt_model') == 'base.en' and not english_only.is_file():
+            value['stt_model'] = default_model(value['stt_language'])
+        value['stt_config_version'] = 3
     if stored and stored.get('version', 1) < 2:
         # Version 2: be ready by default. The old five-minute voice unload was
         # the default rather than a choice, so it becomes "never".
@@ -156,3 +163,33 @@ def select_voice(path, identifier, *, language_only=False):
                           (r'HKCU\SOFTWARE\Microsoft\Speech\Voices', 'DefaultTokenId')):
             installer.execute('reg.exe', 'add', key, '/v', item, '/t', 'REG_SZ', '/d', token, '/f', '/reg:64')
     return pending
+
+
+def usable_voice(config, *preferred, language=''):
+    """An installed voice: the first preferred one that is installed, else one for
+    the language (its chosen voice, then any installed voice in the language or
+    its family), else the default, else any. None only when no voice is installed.
+
+    Remembered choices can name a voice that has since been removed, and apps
+    can ask for voices by names Akousousin does not have; neither may silence
+    speech while a usable voice exists.
+    """
+    voices = config.get('voices') or {}
+    for key in preferred:
+        if key and key in voices:
+            return key
+    language = (language or '').replace('-', '_').casefold()
+    if language:
+        family = language.split('_')[0]
+        chosen = {code.replace('-', '_').casefold(): key for code, key in (config.get('language_voices') or {}).items()}
+        candidates = [chosen.get(language),
+                      *(key for key, entry in voices.items() if entry.get('language', '').replace('-', '_').casefold() == language),
+                      *(key for code, key in chosen.items() if code.split('_')[0] == family),
+                      *(key for key, entry in voices.items() if entry.get('language', '').split('_')[0].casefold() == family)]
+        for key in candidates:
+            if key and key in voices:
+                return key
+    if config.get('voice') in voices:
+        return config['voice']
+    return next(iter(voices), None)
+

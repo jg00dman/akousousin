@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 John Goodman
 """Per-user controller IPC. Session ownership belongs to Akousousin, not launchers."""
+from contextlib import contextmanager
 import hashlib
 import json
 import os
@@ -112,7 +113,13 @@ def replace_stale(path):
         call(path, {'command': 'quit'}, launch=False, timeout=30)
     except (OSError, RuntimeError, ValueError):
         pass
-    deadline = time.monotonic() + 20
+    wait_gone(path)
+    return True
+
+
+def wait_gone(path, seconds=20):
+    """Wait until the controller has exited, not just begun shutting down. True if it has."""
+    deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
         try:
             if call(path, {'command': 'status'}, launch=False, timeout=2) is None:
@@ -120,7 +127,7 @@ def replace_stale(path):
         except (OSError, RuntimeError, ValueError):
             return True
         time.sleep(.2)
-    return True
+    return False
 
 
 def environment():
@@ -136,7 +143,65 @@ def host_environment():
     return clean(environment())
 
 
+def open_external(target):
+    """Open a web page or file with the desktop's own handler.
+
+    Packaged builds carry their own libraries; a browser started with them
+    can fail without a word, so the desktop's clean environment is used."""
+    target = str(target)
+    if os.name == 'nt':
+        try:
+            os.startfile(target)
+            return True
+        except OSError:
+            return False
+    try:
+        subprocess.Popen(['xdg-open', target], env=host_environment(), stdin=subprocess.DEVNULL,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        return True
+    except OSError:
+        return False
+
+
+@contextmanager
+def launches_paused():
+    """While installing or removing Akousousin, apps that want speech wait instead of starting it.
+
+    Otherwise Speech Dispatcher or a Wine app restarts the old program the
+    moment the installer quits it.
+    """
+    marker = directory() / 'installing'
+    marker.write_text(str(os.getpid()))
+    try:
+        yield
+    finally:
+        marker.unlink(missing_ok=True)
+
+
+def wait_for_install(seconds=180):
+    """Hold a controller launch while an installer (still running) has paused launches."""
+    marker = directory() / 'installing'
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        try:
+            owner = int(marker.read_text())
+        except (OSError, ValueError):
+            return
+        if owner == os.getpid():
+            return
+        try:
+            os.kill(owner, 0)
+        except ProcessLookupError:
+            marker.unlink(missing_ok=True)  # left by an installer that died
+            return
+        except PermissionError:
+            pass
+        time.sleep(.25)
+
+
 def launch_controller(path):
+    if os.name != 'nt':
+        wait_for_install()
     with log_path().open('ab') as output:
         options = {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == 'nt' else {
             'start_new_session': True}

@@ -22,6 +22,8 @@ import zipfile
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--bundle-starter-voice', action=argparse.BooleanOptionalAction, default=True,
                     help='Include the reviewed LJSpeech voice for offline first use (default: included; use --no-bundle-starter-voice for a lean build)')
+parser.add_argument('--bundle-dictation-model', action=argparse.BooleanOptionalAction, default=sys.platform == 'linux',
+                    help='Include the multilingual Whisper base model so dictation works on first use (default: included on Linux)')
 options = parser.parse_args()
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -80,11 +82,21 @@ if sys.platform != 'win32':
          '3b19eb0e45ac5f57301073fc9e721cac7829dc93', 'release': 'wine-compat-11.21-3b19eb0e45ac',
          'source': published + 'wine-source-11.21-logos.tar.xz'}, indent=2))
 
+dictation_model = None
+if options.bundle_dictation_model and importlib.util.find_spec('faster_whisper') is not None:
+    from akousousin_backend import models as whisper_models
+    from akousousin_backend.recognition_config import BUNDLED_MODEL
+    folder = RESOURCE / 'models/whisper'
+    whisper_models.install(BUNDLED_MODEL, root=folder)
+    (folder / '.install.lock').unlink(missing_ok=True)
+    dictation_model = BUNDLED_MODEL
+
 commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
 (RESOURCE / 'build.json').write_text(json.dumps({'build': commit[:12] + '-' + sys.platform,
                                                'commit': commit, 'version': __version__,
                                                'distribution': 'appimage' if sys.platform == 'linux' else 'windows-zip',
-                                               'starter_voice': 'en_US-ljspeech-medium' if options.bundle_starter_voice else None}, indent=2))
+                                               'starter_voice': 'en_US-ljspeech-medium' if options.bundle_starter_voice else None,
+                                               'dictation_model': dictation_model}, indent=2))
 recognition_options = []
 if importlib.util.find_spec('faster_whisper') is not None:
     for dependency in ('faster_whisper', 'ctranslate2', 'tokenizers', 'av'):
@@ -166,6 +178,7 @@ expected_models = ['resources/voices/en_US-ljspeech-medium.onnx'] if options.bun
 if sorted(models) != expected_models:
     raise RuntimeError('Packaged voice weights differ from the selected build option')
 print('Starter voice: ' + ('included for offline use' if options.bundle_starter_voice else 'download on demand'), flush=True)
+print('Dictation model: ' + (dictation_model + ' included' if dictation_model else 'download on demand'), flush=True)
 if sys.platform == 'win32':
     with zipfile.ZipFile(OUT / 'Akousousin-Windows-x86_64.zip', 'w', zipfile.ZIP_DEFLATED) as archive:
         for file in PACKAGE.rglob('*'):

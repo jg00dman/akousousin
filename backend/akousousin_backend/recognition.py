@@ -258,7 +258,9 @@ def ready_cue():
         import winsound
         winsound.PlaySound(data, winsound.SND_MEMORY)
         return
-    from .audio_system import play_command
+    from .audio_system import lead_in, play_command, played, wav_seconds, with_lead_in
+    data = with_lead_in(data, lead_in())
+    played(wav_seconds(data))
     environment = host_environment()
     arguments = play_command('', 'Dictation ready', 'Notification')[:-1]
     # Seekable WAV avoids raw-stdin playback differences. On Linux this is an

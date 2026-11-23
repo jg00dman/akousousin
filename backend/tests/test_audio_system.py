@@ -126,3 +126,43 @@ class PcmStreamTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class WakeLeadInTests(unittest.TestCase):
+    """A sleeping output must be awake before the first word or cue plays."""
+    def setUp(self):
+        import tempfile
+        from unittest.mock import patch
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        environment = patch.dict(os.environ, {'XDG_RUNTIME_DIR': temporary.name})
+        environment.start()
+        self.addCleanup(environment.stop)
+
+    @unittest.skipIf(os.name == 'nt', 'Linux audio servers')
+    def test_silence_only_after_a_quiet_spell(self):
+        from akousousin_backend import audio_system
+        self.assertEqual(audio_system.lead_in(), audio_system.WAKE_LEAD_IN, 'nothing played yet')
+        audio_system.played(2.0)
+        self.assertEqual(audio_system.lead_in(), 0.0, 'output is awake while and just after we play')
+        marker = audio_system._last_sound()
+        old = marker.stat().st_mtime - 10
+        os.utime(marker, (old, old))
+        self.assertEqual(audio_system.lead_in(), audio_system.WAKE_LEAD_IN)
+
+    def test_lead_in_prepends_silence_and_keeps_the_sound(self):
+        import io
+        import wave
+        from akousousin_backend import audio_system
+        output = io.BytesIO()
+        with wave.open(output, 'wb') as audio:
+            audio.setparams((1, 2, 16000, 0, 'NONE', ''))
+            audio.writeframes(b'\x01\x02' * 1600)
+        original = output.getvalue()
+        padded = audio_system.with_lead_in(original, .5)
+        self.assertAlmostEqual(audio_system.wav_seconds(padded), .6, places=3)
+        with wave.open(io.BytesIO(padded), 'rb') as audio:
+            frames = audio.readframes(audio.getnframes())
+        self.assertEqual(frames[:16000], b'\0' * 16000)
+        self.assertTrue(frames.endswith(b'\x01\x02' * 1600))
+        self.assertIs(audio_system.with_lead_in(original, 0), original)

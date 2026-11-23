@@ -12,6 +12,17 @@ from . import __version__, resources, runtime, settings
 from .install import Installer
 
 
+def quit_for_install(path):
+    """Quit a running Akousousin (launches are paused, so nothing restarts it)."""
+    status = runtime.call(path, {'command': 'status'}, launch=False, timeout=10)
+    if not status:
+        return
+    if not status.get('closed'):
+        runtime.call(path, {'command': 'quit'}, launch=False, timeout=60)
+    if not runtime.wait_gone(path):
+        raise RuntimeError('Akousousin did not quit. Quit it from its tray, then run this again.')
+
+
 def main():
     multiprocessing.freeze_support()
     if len(sys.argv) > 1 and sys.argv[1] == '--whisper':
@@ -89,27 +100,33 @@ def main():
             raise RuntimeError('Tar installation requires Linux')
         if os.geteuid() == 0:
             raise RuntimeError('Run this per-user installer without sudo')
-        if runtime.call(args.settings, {'command': 'status'}, launch=False):
-            raise RuntimeError('Quit AKS from its tray before installing or removing a bundle')
         from .linux_bundle import install, uninstall, speech_setup
         if args.install_bundle:
-            target = install(args.install_bundle, args.bundle_prefix)
-            print('Installed: ' + str(target))
+            with runtime.launches_paused():
+                quit_for_install(args.settings)
+                target = install(args.install_bundle, args.bundle_prefix)
+                print('Installed: ' + str(target))
+            # After the pause ends, so Speech Dispatcher can start the new module.
             if not args.without_speech_dispatcher:
                 try:
-                    speech_setup(target, args.settings)
+                    speech_setup(target, args.settings)  # also restarts Speech Dispatcher
                 except (OSError, subprocess.SubprocessError) as error:
                     print('Warning: application installed; Speech Dispatcher setup could not run: ' + str(error), file=sys.stderr)
+            else:
+                from .speech_dispatcher import reload_module
+                reload_module()  # an existing registration must run the new version
             if not args.quiet and sys.stdin.isatty():
                 answer = input('Launch Akousousin now? [y/N] ').strip().lower()
                 if answer in ('y', 'yes'):
                     executable = str(target / 'akousousin')
                     os.execve(executable, [executable, '--configure'], dict(os.environ, PYINSTALLER_RESET_ENVIRONMENT='1'))
         else:
-            speech_setup(args.uninstall_bundle, args.settings, remove=True)
-            from . import startup
-            startup.disable_if_inside(args.uninstall_bundle)  # it would start a program that is gone
-            print(uninstall(args.uninstall_bundle))
+            with runtime.launches_paused():
+                quit_for_install(args.settings)
+                speech_setup(args.uninstall_bundle, args.settings, remove=True)
+                from . import startup
+                startup.disable_if_inside(args.uninstall_bundle)  # it would start a program that is gone
+                print(uninstall(args.uninstall_bundle))
         return
     if args.protocol_version:
         print('2')
@@ -127,6 +144,11 @@ def main():
         run(args.settings)
         return
     if args.speech_dispatcher:
+        # Speech Dispatcher discards a module's own output; keep its problems
+        # in Akousousin's log, where a diagnostic report can find them.
+        import logging
+        logging.basicConfig(filename=str(runtime.log_path()), level=logging.WARNING,
+                            format='%(asctime)s Speech Dispatcher module: %(levelname)s %(message)s')
         from .speech_dispatcher import Module
         resources.bootstrap(args.settings)
         Module(args.settings).run()
@@ -206,6 +228,8 @@ def main():
         runtime.replace_stale(args.settings)
     if request:
         response = runtime.call(args.settings, request, launch=request['command'] not in ('release', 'stop', 'quit', 'status', 'stt-status', 'stt-cancel', 'selection-status', 'selection-stop'))
+        if request['command'] == 'quit' and response:
+            runtime.wait_gone(args.settings)  # return once it has really exited, so installers can follow
         print(json.dumps(response or {'running': False, 'sessions': 0}))
         return
     from .panel import Panel

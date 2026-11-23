@@ -46,7 +46,8 @@ not available on Windows yet.
 
 ## First start
 
-An English voice is included, so Akousousin can speak straight away. The first
+An English voice and a dictation model are included, so Akousousin can speak
+and take dictation straight away, with no downloads. The first
 time the window opens, it asks whether to **start at login**. Say yes, and
 Akousousin waits in the tray with its shortcuts working, without a window.
 
@@ -87,9 +88,9 @@ Dictation types what you say into the app you are using. It needs Plasma or
 GNOME on Wayland. On GNOME, also set up the Akousousin Focus extension shown on
 the Dictation page, so dictation knows which window to type into.
 
-1. On **Dictation**, choose a model under **Speed and accuracy** and
-   **Download** it: Fastest, Balanced or Most accurate. Larger models are more
-   accurate but slower; Balanced suits most computers.
+1. On **Dictation**, check **Speed and accuracy**. **Fastest** is included and
+   works in every language. **Balanced** and **Most accurate** recognise more
+   words correctly but are slower; choose one and **Download** it.
 2. Choose **Set up shortcut** and approve it. The suggested keys are
    **Ctrl+Alt+Space**.
 3. Choose **Hold to talk** (speak while holding the keys) or **Press to start

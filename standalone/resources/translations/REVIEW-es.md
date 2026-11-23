@@ -119,6 +119,7 @@ SPDX-FileCopyrightText: 2026 John Goodman
 | AdvancedPage | Start Akousousin when you log in? | ¿Iniciar Akousousin al iniciar sesión? |
 | AdvancedPage | Reading and dictation shortcuts then work as soon as you log in, and your voice is ready without a wait. Akousousin stays in the tray; you can change this in Advanced. | Así los atajos de lectura y dictado funcionan en cuanto inicias sesión, y tu voz está lista sin esperas. Akousousin se queda en la bandeja; puedes cambiarlo en Avanzado. |
 | AdvancedPage | Not now | Ahora no |
+| AdvancedPage | Could not open the page. Visit %1 | No se pudo abrir la página. Visita %1 |
 | AppsPage | Apps | Aplicaciones |
 | AppsPage | Where Akousousin’s voices are available. | Dónde están disponibles las voces de Akousousin. |
 | AppsPage | Windows speech (SAPI) | Voz de Windows (SAPI) |
@@ -159,6 +160,9 @@ SPDX-FileCopyrightText: 2026 John Goodman
 | AppsPage | This restarts Speech Dispatcher, so Orca pauses for a moment. Continue? | Esto reinicia Speech Dispatcher, así que Orca se detiene un momento. ¿Continuar? |
 | AppsPage | Turn off | Desactivar |
 | AppsPage | Turn on | Activar |
+| AppsPage | Wine prefixes found on this computer | Prefijos de Wine encontrados en este equipo |
+| AppsPage | Found on this computer | Encontrados en este equipo |
+| AppsPage | Choose one, or pick another folder below. | Elige uno o selecciona otra carpeta abajo. |
 | Dialogs | Cancel | Cancelar |
 | Dialogs | Close | Cerrar |
 | Dialogs | Something went wrong | Algo ha fallado |
@@ -208,7 +212,6 @@ SPDX-FileCopyrightText: 2026 John Goodman
 | DictationPage | Download | Descargar |
 | DictationPage | Import model… | Importar modelo… |
 | DictationPage | Download · %1 | Descargar · %1 |
-| DictationPage | Faster settings suit older computers. Models download only when you choose Download. | Las opciones más rápidas van mejor en equipos antiguos. Los modelos solo se descargan cuando eliges Descargar. |
 | DictationPage | Finish test recording | Terminar grabación de prueba |
 | DictationPage | Unavailable microphone | Micrófono no disponible |
 | DictationPage | Could not list microphones. Check that PipeWire or PulseAudio is running, then choose Refresh. | No se pudieron listar los micrófonos. Comprueba que PipeWire o PulseAudio estén en marcha y elige Actualizar lista. |
@@ -222,6 +225,8 @@ SPDX-FileCopyrightText: 2026 John Goodman
 | DictationPage | Microphone level | Nivel del micrófono |
 | DictationPage | The bars move when the microphone hears you. | Las barras se mueven cuando el micrófono te oye. |
 | DictationPage | Microphone level unavailable: %1 | Nivel del micrófono no disponible: %1 |
+| DictationPage | Included | Incluido |
+| DictationPage | Fastest comes with Akousousin. The others are more accurate but slower, and download only when you choose Download. | El más rápido viene con Akousousin. Los demás son más precisos pero más lentos, y solo se descargan cuando eliges Descargar. |
 | DictationTest | Dictation needs a Linux build with recognition. | El dictado necesita una versión para Linux con reconocimiento de voz. |
 | DictationTest | Finish the current dictation before starting a test. | Termina el dictado actual antes de empezar una prueba. |
 | DictationTest | Listening — speak now. Press Finish when you are done. | Escuchando: habla ahora. Pulsa Terminar cuando acabes. |
