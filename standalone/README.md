@@ -360,15 +360,20 @@ Multilingual (auto) explicitly detects the first nonempty phrase, then locks its
 language for the rest of that recording session. Starting a new session detects
 again. Start recording tests ten seconds and displays text.
 
-Capture uses an adaptive energy endpointer with approximately 500 ms silence and
-an 8-second cap. Endpointed input skips Whisper's redundant VAD pass; standalone
-WAV transcription retains neural VAD. The read-only transcript display retains up to 200 phrases within its size limit.
+Capture splits the microphone stream into phrases with Silero VAD, the small
+speech-detection model faster-whisper ships, run live on 32 ms steps: a phrase
+starts when speech probability reaches 0.5, continues while it stays above 0.35,
+and ends after about 500 ms without speech or at an 8-second cap. Fans, hum,
+music and keyboard noise therefore do not reach Whisper. If the model cannot
+load, capture falls back to an adaptive loudness threshold and logs why;
+`speech_detector` in each phrase's timings says which was used. Endpointed input
+skips Whisper's own VAD pass, which would repeat the same work. The read-only transcript display retains up to 200 phrases within its size limit.
 Ctrl+A selects its contents; Copy transcript includes measurements.
 Per-phrase timing shows voiced duration,
 endpoint wait, audio length, recognition queue wait, recognition time, insertion
 queue wait and insertion time. Timings also include estimated speech end to
 recognition and first/last acknowledged key.
-The speech end estimate uses the last above-threshold microphone frame; key
+The speech end estimate uses the last microphone frame judged to be speech; key
 acknowledgements cannot measure when another application renders its text.
 Recent transcripts stay in memory; numeric timings
 and outcomes are logged without dictated text. Spoken punctuation commands are

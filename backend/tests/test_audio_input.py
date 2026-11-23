@@ -124,7 +124,9 @@ class StreamingProcessTests(unittest.TestCase):
         def launch(args, **kwargs):
             return original([sys.executable, '-c', emitter], **kwargs)
         capture = Capture()
-        with patch('akousousin_backend.audio_input.subprocess.Popen', side_effect=launch):
+        # A constant level is not speech to Silero; this test is about the pipe, so use loudness.
+        with patch('akousousin_backend.audio_input.subprocess.Popen', side_effect=launch), \
+                patch('akousousin_backend.voice_activity.detector', return_value=(None, 'test')):
             try:
                 capture.start()
                 segment = capture.segments.get(timeout=5)

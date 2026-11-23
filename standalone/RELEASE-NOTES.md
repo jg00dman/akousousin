@@ -3,6 +3,19 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
+# Akousousin 0.9.0b5 beta
+
+- **Dictation now tells speech from noise.** Phrases were found by loudness,
+  so a fan, hum, music or typing loud enough to cross the threshold was sent to
+  Whisper as a "phrase". Whisper, given no words, tends to invent short ones
+  ("Okay.", "Thank you.") — another source of stray text. Akousousin now uses
+  Silero, a small speech-detection model already included with dictation, on
+  the live microphone. It checks every 32 ms and costs well under 1% of one CPU
+  core. It is loaded alongside the Whisper model, so it adds nothing to
+  dictation start-up. If it cannot load, dictation falls back to loudness and
+  the log says why.
+- Recognition details show which speech detector found each phrase.
+
 # Akousousin 0.9.0b4 beta
 
 - **Fixed: dictation sometimes typed the same words over and over** ("Okay.

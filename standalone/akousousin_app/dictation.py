@@ -24,6 +24,12 @@ def log_timings(record):
                   record['output'], json.dumps(record.get('timings', {}), sort_keys=True))
 
 
+def warm_speech_detector():
+    """Load Silero while Whisper loads, so the first phrase does not wait for it."""
+    from akousousin_backend.voice_activity import detector
+    detector()
+
+
 class Dictation:
     def __init__(self, path, speaking=lambda: False, recognizer_factory=None, capture_factory=None):
         self.path = path
@@ -98,6 +104,7 @@ class Dictation:
         if missing:
             from .network import require
             require(self.path, 'downloading dictation models')
+        threading.Thread(target=warm_speech_detector, daemon=True).start()
         if self.recognizer and self.recognizer.model['model'] != model:
             self.recognizer.close()
             self.recognizer = None

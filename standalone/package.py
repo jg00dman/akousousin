@@ -157,8 +157,11 @@ for sample in (PACKAGE / '_internal/onnxruntime/datasets').glob('*.onnx'):
 # auxiliary language weights external, including in starter-voice builds.
 for optional in ('piper/tashkeel/model.onnx', 'piper/hebrew/nakdimon.onnx'):
     (PACKAGE / '_internal' / optional).unlink(missing_ok=True)
+SPEECH_DETECTOR = '_internal/faster_whisper/assets/silero_vad_v6.onnx'
+if recognition_options and not (PACKAGE / SPEECH_DETECTOR).is_file():
+    raise RuntimeError('Dictation speech detection model (Silero VAD) is missing from the package')
 models = [file.relative_to(PACKAGE).as_posix() for file in PACKAGE.rglob('*.onnx')
-          if file.relative_to(PACKAGE).as_posix() != '_internal/faster_whisper/assets/silero_vad_v6.onnx']
+          if file.relative_to(PACKAGE).as_posix() != SPEECH_DETECTOR]
 expected_models = ['resources/voices/en_US-ljspeech-medium.onnx'] if options.bundle_starter_voice else []
 if sorted(models) != expected_models:
     raise RuntimeError('Packaged voice weights differ from the selected build option')

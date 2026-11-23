@@ -4,6 +4,7 @@
 import audioop
 from collections import deque
 import io
+import logging
 import os
 import queue
 import selectors
@@ -27,21 +28,62 @@ def wav(pcm):
     return output.getvalue()
 
 
-class Endpoint:
-    """Adaptive energy fallback; calibrated on microphone startup, before ready."""
-    def __init__(self, threshold=250, silence_frames=25, max_frames=400):
+class Loudness:
+    """Fallback speech test by loudness, used only when Silero cannot load.
+
+    It learns the room's noise level from quiet frames, so steady noise above
+    the threshold can be mistaken for speech; Silero does not have that flaw.
+    """
+    name = 'loudness'
+
+    def __init__(self, threshold=250):
         self.threshold = threshold
-        self.silence_frames = silence_frames
-        self.max_frames = max_frames
         self.noise_floor = threshold / 3
-        self.last_metadata = {}
-        self.reset()
 
     def calibrate(self, pcm):
         levels = [audioop.rms(pcm[i:i + FRAME_BYTES], 2)
                   for i in range(0, len(pcm) - FRAME_BYTES + 1, FRAME_BYTES)]
         if levels:
             self.noise_floor = sorted(levels)[len(levels) // 2]
+
+    def __call__(self, frame, in_phrase):
+        level = audioop.rms(frame, 2)
+        speech = level >= max(self.threshold, self.noise_floor * 2 + 40)
+        if not speech:
+            self.noise_floor = .98 * self.noise_floor + .02 * level
+        return speech
+
+
+class Silero:
+    """Speech test by Silero VAD probability, with hysteresis inside a phrase."""
+    name = 'silero'
+    START, CONTINUE = .5, .35
+
+    def __init__(self, detector):
+        self.detector = detector
+        self.probability = 0.0
+
+    def calibrate(self, pcm):
+        pass  # nothing to learn: the model already knows what speech is
+
+    def __call__(self, frame, in_phrase):
+        probabilities = self.detector.feed(frame)
+        if probabilities:
+            self.probability = probabilities[-1]
+        return self.probability >= (self.CONTINUE if in_phrase else self.START)
+
+
+class Endpoint:
+    """Splits the microphone stream into phrases: speech, then 0.5 s of non-speech."""
+    def __init__(self, threshold=250, silence_frames=25, max_frames=400, voice=None):
+        self.voice = voice or Loudness(threshold)
+        self.silence_frames = silence_frames
+        self.max_frames = max_frames
+        self.last_metadata = {}
+        self.reset()
+
+    def calibrate(self, pcm):
+        self.voice.calibrate(pcm)
 
     def reset(self):
         self.preroll = deque(maxlen=12)
@@ -52,12 +94,9 @@ class Endpoint:
     def feed(self, frame, captured_at=None):
         if len(frame) != FRAME_BYTES:
             raise ValueError('Expected a complete 20 ms frame')
-        level = audioop.rms(frame, 2)
-        speech = level >= max(self.threshold, self.noise_floor * 2 + 40)
+        speech = self.voice(frame, bool(self.frames))
         if speech:
             self.last_speech_at = time.monotonic() if captured_at is None else captured_at
-        if not speech:
-            self.noise_floor = .98 * self.noise_floor + .02 * level
         if not self.frames:
             self.preroll.append(frame)
             if not speech:
@@ -72,7 +111,7 @@ class Endpoint:
         return None
 
     def finish(self):
-        metadata = {'speech_seconds': round(self.voiced * .02, 3),
+        metadata = {'speech_detector': self.voice.name, 'speech_seconds': round(self.voiced * .02, 3),
                     'endpoint_wait_seconds': round(self.quiet * .02, 3),
                     'speech_ended_at': self.last_speech_at}
         trim = max(0, self.quiet - 5)
@@ -89,6 +128,7 @@ class Capture:
         self.ended = ended
         self.source, self.cue = source, cue
         self.paused, self.changed = paused, changed
+        self.threshold = threshold
         self.endpoint = Endpoint(threshold)
         self.segments = queue.Queue(maxsize=2)
         self.queued_at = {}
@@ -124,6 +164,12 @@ class Capture:
 
     def _pump(self):
         from .audio_system import PcmStream, record_command
+        from .voice_activity import detector
+        model, problem = detector()
+        if model is not None:
+            self.endpoint = Endpoint(self.threshold, voice=Silero(model))
+        else:
+            logging.warning('Silero speech detection unavailable (%s); using loudness', problem)
         stream = PcmStream()
         process = None
         selector = selectors.DefaultSelector()
