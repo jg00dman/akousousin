@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 John Goodman
-"""Bounded PulseAudio capture and silence endpointing for desktop dictation."""
+"""Bounded microphone capture (PipeWire or PulseAudio) and silence endpointing for desktop dictation."""
 import audioop
 from collections import deque
 import io
@@ -123,21 +123,16 @@ class Capture:
                 raise RuntimeError('Recognition cannot keep up. Dictation stopped; previous results are retained.')
 
     def _pump(self):
-        args = ['parec', '--raw', '--format=s16le', '--rate=16000', '--channels=1',
-                '--latency-msec=50', '--client-name=Akousousin', '--stream-name=Dictation']
-        if self.source:
-            args.append('--device=' + self.source)
+        from .audio_system import PcmStream, record_command
+        stream = PcmStream()
         process = None
         selector = selectors.DefaultSelector()
         try:
             if os.name == 'nt':
                 raise RuntimeError('Desktop microphone capture currently requires Linux')
+            args = record_command(self.source)
             with tempfile.TemporaryFile() as errors:
-                try:
-                    process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=errors, bufsize=0, env=host_environment())
-                except FileNotFoundError as error:
-                    raise RuntimeError("Microphone capture requires 'parec'. On Ubuntu/Debian, run: "
-                                       "sudo apt install pulseaudio-utils. This works with PipeWire.") from error
+                process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=errors, bufsize=0, env=host_environment())
                 os.set_blocking(process.stdout.fileno(), False)
                 selector.register(process.stdout, selectors.EVENT_READ)
                 startup = time.monotonic() + 5
@@ -159,6 +154,9 @@ class Capture:
                     if not data:
                         raise RuntimeError('Microphone stream ended')
                     last_audio = time.monotonic()
+                    data = stream.feed(data)
+                    if not data:
+                        continue
                     if first:
                         self.endpoint.calibrate(data)
                         if self.cue:

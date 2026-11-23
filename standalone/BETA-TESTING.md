@@ -55,7 +55,8 @@ The panel header should show the AKS artwork, without a bars text character.
 
 ## KDE Wayland dictation
 
-Install `pulseaudio-utils` if needed; PipeWire remains the audio server.
+PipeWire is used natively (`pw-record`, `pw-play`); PulseAudio systems need `pulseaudio-utils`.
+Advanced › Audio system shows which one Akousousin chose.
 
 1. In Voice Input, choose Small and Enable voice input. The first download is
    about 485 MB; subsequent starts reuse it. Watch download/loading/ready states.

@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 John Goodman
 """Readable microphone and Whisper-language choices without importing inference."""
-import json
 import subprocess
 
 # ISO/Whisper codes and language names are data; kept in sync with the pinned
@@ -152,17 +151,11 @@ def microphone_choices(sources, default=''):
 
 
 def discover_microphones():
+    """Microphones from PipeWire (natively) or PulseAudio, whichever is running."""
+    from akousousin_backend.audio_system import AudioUnavailable, list_sources
     try:
-        result = subprocess.run(['pactl', '--format=json', 'list', 'sources'],
-                                capture_output=True, text=True, check=True, timeout=3)
-        sources = json.loads(result.stdout)
-        if not isinstance(sources, list):
-            raise ValueError('Invalid source list')
-        try:
-            default = subprocess.run(['pactl', 'get-default-source'], capture_output=True,
-                                     text=True, check=True, timeout=3).stdout.strip()
-        except (OSError, subprocess.SubprocessError):
-            default = ''
-        return microphone_choices(sources, default)
+        return microphone_choices(*list_sources())
+    except AudioUnavailable:
+        raise
     except (OSError, subprocess.SubprocessError, ValueError) as error:
-        raise RuntimeError('Could not list microphones. Check PipeWire and pulseaudio-utils, then Refresh.') from error
+        raise RuntimeError('Could not list microphones. Check that PipeWire or PulseAudio is running, then Refresh.') from error

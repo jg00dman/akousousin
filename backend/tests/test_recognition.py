@@ -104,7 +104,9 @@ class RecognitionTests(unittest.TestCase):
                 self.assertEqual(model_root(), Path('/example/Akousousin/models/whisper'))
 
     @unittest.skipIf(__import__('os').name == 'nt', 'Linux capture adapter')
-    def test_capture_ready_discards_startup_and_cue(self):
+    @patch('akousousin_backend.audio_system.server', return_value='pulseaudio')
+    @patch('akousousin_backend.audio_system.shutil.which', return_value='/usr/bin/parec')
+    def test_capture_ready_discards_startup_and_cue(self, _which, _server):
         events = []
         process = Mock()
         process.poll.return_value = None
@@ -128,7 +130,9 @@ class RecognitionTests(unittest.TestCase):
         process.terminate.assert_called_once()
 
     @unittest.skipIf(__import__('os').name == 'nt', 'Linux capture adapter')
-    def test_capture_failure_does_not_signal_ready(self):
+    @patch('akousousin_backend.audio_system.server', return_value='pipewire')
+    @patch('akousousin_backend.audio_system._raw_flag', return_value=['--raw'])
+    def test_capture_failure_does_not_signal_ready(self, _raw, _server):
         process = Mock()
         process.poll.return_value = 1
         def launch(args, stdout, stderr, **kwargs):
@@ -163,6 +167,11 @@ class RecognitionTests(unittest.TestCase):
 
 @unittest.skipIf(os.name == 'nt', 'Linux system audio player')
 class ReadyCueTests(unittest.TestCase):
+    def setUp(self):
+        server = patch('akousousin_backend.audio_system.server', return_value='pulseaudio')
+        server.start()
+        self.addCleanup(server.stop)
+
     def test_two_tones_use_host_libraries_and_identifiable_stream(self):
         def play(arguments, **options):
             with wave.open(arguments[-1], 'rb') as sound:
@@ -192,7 +201,7 @@ class ReadyCueTests(unittest.TestCase):
 
     def test_no_player_has_clear_error(self):
         with patch('shutil.which', return_value=None):
-            with self.assertRaisesRegex(RuntimeError, 'paplay or pw-play'):
+            with self.assertRaisesRegex(RuntimeError, 'pw-record and pw-play'):
                 ready_cue()
 
 

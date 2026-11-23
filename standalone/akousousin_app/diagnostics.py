@@ -17,6 +17,9 @@ def report(path, status=None):
              f'Desktop: {os.environ.get("XDG_CURRENT_DESKTOP", "unknown")} '
              f'({"Wayland" if os.environ.get("WAYLAND_DISPLAY") else "X11" if os.environ.get("DISPLAY") else "no display"})',
              f'AppImage: {"yes" if os.environ.get("APPIMAGE") else "no"}']
+    if os.name != 'nt':
+        from akousousin_backend import audio_system
+        lines.append(f'Audio: {audio_system.describe()}')
     try:
         from PySide6 import __version__ as qt
         lines.append(f'PySide6: {qt}')

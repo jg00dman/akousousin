@@ -12,7 +12,6 @@ import os
 from pathlib import Path
 import re
 import subprocess
-import shutil
 import struct
 import sys
 import tempfile
@@ -245,14 +244,9 @@ def ready_cue():
         import winsound
         winsound.PlaySound(data, winsound.SND_MEMORY)
         return
-    player = shutil.which('paplay') or shutil.which('pw-play')
-    if player is None:
-        raise RuntimeError('Ready sound needs paplay or pw-play; disable the sound to continue')
+    from .audio_system import play_command
     environment = host_environment()
-    arguments = [player]
-    if Path(player).name == 'paplay':
-        arguments += ['--client-name=Akousousin', '--stream-name=Dictation ready',
-                      '--property=media.role=event']
+    arguments = play_command('', 'Dictation ready', 'Notification')[:-1]
     # Seekable WAV avoids raw-stdin playback differences. On Linux this is an
     # anonymous RAM file, with no temporary file left on disk.
     memory = False
@@ -287,10 +281,8 @@ def capture(seconds, source=None, on_ready=None, cue=None):
         raise RuntimeError('This capture adapter requires Linux; use a WAV input on Windows')
     if isinstance(seconds, bool) or not isinstance(seconds, int) or not 1 <= seconds <= MAX_SECONDS:
         raise ValueError('Capture duration must be 1–30 seconds')
-    args = ['parec', '--raw', '--format=s16le', '--rate=16000', '--channels=1',
-            '--client-name=Akousousin', '--stream-name=Dictation']
-    if source:
-        args.append('--device=' + source)
+    from .audio_system import PcmStream, record_command
+    args = record_command(source)
     with tempfile.TemporaryFile() as recording, tempfile.TemporaryFile() as errors:
         process = subprocess.Popen(args, stdout=recording, stderr=errors, env=host_environment())
         try:
@@ -323,8 +315,12 @@ def capture(seconds, source=None, on_ready=None, cue=None):
                 except subprocess.TimeoutExpired:
                     process.kill()
                     process.wait(timeout=3)
-        recording.seek(offset)
-        pcm = recording.read(seconds * RATE * 2)
+        recording.seek(0)
+        everything = recording.read()
+        audio = PcmStream().feed(everything)
+        start = max(0, offset - (len(everything) - len(audio)))
+        start -= start % 2
+        pcm = audio[start:start + seconds * RATE * 2]
     pcm = pcm[:len(pcm) // 2 * 2]
     if not pcm:
         raise RuntimeError('No microphone audio captured')

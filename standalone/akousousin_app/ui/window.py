@@ -49,6 +49,7 @@ class MainWindow(QMainWindow):
         self.stack = QStackedWidget()
         body.addWidget(self.stack, 1)
         self.pages = {}
+        self.visible_page = None
         self._build_pages()
         self.nav.currentRowChanged.connect(self._show_row)
         QApplication.instance().styleHints().colorSchemeChanged.connect(lambda _: QTimer.singleShot(0, self.retheme))
@@ -102,6 +103,9 @@ class MainWindow(QMainWindow):
         key = self.current_page().key if self.nav.currentItem() else 'home'
         self.setStyleSheet(theme.style_sheet())
         self.tile.setStyleSheet(f'background: {theme.current().accent}; border-radius: 9px')
+        if self.visible_page is not None:
+            self.visible_page.hidden()
+            self.visible_page = None
         self.nav.blockSignals(True)
         self.nav.clear()
         while self.stack.count():
@@ -153,9 +157,27 @@ class MainWindow(QMainWindow):
 
     # Navigation -----------------------------------------------------------
     def _show_row(self, index):
+        if self.visible_page is not None:
+            self.visible_page.hidden()
         self.stack.setCurrentIndex(index)
-        key = self.nav.item(index).data(Qt.UserRole)
-        self.pages[key].shown()
+        self.visible_page = self.pages[self.nav.item(index).data(Qt.UserRole)]
+        if self.isVisible() and not self.isMinimized():
+            self.visible_page.shown()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if self.visible_page is not None:
+            self.visible_page.shown()
+
+    def hideEvent(self, event):
+        if self.visible_page is not None:
+            self.visible_page.hidden()
+        super().hideEvent(event)
+
+    def changeEvent(self, event):
+        if event.type() == QEvent.WindowStateChange and self.visible_page is not None:
+            self.visible_page.hidden() if self.isMinimized() else self.visible_page.shown()
+        super().changeEvent(event)
 
     def _go_row(self, index):
         if 0 <= index < self.nav.count():

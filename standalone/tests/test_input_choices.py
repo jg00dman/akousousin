@@ -41,7 +41,10 @@ class InputChoiceTests(unittest.TestCase):
         self.assertNotIn('other-monitor', [code for code, label in choices])
 
     def test_discovery_is_bounded_and_default_name_is_optional(self):
-        with patch('akousousin_app.input_choices.subprocess.run') as run:
+        from akousousin_backend import audio_system
+        with patch.object(audio_system, 'server', return_value='pulseaudio'), \
+                patch.object(audio_system.shutil, 'which', return_value='/usr/bin/pactl'), \
+                patch('akousousin_backend.audio_system.subprocess.run') as run:
             run.side_effect = [Mock(stdout='[{"name":"mic","description":"Built-in microphone"}]'), Mock(stdout='mic\n')]
             self.assertEqual(discover_microphones()[0][1], 'System default — Built-in microphone')
             self.assertTrue(all(call.kwargs['timeout'] == 3 for call in run.call_args_list))

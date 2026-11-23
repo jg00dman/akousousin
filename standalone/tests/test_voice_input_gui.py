@@ -159,6 +159,34 @@ class PanelTests(unittest.TestCase):
             self.assertIn(words, content)
         self.assertTrue(any('licence texts' in b.text() for b in page.findChildren(QPushButton)))
 
+    @unittest.skipIf(os.name == 'nt', 'Linux microphone level')
+    def test_microphone_level_runs_only_while_dictation_is_visible(self):
+        import sys
+        import time
+        from akousousin_app.ui.meter import loudness
+        self.assertEqual(loudness(b''), 0.0)
+        self.assertGreater(loudness(b'\x00\x40' * 800), loudness(b'\x10\x00' * 800))
+        emitter = "import sys,time\nwhile True:\n sys.stdout.buffer.write(b'\\x00\\x40'*320); sys.stdout.buffer.flush(); time.sleep(.02)"
+        levels = []
+        with patch('akousousin_backend.audio_system.record_command', return_value=[sys.executable, '-c', emitter]) as command:
+            self.window.go('dictation')
+            page = self.window.pages['dictation']
+            page.monitor.level.connect(levels.append)
+            self.assertTrue(page.monitor.running)
+            self.assertEqual(command.call_args.args[1], 'Microphone level')
+            deadline = time.monotonic() + 5
+            while not any(levels) and time.monotonic() < deadline:
+                self.app.processEvents()
+                time.sleep(.01)
+            self.assertGreater(max(levels), .5)
+            self.assertEqual(page.meter.accessibleDescription(), 'Hearing sound')
+            self.window.go('voices')
+            self.assertFalse(page.monitor.running, 'the microphone closes when the page is left')
+            self.window.go('dictation')
+            self.window.showMinimized()
+            self.app.processEvents()
+            self.assertFalse(page.monitor.running, 'the microphone closes when the window is minimised')
+
     def test_closing_with_work_running_hides_and_waits(self):
         self.window.tasks.active.add('download')
         self.window.close()

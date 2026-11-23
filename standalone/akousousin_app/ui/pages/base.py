@@ -49,6 +49,9 @@ class Page(QWidget):
     def shown(self):
         """Called each time the page becomes visible."""
 
+    def hidden(self):
+        """Called when another page is chosen or the window is hidden or minimised."""
+
     # Helpers --------------------------------------------------------------
     def add(self, item):
         if isinstance(item, QWidget):

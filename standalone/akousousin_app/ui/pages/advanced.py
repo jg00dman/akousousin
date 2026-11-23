@@ -49,6 +49,13 @@ class AdvancedPage(Page):
         restart = button(self.tr('Restart'), self.restart)
         service.add(SettingRow(self.tr('Status'), self.tr('Starts by itself when an app needs speech.'),
                                self.service_status, restart, first=True))
+        if not self.state.windows:
+            from akousousin_backend import audio_system
+            self.audio = text('', 'muted', wrap=False)
+            service.add(SettingRow(self.tr('Audio system'),
+                                   self.tr('Akousousin records and plays sounds through PipeWire directly when it is running, otherwise through PulseAudio.'),
+                                   self.audio))
+            self.tasks.run(audio_system.describe, self.show_audio, failed=lambda _e: None, background=True)
         self.idle = combo(self.idle_choices(), config['idle_timeout'])
         self.idle.activated.connect(lambda _: self.state.save(idle_timeout=self.idle.currentData()))
         service.add(SettingRow(self.tr('Free memory when idle'),
@@ -115,6 +122,10 @@ class AdvancedPage(Page):
         for widget in widgets:
             layout.addWidget(widget)
         return box
+
+    def show_audio(self, description):
+        self.audio.setText({'PipeWire (native)': self.tr('PipeWire (native)'), 'PulseAudio': self.tr('PulseAudio')}
+                           .get(description, self.tr('Not found')))
 
     def idle_choices(self):
         return [(0, self.tr('Never')), (60, self.tr('After 1 minute')), (300, self.tr('After 5 minutes')),

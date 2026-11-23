@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QApplication, QCheckBox, QFileDialog, QPlainTextEd
 
 from ...input_choices import discover_microphones, language_choices
 from ..flow import Columns
+from ..meter import LevelMeter, LevelMonitor
 from ..lang import dictation_state, keys, language_name
 from ..widgets import Card, Choices, Keys, button, combo, fill, labelled, row, set_icon, spread, text
 from .base import Page
@@ -51,10 +52,19 @@ class DictationPage(Page):
         self.language = combo()
         self.language.activated.connect(lambda _: self.save_language())
         self.mic = combo([('', self.tr('System default'))], config['stt_source'])
-        self.mic.activated.connect(lambda _: self.state.save(stt_source=self.mic.currentData()))
+        self.mic.activated.connect(lambda _: self.choose_mic())
         refresh = button(self.tr('Refresh'), lambda: self.refresh_mics())
         mic_box = labelled(self.tr('Microphone'), self.mic)
-        mic_box.addLayout(row(refresh))
+        self.meter = LevelMeter(self.tr('Quiet'), self.tr('Hearing sound'), self.tr('Microphone level unavailable'))
+        self.meter.setAccessibleName(self.tr('Microphone level'))
+        self.monitor = LevelMonitor(self)
+        self.monitor.level.connect(self.meter.set_level)
+        self.monitor.failed.connect(self.meter_failed)
+        mic_box.addLayout(row(self.meter, refresh, stretch=False))
+        self.meter_note = text(self.tr('The bars move when the microphone hears you.'), 'small')
+        mic_box.addWidget(self.meter_note)
+        self.meter.setVisible(not self.state.windows)
+        self.meter_note.setVisible(not self.state.windows)
         fields = Columns([[self._box(labelled(self.tr('Language'), self.language,
                                               self.tr('Starts with your system language. Automatic detects it each time.')))],
                           [self._box(mic_box)]], minimum=240)
@@ -106,6 +116,24 @@ class DictationPage(Page):
         widget.setLayout(layout)
         return widget
 
+    # Microphone level ---------------------------------------------------------
+    def shown(self):
+        if not self.state.windows and not self.monitor.running:
+            self.meter_note.setText(self.tr('The bars move when the microphone hears you.'))
+            self.monitor.start(self.state.config['stt_source'])
+
+    def hidden(self):
+        self.monitor.stop()
+
+    def choose_mic(self):
+        self.state.save(stt_source=self.mic.currentData())
+        if self.monitor.running:
+            self.monitor.start(self.mic.currentData())
+
+    def meter_failed(self, message):
+        self.meter.set_unavailable()
+        self.meter_note.setText(self.tr('Microphone level unavailable: %1').replace('%1', message))
+
     # Models -----------------------------------------------------------------
     def tiers(self, language):
         english = language == 'en'
@@ -154,6 +182,8 @@ class DictationPage(Page):
 
     # Updates ----------------------------------------------------------------
     def settings_changed(self, config):
+        if self.monitor.running and self.monitor.source != config['stt_source']:
+            self.monitor.start(config['stt_source'])
         fill(self.language, [(code, language_name(code) if code else self.tr('Detect automatically'))
                              for code, _caption in language_choices()], config['stt_language'])
         self.mode.select(config['stt_mode'])

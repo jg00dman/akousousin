@@ -343,9 +343,13 @@ other supported locales. Small/Small.en are quality options. Turbo requires a
 converted local import and is not presented as a CPU speed option; a failed
 Turbo load falls back to installed Small.
 
-Install `pulseaudio-utils` for `parec`/`paplay`; PipeWire remains your audio server
-through its PulseAudio-compatible service. Enable voice input downloads the
-selected pinned weights once if necessary and loads them. Disable stops
+Akousousin detects the audio server. On PipeWire it records and plays sounds
+natively with `pw-record`, `pw-play` and `pw-dump` (packaged as `pipewire-bin`,
+`pipewire-utils` or `pipewire-tools`); on PulseAudio it uses `parec`, `paplay`
+and `pactl` from `pulseaudio-utils`. Set `AKOUSOUSIN_AUDIO=pulseaudio` or
+`AKOUSOUSIN_AUDIO=pipewire` to override. Advanced › Audio system shows which is
+in use. Downloading on the Dictation page fetches the selected pinned weights
+once and loads them. Disable stops
 recognition and frees model memory, retaining downloads. Wait for the ready state
 and two optional 300 Hz tones before speaking. Test ready sound checks playback
 separately. Tones use cached, seekable WAV audio with a short device-wake lead-in.

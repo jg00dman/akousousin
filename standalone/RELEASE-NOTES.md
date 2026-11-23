@@ -3,6 +3,20 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
+# Akousousin 0.9.0b3 beta
+
+- **Microphone level on the Dictation page.** Bars move as the microphone
+  hears you. The microphone is open only while the Dictation page is on screen
+  and closes when you leave the page or minimise the window. Screen readers
+  hear "Quiet" or "Hearing sound" rather than constant updates.
+- **PipeWire natively.** Akousousin now detects the audio server. On PipeWire
+  it records, plays its own sounds and lists microphones with PipeWire's tools
+  (`pw-record`, `pw-play`, `pw-dump`) instead of the PulseAudio compatibility
+  layer, so `pulseaudio-utils` is no longer needed there. PulseAudio systems
+  keep using `parec`, `paplay` and `pactl`. Advanced shows which is in use, and
+  `AKOUSOUSIN_AUDIO=pipewire|pulseaudio` overrides the choice. Saved microphone
+  choices keep working on both.
+
 # Akousousin 0.9.0b2 beta
 
 Fixes from testing 0.9.0b1:
