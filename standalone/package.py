@@ -81,11 +81,42 @@ if sys.platform != 'win32':
          'source': published + 'wine-source-11.21-logos.tar.xz'}, indent=2))
 
 commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+
+
+def windows_version_file():
+    """Explorer's Details tab and the UAC prompt show these."""
+    from packaging.version import Version
+    numbers = (list(Version(__version__).release) + [0, 0, 0, 0])[:4]
+    target = BUILD / 'version-info.txt'
+    target.write_text(f'''VSVersionInfo(
+  ffi=FixedFileInfo(filevers={tuple(numbers)}, prodvers={tuple(numbers)}, mask=0x3f, flags=0x0, OS=0x40004,
+                    fileType=0x1, subtype=0x0, date=(0, 0)),
+  kids=[StringFileInfo([StringTable('040904B0', [
+    StringStruct('CompanyName', 'Akousousin'),
+    StringStruct('FileDescription', 'Akousousin'),
+    StringStruct('FileVersion', {__version__!r}),
+    StringStruct('InternalName', 'akousousin'),
+    StringStruct('LegalCopyright', 'GPL-3.0-or-later'),
+    StringStruct('OriginalFilename', 'akousousin.exe'),
+    StringStruct('ProductName', 'Akousousin'),
+    StringStruct('ProductVersion', {__version__!r})])]),
+        VarFileInfo([VarStruct('Translation', [1033, 1200])])])
+''', encoding='utf-8')
+    return target
+
+
 (RESOURCE / 'build.json').write_text(json.dumps({'build': commit[:12] + '-' + sys.platform,
                                                'commit': commit, 'version': __version__,
                                                'distribution': 'appimage' if sys.platform == 'linux' else 'windows-zip',
                                                'starter_voice': 'en_US-ljspeech-medium' if options.bundle_starter_voice else None}, indent=2))
 recognition_options = []
+windows_options = []
+if sys.platform == 'win32':
+    # A GUI program: no console window behind the control panel, the tray or
+    # programs that wake speech. Command-line use writes to the calling
+    # terminal (see akousousin_app/windows.py).
+    windows_options = ['--windowed', '--icon', str(ROOT / 'standalone/resources/akousousin.ico'),
+                       '--version-file', str(windows_version_file())]
 if importlib.util.find_spec('faster_whisper') is not None:
     for dependency in ('faster_whisper', 'ctranslate2', 'tokenizers', 'av'):
         recognition_options += ['--collect-all', dependency]
@@ -93,7 +124,8 @@ subprocess.run([sys.executable, '-m', 'PyInstaller', '--clean', '--noconfirm', '
                 '--distpath', str(BUILD / 'frozen'), '--workpath', str(BUILD / 'freeze'), '--specpath', str(BUILD),
                 '--paths', str(ROOT / 'standalone'), '--paths', str(ROOT / 'backend'),
                 '--exclude-module', 'readline', '--collect-all', 'piper', '--collect-all', 'numpy',
-                '--collect-all', 'onnxruntime', '--collect-data', 'akousousin_backend', *recognition_options, str(ROOT / 'standalone/entrypoint.py')], check=True)
+                '--collect-all', 'onnxruntime', '--collect-data', 'akousousin_backend', *recognition_options,
+                *windows_options, str(ROOT / 'standalone/entrypoint.py')], check=True)
 
 PACKAGE = BUILD / 'Akousousin'
 shutil.copytree(BUILD / 'frozen/akousousin', PACKAGE, dirs_exist_ok=True)
@@ -170,6 +202,20 @@ if sys.platform == 'win32':
     with zipfile.ZipFile(OUT / 'Akousousin-Windows-x86_64.zip', 'w', zipfile.ZIP_DEFLATED) as archive:
         for file in PACKAGE.rglob('*'):
             archive.write(file, Path('Akousousin') / file.relative_to(PACKAGE))
+    # The installer (Start menu entry, uninstall, Program Files) is built from
+    # the same files. Its checksum is kept apart from SHA256SUMS until releases
+    # carry it.
+    compiler = shutil.which('ISCC') or next((str(path) for path in (
+        Path(os.environ.get('ProgramFiles(x86)', r'C:\Program Files (x86)')) / 'Inno Setup 6/ISCC.exe',
+        Path(os.environ.get('ProgramFiles', r'C:\Program Files')) / 'Inno Setup 6/ISCC.exe') if path.is_file()), None)
+    if compiler is None:
+        raise RuntimeError('Inno Setup 6 (ISCC.exe) is needed to build the Windows installer')
+    subprocess.run([compiler, '/Qp', f'/DAppVersion={__version__}', f'/DSource={PACKAGE}', f'/DOutput={OUT}',
+                    str(ROOT / 'standalone/windows-installer.iss')], check=True)
+    setup = OUT / 'Akousousin-Windows-x86_64-Setup.exe'
+    with setup.open('rb') as stream:
+        (OUT / 'SETUP-SHA256SUMS').write_text(hashlib.file_digest(stream, 'sha256').hexdigest() + '  ' + setup.name + '\n',
+                                             encoding='ascii', newline='\n')
 else:
     app = BUILD / 'AppDir'
     (app / 'usr/lib').mkdir(parents=True, exist_ok=True)
@@ -178,7 +224,7 @@ else:
     (app / 'AppRun').chmod(0o755)
     (app / 'akousousin.desktop').unlink(missing_ok=True)
     (app / (APP_ID + '.desktop')).write_text('[Desktop Entry]\nType=Application\nName=Akousousin — Neural Voice Engine\nComment=Local neural speech and experimental Whisper dictation\nExec=AppRun\nIcon=akousousin\nCategories=AudioVideo;Accessibility;\nTerminal=false\n')
-    (app / 'akousousin.svg').write_text('<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"><rect width="128" height="128" rx="24" fill="#087e82"/><path d="M30 52v24m17-40v56m17-66v76m17-62v48m17-32v16" stroke="white" stroke-width="7" stroke-linecap="round"/></svg>')
+    shutil.copy(ROOT / 'standalone/resources/akousousin.svg', app / 'akousousin.svg')
     runtime = CACHE / 'appimage-runtime'
     fetch('https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64', runtime,
           '617aa77314d57c8b8e4fae9c3f0b35af7b30d5529cb69e98f64f92510ed98a46')

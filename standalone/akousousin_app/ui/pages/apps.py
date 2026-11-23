@@ -191,7 +191,7 @@ class AppsPage(Page):
 
         def apply():
             if remove:
-                installer.uninstall()
+                installer.uninstall(path)
                 config = settings.load(path)
                 config['registrations'] = [r for r in config.get('registrations', []) if r['prefix'] != (prefix or '')]
                 settings.save(path, config)

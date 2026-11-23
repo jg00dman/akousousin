@@ -152,7 +152,11 @@ def select_voice(path, identifier, *, language_only=False):
         if installer.execute('reg.exe', 'query', token, '/reg:64', check=False).returncode:
             pending.append(entry['prefix'] or 'Windows')
             continue
-        for key, item in ((VOICES, 'DefaultDefaultTokenId'),
-                          (r'HKCU\SOFTWARE\Microsoft\Speech\Voices', 'DefaultTokenId')):
-            installer.execute('reg.exe', 'add', key, '/v', item, '/t', 'REG_SZ', '/d', token, '/f', '/reg:64')
+        for key, item in ((r'HKCU\SOFTWARE\Microsoft\Speech\Voices', 'DefaultTokenId'),
+                          (VOICES, 'DefaultDefaultTokenId')):
+            # Windows: the machine-wide default needs administrator rights. The
+            # per-user default is the one SAPI uses, so a refusal there is fine.
+            machine = key == VOICES and installer.needs_elevation()
+            installer.execute('reg.exe', 'add', key, '/v', item, '/t', 'REG_SZ', '/d', token, '/f', '/reg:64',
+                              check=not machine)
     return pending

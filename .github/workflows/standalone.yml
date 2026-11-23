@@ -95,6 +95,11 @@ jobs:
         if: runner.os == 'Linux'
         shell: bash
         run: PYTHONPATH=backend python -m unittest discover -s backend/tests -v
+      - name: Install Inno Setup for the Windows installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
       - name: Build selected package variant, licences and sources
         id: package
         run: python standalone/package.py ${{ github.event_name == 'workflow_dispatch' && !inputs.bundle_starter_voice && '--no-bundle-starter-voice' || '' }}
@@ -150,6 +155,9 @@ jobs:
       - name: Native Windows SAPI, installer and panel tests
         if: runner.os == 'Windows'
         run: python standalone/ci_smoke.py
+      - name: Windows installer install, shortcut and uninstall
+        if: runner.os == 'Windows'
+        run: python standalone/ci_windows_installer.py standalone-dist/Akousousin-Windows-x86_64-Setup.exe
       - name: Print controller diagnostics
         if: always()
         shell: bash
@@ -179,6 +187,15 @@ jobs:
           # keep the Windows ZIP inside the usual artifact archive.
           name: Akousousin-Windows-x86_64.zip
           path: standalone-dist/Akousousin-Windows-x86_64.zip
+          if-no-files-found: error
+      - name: Upload Windows installer (not yet a release asset)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: windows-installer
+          path: |
+            standalone-dist/Akousousin-Windows-x86_64-Setup.exe
+            standalone-dist/SETUP-SHA256SUMS
           if-no-files-found: error
       - name: Upload checksums and diagnostic evidence
         if: always()

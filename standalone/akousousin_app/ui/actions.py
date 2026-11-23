@@ -74,7 +74,8 @@ class DictationTest(QObject):
             self.state.command('stt-finish')
             return
         if not self.supported:
-            self.state.notice.emit(self.tr('Dictation needs a Linux build with recognition.'))
+            self.state.notice.emit(self.tr('Dictation is not available on Windows yet.') if os.name == 'nt'
+                                   else self.tr('Dictation needs a Linux build with recognition.'))
             return
 
         def start():

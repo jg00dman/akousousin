@@ -65,3 +65,61 @@ def play_wav(path, cancelled=lambda: False, timeout=120):
                 except subprocess.TimeoutExpired:
                     process.kill()
                     process.wait(timeout=2)
+
+
+DRAIN_SECONDS = .35  # longer than the device buffer, so the last word is heard
+
+
+def _stream(pcm, frame_bytes, rate, finished):
+    """miniaudio generator: the audio, then silence until the device has played it all."""
+    required = yield b''
+    offset = 0
+    while offset < len(pcm):
+        chunk = pcm[offset:offset + required * frame_bytes]
+        offset += len(chunk)
+        required = yield chunk
+    remaining = int(rate * DRAIN_SECONDS)
+    while remaining > 0:
+        count = min(required, remaining)
+        remaining -= count
+        required = yield bytes(count * frame_bytes)
+    finished.set()
+    while True:
+        required = yield bytes(required * frame_bytes)
+
+
+def play_native(path, cancelled=lambda: False, timeout=120, backends=None):
+    """Play a WAV through the system's default output (Windows), to the very end.
+
+    Timing a fire-and-forget sound and stopping it when its length has passed
+    cut off the end of the last word, because the device starts a little late.
+    Here playback ends only after the audio and a buffer's worth of silence
+    have been consumed by the device.
+    """
+    import threading
+    import wave
+    import miniaudio
+    with wave.open(str(path), 'rb') as sound:
+        channels, width, rate = sound.getnchannels(), sound.getsampwidth(), sound.getframerate()
+        pcm = sound.readframes(sound.getnframes())
+    if width != 2:
+        raise RuntimeError('Expected 16-bit audio')
+    if cancelled():
+        return False
+    finished = threading.Event()
+    device = miniaudio.PlaybackDevice(output_format=miniaudio.SampleFormat.SIGNED16, nchannels=channels,
+                                      sample_rate=rate, buffersize_msec=200, backends=backends,
+                                      app_name='Akousousin')
+    try:
+        stream = _stream(pcm, channels * width, rate, finished)
+        next(stream)
+        device.start(stream)
+        deadline = time.monotonic() + timeout
+        while not finished.wait(.025):
+            if cancelled():
+                return False
+            if time.monotonic() >= deadline:
+                raise RuntimeError(f'Playback timed out after {timeout} seconds')
+        return True
+    finally:
+        device.close()

@@ -138,10 +138,9 @@ def host_environment():
 
 def launch_controller(path):
     with log_path().open('ab') as output:
-        options = {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == 'nt' else {
-            'start_new_session': True}
+        from .windows import detached
         subprocess.Popen(command('--controller', '--settings', str(path)), stdin=subprocess.DEVNULL,
-                         stdout=output, stderr=output, env=environment(), **options)
+                         stdout=output, stderr=output, env=environment(), **detached())
 
 
 def result(data):

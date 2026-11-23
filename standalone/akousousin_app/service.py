@@ -57,8 +57,8 @@ class Service:
         self.record.write_text(json.dumps({'instance': self.instance, 'settings': str(self.settings.resolve()), 'port': port}))
         invocation = command()
         with self.log.open('ab') as output:
-            options = {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == 'nt' else {
-                'start_new_session': True}
+            from .windows import detached
+            options = detached()
             environment = os.environ.copy()
             if getattr(sys, 'frozen', False) and os.environ.get('APPIMAGE'):
                 # It runs from this process's AppImage mount, which ends with us.
@@ -112,8 +112,9 @@ class Service:
         if self.process is None or self.process.poll() is not None:
             return False
         if os.name == 'nt':
+            from .windows import hidden
             subprocess.run(['taskkill', '/PID', str(self.process.pid), '/T', '/F'],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10, **hidden())
         else:
             try:
                 os.killpg(self.process.pid, signal.SIGTERM)

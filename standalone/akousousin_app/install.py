@@ -14,6 +14,7 @@ import tempfile
 
 from .settings import lcid
 from . import runtime, settings
+from .windows import hidden, is_admin
 
 CLSID = '{EA7A00AB-0FB7-4DEB-81C5-550D854F390F}'
 CLASS = 'HKCU\\Software\\Classes\\CLSID\\' + CLSID
@@ -77,8 +78,10 @@ class Installer:
                 raise ValueError('--wine-prefix is for Linux; use --install on Windows')
             self.directory = Path(os.environ['PROGRAMFILES']) / 'Akousousin'
         # Wine commonly runs with an administrative token and ignores per-user COM classes.
-        # HKLM here belongs exclusively to the selected prefix; Windows keeps per-user registration.
-        self.class_key = CLASS.replace('HKCU', 'HKLM', 1) if self.prefix else CLASS
+        # On Windows the voice tokens are machine-wide (HKLM), so the engine class is too:
+        # a per-user class would be written to the administrator's profile when the
+        # person who approves the UAC prompt is a different account.
+        self.class_key = CLASS.replace('HKCU', 'HKLM', 1)
         self.manifest = self.directory / 'install-state.json'
         self.backups = self.directory / 'backups'
         self.state = json.loads(self.manifest.read_text()) if self.manifest.exists() else {
@@ -101,7 +104,7 @@ class Installer:
         with tempfile.TemporaryFile() as output, tempfile.TemporaryFile() as errors:
             try:
                 result = subprocess.run(command, env=self.environment(), stdout=output, stderr=errors,
-                                        timeout=timeout, check=False)
+                                        timeout=timeout, check=False, **({} if self.prefix else hidden()))
             except subprocess.TimeoutExpired as error:
                 output.seek(0)
                 errors.seek(0)
@@ -226,9 +229,29 @@ class Installer:
             path.write_text('Windows Registry Editor Version 5.00\n\n' + text, encoding='utf-16')
             self.execute('regedit.exe', '/S', self.windows(path))
 
+    def needs_elevation(self):
+        """Windows voices live in Program Files and HKLM, which need administrator rights."""
+        return os.name == 'nt' and not self.prefix and not is_admin()
+
+    def elevated(self, flags, settings_path):
+        """Repeat this step in an elevated copy of Akousousin (one UAC prompt)."""
+        from .windows import run_elevated
+        with tempfile.TemporaryDirectory() as folder:
+            report = Path(folder) / 'error.txt'
+            code = run_elevated(runtime.command(*flags, '--settings', str(settings_path or settings.config_path()),
+                                                '--error-file', str(report)))
+            if code:
+                detail = report.read_text(encoding='utf-8', errors='replace').strip() if report.exists() else ''
+                raise RuntimeError(detail or f'The administrator step failed (exit code {code}). See {runtime.log_path()}')
+        self.state = json.loads(self.manifest.read_text()) if self.manifest.exists() else {
+            'product': 'Akousousin', 'version': 1, 'files': {}, 'keys': {}, 'values': [], 'compatibility': False}
+        return self.manifest
+
     def install(self, config, settings_path=None):
         if config['voices'] and config['voice'] not in config['voices']:
             raise ValueError('Select an installed voice first')
+        if self.needs_elevation():
+            return self.elevated(('--install', '--install-only'), settings_path)
         before_state = copy.deepcopy(self.state)
         self.backups.mkdir(parents=True, exist_ok=True)
         self.transaction = tempfile.TemporaryDirectory()
@@ -374,7 +397,9 @@ class Installer:
                 path.unlink(missing_ok=True)
         self.manifest.unlink(missing_ok=True)
 
-    def uninstall(self):
+    def uninstall(self, settings_path=None):
         if not self.manifest.exists():
             raise ValueError('No Akousousin installation record was found in this prefix')
+        if self.needs_elevation():
+            return self.elevated(('--uninstall',), settings_path)
         self.restore()

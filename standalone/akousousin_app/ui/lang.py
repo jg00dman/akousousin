@@ -7,6 +7,7 @@ they read correctly whatever language the panel itself is in. Status comes
 from the controller as codes and is worded here, in the panel's language.
 """
 from functools import lru_cache
+import os
 
 from PySide6.QtCore import QCoreApplication, QLocale
 
@@ -76,6 +77,8 @@ def keys(description):
 def dictation_state(status, supported=True):
     """A short sentence for the dictation phase and whether it needs attention."""
     if not supported:
+        if os.name == 'nt':
+            return translate('Status', 'Dictation is not available on Windows yet'), 'off'
         return translate('Status', 'Dictation needs a Linux build with recognition'), 'off'
     if not status:
         return translate('Status', 'Dictation status unavailable'), 'off'

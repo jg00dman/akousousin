@@ -35,14 +35,37 @@ def animation_factor():
     return 1.0
 
 
-def draw(state, phase=0.0, tint=None, badge=None, progress=None, size=64):
+def default_tint():
+    """The colour of the logo bars: the panel's text colour.
+
+    Qt's palette follows the desktop panel on Linux. The Windows taskbar has
+    its own light/dark setting (dark by default), independent of app colours.
+    """
+    from ..windows import taskbar_is_light
+    light = taskbar_is_light()
+    if light is not None:
+        return QColor('#1C1C1C' if light else '#FFFFFF')
+    return QApplication.palette().windowText().color()
+
+
+SIZES = (16, 20, 24, 32, 48, 64)  # drawn per size so small tray icons stay sharp
+
+
+def draw(state, phase=0.0, tint=None, badge=None, progress=None, size=None):
     """Paint one frame. ``phase`` runs 0–1 through one animation cycle."""
+    tint = QColor(tint or default_tint())
+    icon = QIcon()
+    for each in ((size,) if size else SIZES):
+        icon.addPixmap(_frame(state, phase, tint, badge, progress, each))
+    return icon
+
+
+def _frame(state, phase, tint, badge, progress, size):
     image = QPixmap(size, size)
     image.fill(Qt.transparent)
     painter = QPainter(image)
     painter.setRenderHint(QPainter.Antialiasing)
     scale = size / 24
-    tint = QColor(tint or QApplication.palette().windowText().color())
     if state == 'listening':
         glow = QColor(GLOW)
         glow.setAlphaF(.25 + .45 * (.5 - .5 * math.cos(2 * math.pi * phase)))
@@ -80,7 +103,7 @@ def draw(state, phase=0.0, tint=None, badge=None, progress=None, size=64):
         painter.setBrush(QColor(badge))
         painter.drawEllipse(QPointF(19.5 * scale, 19.5 * scale), 3.8 * scale, 3.8 * scale)
     painter.end()
-    return QIcon(image)
+    return image
 
 
 class Tray(QObject):

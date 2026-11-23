@@ -4,7 +4,6 @@
 import json
 import os
 import tempfile
-import time
 import urllib.request
 import wave
 from pathlib import Path
@@ -53,16 +52,4 @@ def play(path, text, voice, sample, stop):
             return False
         if os.name != 'nt':
             return playback.play_wav(audio, cancelled)
-        import winsound
-        with wave.open(str(audio), 'rb') as sound:
-            duration = sound.getnframes() / sound.getframerate()
-        winsound.PlaySound(str(audio), winsound.SND_FILENAME | winsound.SND_ASYNC)
-        try:
-            until = time.monotonic() + duration
-            while time.monotonic() < until:
-                if cancelled():
-                    return False
-                time.sleep(.025)
-            return True
-        finally:
-            winsound.PlaySound(None, 0)
+        return playback.play_native(audio, cancelled)

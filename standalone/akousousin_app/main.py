@@ -14,7 +14,24 @@ from .install import Installer
 
 def main():
     multiprocessing.freeze_support()
-    if len(sys.argv) > 1 and sys.argv[1] == '--whisper':
+    from .windows import console
+    console()
+    report = None
+    if '--error-file' in sys.argv:
+        # An elevated (UAC) step has no window of its own; hand its error back.
+        index = sys.argv.index('--error-file')
+        report = Path(sys.argv[index + 1]) if index + 1 < len(sys.argv) else None
+        del sys.argv[index:index + 2]
+    try:
+        run(sys.argv[1:])
+    except BaseException as error:
+        if report is not None and not (isinstance(error, SystemExit) and not error.code):
+            report.write_text(str(error) or type(error).__name__, encoding='utf-8')
+        raise
+
+
+def run(arguments):
+    if arguments[:1] == ['--whisper']:
         from akousousin_backend.recognition import main as recognition_main
         sys.argv = [sys.argv[0], *sys.argv[2:]]
         recognition_main()
@@ -71,7 +88,7 @@ def main():
     parser.add_argument('--bundle-prefix', type=Path, help='Tar installation prefix (default: ~/.local)')
     parser.add_argument('--quiet', action='store_true', help='Do not offer to launch after installing a tar bundle')
     parser.add_argument('--without-speech-dispatcher', action='store_true', help='Skip default Speech Dispatcher setup during tar installation')
-    args = parser.parse_args()
+    args = parser.parse_args(arguments)
     if args.purge:
         from . import purge
         if not args.yes:
@@ -163,7 +180,7 @@ def main():
         settings.save(args.settings, config)
     if args.uninstall:
         Installer(resources.root(), args.wine_prefix or config['wine_prefix'] or None,
-                  args.wine or config['wine'] or None).uninstall()
+                  args.wine or config['wine'] or None).uninstall(args.settings)
         print('Akousousin uninstalled; original speech registration and DLLs restored.')
         return
     if args.wine_prefix or args.install or args.install_only:
