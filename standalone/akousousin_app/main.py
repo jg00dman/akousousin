@@ -127,6 +127,11 @@ def main():
         run(args.settings)
         return
     if args.speech_dispatcher:
+        # Speech Dispatcher discards a module's own output; keep its problems
+        # in Akousousin's log, where a diagnostic report can find them.
+        import logging
+        logging.basicConfig(filename=str(runtime.log_path()), level=logging.WARNING,
+                            format='%(asctime)s Speech Dispatcher module: %(levelname)s %(message)s')
         from .speech_dispatcher import Module
         resources.bootstrap(args.settings)
         Module(args.settings).run()

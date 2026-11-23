@@ -85,10 +85,35 @@ class DispatcherTests(unittest.TestCase):
         self.assertTrue(all(0 < len(piece) <= 241 for piece in pieces))
         self.assertEqual(escaped(b'\x00\n}\x80'), b'\x00}*}]\x80')
 
-    def test_bad_settings_and_unsupported_audio_are_rejected(self):
+    def test_unsupported_audio_is_rejected(self):
         output = io.BytesIO()
-        Module(self.path, io.BytesIO(b'INIT\nSET\nrate=101\n.\nAUDIO\naudio_output_method=alsa\n.\nQUIT\n'), output).run()
-        self.assertEqual(output.getvalue().count(b'303 ERROR'), 2)
+        Module(self.path, io.BytesIO(b'INIT\nAUDIO\naudio_output_method=alsa\n.\nQUIT\n'), output).run()
+        self.assertEqual(output.getvalue().count(b'303 ERROR'), 1)
+
+    def test_a_bad_setting_does_not_drop_the_voice_and_language(self):
+        # Rejecting the whole block left Orca silent; keep what is usable.
+        output = io.BytesIO()
+        module = Module(self.path, io.BytesIO(
+            b'INIT\nSET\nrate=101\npitch=abc\npunctuation_mode=sometimes\nlanguage=en-GB\nsynthesis_voice=x\n.\nQUIT\n'), output)
+        with self.assertLogs('akousousin_app.speech_dispatcher', 'WARNING') as logs:
+            module.run()
+        self.assertNotIn(b'303 ERROR', output.getvalue())
+        self.assertEqual((module.options['rate'], module.options['language'], module.options['synthesis_voice']),
+                         ('100', 'en-GB', 'x'))
+        self.assertNotIn('pitch', module.options)
+        self.assertNotIn('punctuation_mode', module.options)
+        self.assertEqual(len(logs.output), 2)
+
+    def test_voice_list_for_a_regional_language_includes_the_family(self):
+        config = settings.load(self.path)
+        config['voices'] = {'en_US-ljspeech-medium': {'language': 'en_US', 'path': '/x'},
+                            'es_ES-davefx-medium': {'language': 'es_ES', 'path': '/y'}}
+        settings.save(self.path, config)
+        output = io.BytesIO()
+        Module(self.path, io.BytesIO(b'INIT\nLIST VOICES en-GB\nQUIT\n'), output).run()
+        listed = output.getvalue().decode()
+        self.assertIn('200-en_US-ljspeech-medium\ten-US', listed)
+        self.assertNotIn('es_ES', listed)
 
     @patch('akousousin_app.speech_dispatcher.runtime.call')
     @patch('akousousin_app.speech_dispatcher.fetch')

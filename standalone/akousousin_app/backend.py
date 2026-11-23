@@ -106,7 +106,7 @@ class Router:
             return request['voice']
         language = config['book_language'] or settings.language_for_lcid(request.get('language', 0))
         selected = config['language_voices'].get(language) if language else None
-        return selected or request.get('voice') or config['voice']
+        return settings.usable_voice(config, selected, request.get('voice'), language=language or '') or config['voice']
 
     def start(self):
         config = settings.load(self.path)

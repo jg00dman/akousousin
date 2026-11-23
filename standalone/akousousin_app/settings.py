@@ -156,3 +156,33 @@ def select_voice(path, identifier, *, language_only=False):
                           (r'HKCU\SOFTWARE\Microsoft\Speech\Voices', 'DefaultTokenId')):
             installer.execute('reg.exe', 'add', key, '/v', item, '/t', 'REG_SZ', '/d', token, '/f', '/reg:64')
     return pending
+
+
+def usable_voice(config, *preferred, language=''):
+    """An installed voice: the first preferred one that is installed, else one for
+    the language (its chosen voice, then any installed voice in the language or
+    its family), else the default, else any. None only when no voice is installed.
+
+    Remembered choices can name a voice that has since been removed, and apps
+    can ask for voices by names Akousousin does not have; neither may silence
+    speech while a usable voice exists.
+    """
+    voices = config.get('voices') or {}
+    for key in preferred:
+        if key and key in voices:
+            return key
+    language = (language or '').replace('-', '_').casefold()
+    if language:
+        family = language.split('_')[0]
+        chosen = {code.replace('-', '_').casefold(): key for code, key in (config.get('language_voices') or {}).items()}
+        candidates = [chosen.get(language),
+                      *(key for key, entry in voices.items() if entry.get('language', '').replace('-', '_').casefold() == language),
+                      *(key for code, key in chosen.items() if code.split('_')[0] == family),
+                      *(key for key, entry in voices.items() if entry.get('language', '').split('_')[0].casefold() == family)]
+        for key in candidates:
+            if key and key in voices:
+                return key
+    if config.get('voice') in voices:
+        return config['voice']
+    return next(iter(voices), None)
+
