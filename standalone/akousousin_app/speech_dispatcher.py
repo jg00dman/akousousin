@@ -249,6 +249,9 @@ class Module:
                     if not pcm or len(pcm) != wav.getnframes() * 2:
                         raise ValueError('Truncated audio')
                     sample_rate = wav.getframerate()
+                from akousousin_backend.audio_system import lead_in, played
+                pcm = b'\0\0' * int(sample_rate * lead_in()) + pcm  # so a sleeping output wakes in time
+                played(len(pcm) / 2 / sample_rate)
                 if speech_gate.suppressed(self.path, gate):
                     self.stop()
                     return
