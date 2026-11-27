@@ -8,6 +8,14 @@ SPDX-FileCopyrightText: 2026 John Goodman
 Stable releases. Each beta's notes are on its
 [release page](https://github.com/jg00dman/akousousin/releases).
 
+## 0.9.1.4
+
+- Voice service streams speech with word, sentence and mark events (/speak);
+  /synthesize is built on it.
+- Interrupting keeps the voice loaded; the newest request wins.
+- A second-language voice stays loaded while in use (unloads after 5 minutes).
+- Voices are patched once to report phoneme timing.
+
 ## 0.9.1.3
 
 - Apps page says when Spiel isn't installed; turning Spiel off works after
