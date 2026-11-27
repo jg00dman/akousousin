@@ -140,6 +140,8 @@ def ensure_timed(model, owned_root):
     """
     model = Path(model)
     try:
+        if model.stat().st_size == 0:
+            return False   # not a voice
         with open(model, 'rb') as stream, mmap.mmap(stream.fileno(), 0, access=mmap.ACCESS_READ) as mapped:
             view = memoryview(mapped)
             try:

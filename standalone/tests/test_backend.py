@@ -26,19 +26,32 @@ def audio(rate):
 
 
 class FakeSynth:
+    """Stands in for a voice process: one chunk per run, made by synthesize() so tests can replace it."""
     instances = []
-    def __init__(self, model, target):
+    timed = False
+    def __init__(self, model, target=None):
+        self.model = str(model)
         self.rate = 16000 if 'german' in str(model) else 22050
         self.requests = []
         self.closed = False
+        self.process = None
         self.instances.append(self)
     def start(self, cancelled=None):
         pass
+    def alive(self):
+        return not self.closed
     def close(self):
         self.closed = True
     def synthesize(self, request, cancelled=None):
         self.requests.append(request)
         return audio(self.rate)
+    def speak(self, request, cancelled):
+        data = self.synthesize(request, cancelled)
+        if cancelled.is_set():
+            raise InterruptedError('Speech cancelled')
+        with wave.open(io.BytesIO(data), 'rb') as sound:
+            pcm = sound.readframes(sound.getnframes())
+        yield pcm, {'sentence': True, 'words': [], 'covers': None}
 
 
 class RoutingTests(unittest.TestCase):
@@ -48,14 +61,14 @@ class RoutingTests(unittest.TestCase):
         root = Path(self.temp.name)
         self.path = root / 'settings.json'
         self.config = copy.deepcopy(settings.DEFAULTS)
-        for identifier, language, rate in [('english', 'en_US', 22050), ('german', 'de_DE', 16000)]:
+        for identifier, language, rate in [('english', 'en_US', 22050), ('german', 'de_DE', 16000), ('french', 'fr_FR', 22050)]:
             model = root / (identifier + '.onnx')
             model.touch(); Path(str(model) + '.json').write_text('{}')
             self.config['voices'][identifier] = {'path': str(model), 'language': language, 'sample_rate': rate}
             self.config['language_voices'][language] = identifier
         self.config['voice'] = 'english'
         settings.save(self.path, self.config)
-        self.patch = patch('akousousin_app.backend.Synthesizer', FakeSynth)
+        self.patch = patch('akousousin_app.backend.VoiceProcess', FakeSynth)
         self.patch.start(); self.addCleanup(self.patch.stop)
         FakeSynth.instances.clear()
         self.router = Router(self.path)
@@ -123,7 +136,8 @@ class RoutingTests(unittest.TestCase):
 
     def test_explicit_sapi_language_routes_and_resamples(self):
         result = self.router.synthesize({'text': 'Guten Tag', 'language': 0x407, 'sample_rate': 22050})
-        self.assertEqual(self.router.voice, 'german')
+        self.assertEqual((self.router.voice, self.router.second), ('english', 'german'))
+        self.assertEqual(self.router.voices['german'].requests[-1]['text'], 'Guten Tag')
         with wave.open(io.BytesIO(result), 'rb') as wav:
             self.assertEqual(wav.getframerate(), 22050)
             self.assertGreater(wav.getnframes(), 100)
@@ -132,14 +146,40 @@ class RoutingTests(unittest.TestCase):
         self.config['book_language'] = 'de_DE'
         settings.save(self.path, self.config)
         self.router.synthesize({'text': 'Text', 'voice': 'english'})
-        self.assertEqual(self.router.voice, 'german')
+        self.assertEqual(self.router.voices['german'].requests[-1]['text'], 'Text')
 
-    def test_changing_voice_releases_previous_worker(self):
+    def test_a_second_voice_joins_the_main_one_and_a_third_replaces_it(self):
         self.router.synthesize({'text': 'Hello'})
-        old = self.router.synth
+        main = self.router.synth
         self.router.synthesize({'text': 'Hallo', 'voice': 'german'})
-        self.assertTrue(old.closed)
+        german = self.router.voices['german']
+        self.assertFalse(main.closed)            # switching back and forth never reloads
+        self.router.synthesize({'text': 'Hello'})
+        self.router.synthesize({'text': 'Hallo', 'voice': 'german'})
         self.assertEqual(len(FakeSynth.instances), 2)
+        self.router.synthesize({'text': 'Bonjour', 'voice': 'french'})
+        self.assertTrue(german.closed)
+        self.assertEqual(set(self.router.voices), {'english', 'french'})
+
+    def test_a_second_voice_unloads_after_five_minutes_unused(self):
+        self.router.start()   # the service loads the main voice when it starts
+        self.router.synthesize({'text': 'Hallo', 'voice': 'german'})
+        german = self.router.voices['german']
+        used = self.router.second_used = 100.0   # exact boundaries, whatever the host's uptime
+        self.assertAlmostEqual(self.router.until_expiry(used + 60), 240)
+        self.assertFalse(self.router.expire(used + 299))
+        self.assertTrue(self.router.expire(used + 300))
+        self.assertTrue(german.closed)
+        self.assertEqual(set(self.router.voices), {'english'})   # the main voice stays
+
+    def test_choosing_another_main_voice_replaces_the_old_main(self):
+        self.router.synthesize({'text': 'Hello'})
+        english = self.router.synth
+        self.config['voice'] = 'french'
+        settings.save(self.path, self.config)
+        self.router.synthesize({'text': 'Bonjour'})
+        self.assertTrue(english.closed)
+        self.assertEqual((self.router.voice, set(self.router.voices)), ('french', {'french'}))
 
     def test_preferences_apply_to_new_speech(self):
         self.config.update(speed=2.0, volume=.5)
@@ -267,45 +307,40 @@ class RoutingTests(unittest.TestCase):
         self.assertEqual(responses, ['409 Conflict'])
         self.assertEqual(call('/synthesize', 'next-owner', 'again'), '200 OK')
 
-    def test_waiting_caller_cancel_leaves_active_caller_running(self):
-        import time
-        entered, release = threading.Event(), threading.Event()
+    def test_the_newest_request_stops_the_one_in_progress(self):
+        entered = threading.Event()
         original = FakeSynth.synthesize
         results = []
         def blocked(synth, request, cancelled=None):
             if request['text'] == 'active':
                 entered.set()
-                if not release.wait(3):
-                    raise AssertionError('Active caller was not released')
-                self.assertFalse(cancelled.is_set())
+                if not cancelled.wait(3):
+                    raise AssertionError('The newer request did not stop the active one')
             return original(synth, request, cancelled)
         def call(text, identifier):
             try:
                 self.router.synthesize({'text': text}, identifier)
                 results.append((identifier, 'ok'))
             except InterruptedError:
-                results.append((identifier, 'cancelled'))
+                results.append((identifier, 'interrupted'))
         with patch.object(FakeSynth, 'synthesize', blocked):
             active = threading.Thread(target=call, args=('active', 'sapi'))
-            waiting = threading.Thread(target=call, args=('waiting', 'dispatcher'))
             active.start()
             self.assertTrue(entered.wait(1))
-            waiting.start()
-            deadline = time.monotonic() + 1
-            queued = False
-            while time.monotonic() < deadline:
-                with self.router.control_lock:
-                    queued = 'dispatcher' in self.router.waiters
-                if queued:
-                    break
-                time.sleep(.01)
-            self.assertTrue(queued)
-            self.assertTrue(self.router.cancel('dispatcher'))
-            waiting.join(1)
-            release.set()
-            active.join(1)
-        self.assertCountEqual(results, [('dispatcher', 'cancelled'), ('sapi', 'ok')])
+            newer = threading.Thread(target=call, args=('newer', 'dispatcher'))
+            newer.start()
+            newer.join(3)
+            active.join(3)
+        self.assertCountEqual(results, [('sapi', 'interrupted'), ('dispatcher', 'ok')])
         self.router.synthesize({'text': 'recovered'}, 'next')
+
+    def test_a_queued_caller_can_still_be_cancelled(self):
+        self.assertFalse(self.router.cancel('nobody'))
+        cancelled = threading.Event()
+        with self.router.control_lock:
+            self.router.waiters['queued'] = cancelled
+        self.assertTrue(self.router.cancel('queued'))
+        self.assertTrue(cancelled.is_set())
 
 
 @unittest.skipUnless(hasattr(os, 'pidfd_open'), 'Linux reports process exit through pidfd')

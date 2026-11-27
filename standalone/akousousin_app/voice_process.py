@@ -18,6 +18,7 @@ answering is killed.
 import itertools
 import logging
 import multiprocessing as mp
+import os
 from multiprocessing.connection import wait
 import threading
 import time
@@ -80,6 +81,22 @@ def plan(voice, text, events):
     return pieces, starts, owners, spans
 
 
+def sentence_ranges(starts, owners, spans):
+    """For each chunk that begins a sentence, the text range of the whole sentence (None otherwise)."""
+    ranges, current = [None] * len(starts), None
+    for index, (begins, owned) in enumerate(zip(starts, owners)):
+        if begins:
+            current = index
+        tokens = [owner for owner in owned or () if owner is not None]
+        if current is not None and tokens:
+            low, high = spans[min(tokens)][0], spans[max(tokens)][1]
+            if ranges[current] is None:
+                ranges[current] = (low, high)
+            else:
+                ranges[current] = (min(ranges[current][0], low), max(ranges[current][1], high))
+    return ranges
+
+
 def serve(pipe, model, stop):
     """The child process: load the voice, then speak runs as asked."""
     from piper import PiperVoice, SynthesisConfig
@@ -94,13 +111,17 @@ def serve(pipe, model, stop):
                                      noise_w_scale=request.get('noise_w_scale', .8))
             text, events = request['text'], request.get('events', False)
             pieces, starts, owners, spans = plan(voice, text, events)
+            sentences = sentence_ranges(starts, owners, spans) if events else [None] * len(pieces)
             stopped = False
-            for piece, begins, owned in zip(pieces, starts, owners):
+            for piece, begins, owned, sentence in zip(pieces, starts, owners, sentences):
                 if stop.is_set():
                     stopped = True
                     break
                 pcm, counts = synthesize_chunk(voice, piece, config, timed)
-                pipe.send(('chunk', pcm, _describe(text, spans, owned, counts, begins)))
+                described = _describe(text, spans, owned, counts, begins)
+                if sentence:
+                    described['sentence_range'] = timeline.trimmed(text, *sentence) or sentence
+                pipe.send(('chunk', pcm, described))
             pipe.send(('stopped',) if stopped or stop.is_set() else ('done',))
     except (EOFError, BrokenPipeError, KeyboardInterrupt):
         pass
@@ -229,7 +250,7 @@ class VoiceProcess:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise TimeoutError('The voice stopped responding')
-            if hasattr(cancelled, 'fileno'):
+            if hasattr(cancelled, 'fileno') and os.name != 'nt':
                 # Sleep until the voice answers or the request is cancelled (waiting.Interrupt).
                 if wait([self.pipe, cancelled], remaining):
                     if self.pipe.poll(0):
