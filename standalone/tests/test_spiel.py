@@ -48,6 +48,20 @@ async def fake_controller(reader, writer):
     await writer.wait_closed()
 
 
+class AvailabilityTests(unittest.TestCase):
+    def test_spiel_is_found_by_its_settings_schema(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as folder:
+            schemas = Path(folder) / 'glib-2.0/schemas'
+            schemas.mkdir(parents=True)
+            environment = {'XDG_DATA_HOME': str(Path(folder) / 'none'), 'XDG_DATA_DIRS': folder}
+            with patch.object(spiel.runtime, 'host_environment', return_value=environment), \
+                    patch.object(spiel.Path, 'is_file', lambda self: str(self).startswith(folder) and os.path.isfile(self)):
+                self.assertFalse(spiel.available())
+                (schemas / (spiel.SCHEMA + '.gschema.xml')).write_text('<schemalist/>')
+                self.assertTrue(spiel.available())
+
+
 @unittest.skipUnless(sys.platform == 'linux' and all(shutil.which(tool) for tool in
                      ('dbus-run-session', 'gdbus', 'gsettings', 'glib-compile-schemas')),
                      'requires the Linux session bus and GLib tools')

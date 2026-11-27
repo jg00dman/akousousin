@@ -169,6 +169,7 @@ SPDX-FileCopyrightText: 2026 John Goodman
 | AppsPage | Makes Akousousin voices available to Linux apps and screen readers that use Spiel. | Rend les voix d’Akousousin disponibles pour les applications Linux et les lecteurs d’écran qui utilisent Spiel. |
 | AppsPage | Remove Akousousin from Spiel and restore the previous default if it still uses Akousousin? | Retirer Akousousin de Spiel et rétablir le réglage précédent si Spiel utilise encore Akousousin ? |
 | AppsPage | Make Akousousin and its current default voice the default for Spiel? | Faire d’Akousousin et de sa voix par défaut actuelle le choix par défaut de Spiel ? |
+| AppsPage | Not installed | Non installé |
 | Dialogs | Cancel | Annuler |
 | Dialogs | Close | Fermer |
 | Dialogs | Something went wrong | Un problème est survenu |

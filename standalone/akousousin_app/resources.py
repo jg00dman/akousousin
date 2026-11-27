@@ -88,7 +88,8 @@ def bootstrap(path):
             receipt = json.loads((target / 'provenance.json').read_text(encoding='utf-8'))
             with (target / (voice + '.onnx')).open('rb') as stream:
                 actual = hashlib.file_digest(stream, 'sha256').hexdigest()
-            if actual != receipt['model_sha256']:
+            from .voice_timing import checksum_matches
+            if not checksum_matches(actual, receipt):  # as downloaded, or patched to report word timing
                 raise ValueError('Cached starter voice checksum differs')
             cfg = json.loads((target / (voice + '.onnx.json')).read_text(encoding='utf-8'))
             config = register_voice(path, voice, {'path': str(target / (voice + '.onnx')),

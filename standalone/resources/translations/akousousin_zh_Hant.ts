@@ -657,6 +657,10 @@
         <source>Make Akousousin and its current default voice the default for Spiel?</source>
         <translation>要將 Akousousin 及其目前的預設語音設為 Spiel 的預設值嗎？</translation>
     </message>
+    <message>
+        <source>Not installed</source>
+        <translation>未安裝</translation>
+    </message>
 </context>
 <context>
     <name>Dialogs</name>

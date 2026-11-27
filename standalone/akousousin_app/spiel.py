@@ -32,6 +32,16 @@ def registered():
     return service_path().is_file()
 
 
+def available():
+    """Whether Spiel is installed: its settings schema is where GSettings looks for schemas."""
+    environment = runtime.host_environment()
+    data = [environment.get('XDG_DATA_HOME') or str(Path.home() / '.local/share'),
+            *(environment.get('XDG_DATA_DIRS') or '').split(':'), '/usr/local/share', '/usr/share']
+    folders = [*(environment.get('GSETTINGS_SCHEMA_DIR') or '').split(':'),
+               *(str(Path(folder) / 'glib-2.0/schemas') for folder in data if folder)]
+    return any((Path(folder) / (SCHEMA + '.gschema.xml')).is_file() for folder in folders if folder)
+
+
 @contextmanager
 def registration_lock():
     import fcntl
@@ -124,8 +134,11 @@ def configure(path, remove=False, *, executable=None):
             if record is None or (executable is not None
                                   and Path(record['command'][0]).resolve() != Path(executable).resolve()):
                 return
-            previous = current_default()
-            if is_our_default(previous):
+            try:
+                previous = current_default()
+            except RuntimeError:
+                previous = None  # Spiel has been uninstalled: there is no default to restore
+            if previous is not None and is_our_default(previous):
                 set_default(record['previous_default'])
             try:
                 service.unlink()
@@ -133,7 +146,7 @@ def configure(path, remove=False, *, executable=None):
             except (OSError, subprocess.SubprocessError):
                 if not service.exists():
                     atomic_write(service, old_service)
-                if is_our_default(previous):
+                if previous is not None and is_our_default(previous):
                     set_default(previous)
                 raise
             return

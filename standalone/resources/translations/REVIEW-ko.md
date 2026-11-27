@@ -169,6 +169,7 @@ SPDX-FileCopyrightText: 2026 John Goodman
 | AppsPage | Makes Akousousin voices available to Linux apps and screen readers that use Spiel. | Spiel을 사용하는 Linux 앱과 화면 읽기 프로그램에서 Akousousin 음성을 사용할 수 있게 합니다. |
 | AppsPage | Remove Akousousin from Spiel and restore the previous default if it still uses Akousousin? | Spiel에서 Akousousin을 제거하고, Spiel이 아직 Akousousin을 사용 중이면 이전 기본값으로 되돌릴까요? |
 | AppsPage | Make Akousousin and its current default voice the default for Spiel? | Akousousin과 현재 기본 음성을 Spiel의 기본값으로 설정할까요? |
+| AppsPage | Not installed | 설치되지 않음 |
 | Dialogs | Cancel | 취소 |
 | Dialogs | Close | 닫기 |
 | Dialogs | Something went wrong | 문제가 발생했습니다 |

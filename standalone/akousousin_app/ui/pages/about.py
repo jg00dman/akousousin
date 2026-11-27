@@ -11,7 +11,7 @@ from ..flow import Columns
 from ..widgets import Card, Rule, button, link, row, text
 from .base import Page
 
-VERSE = 'https://biblia.com/bible/bsb/john/5/25'
+VERSE = 'https://www.bible.com/bible/3034/JHN.5.25.BSB'
 
 
 class AboutPage(Page):

@@ -3,26 +3,22 @@ SPDX-License-Identifier: GPL-3.0-or-later
 SPDX-FileCopyrightText: 2026 John Goodman
 -->
 
-# Akousousin 0.9.1.2
+# Akousousin 0.9.1.4
 
-Spiel support, six new languages, and an Akousousin that rests when you are
-not using it. Your voices, models and settings carry over.
+Groundwork for word highlighting, and quicker speech when you interrupt or switch
+languages. Your voices, models and settings carry over.
 
-**Spiel.** Apps and screen readers that speak through
-[Spiel](https://project-spiel.org/) can now use Akousousin voices. Install
-Spiel, then turn it on in **Apps → Linux apps and screen readers**. Akousousin
-and your default voice become Spiel's default; turning it off restores the
-voice you had before. Speech Dispatcher support is unchanged, and both can be
-on at once.
+- **Interrupting is instant.** When a screen reader or app stops speech to say
+  something new, the voice stays loaded. Before, it could take about a second
+  to reload.
+- **Switching languages doesn't reload voices.** Text in another language is
+  spoken with that language's voice while your main voice stays ready. The
+  second voice unloads after five minutes unused.
+- **The newest speech wins.** If two apps speak at once, the newer one takes
+  over and the older one stops, as screen readers expect.
+- **Groundwork for following along.** Akousousin now knows where each word
+  and sentence is heard. The next releases use this for word highlighting in
+  Windows apps, Spiel and Orca. Each voice is updated once to report this, the
+  first time it loads after the update.
 
-**Languages.** The control panel and tray now follow your desktop in French,
-German, Portuguese, Korean, and Simplified and Traditional Chinese, as well as
-English and Spanish.
-
-**Idle means idle.** Waiting in the tray, Akousousin used to wake your
-computer dozens of times a second to check whether anything had changed. It
-now waits to be told, and wakes only when you use it, which helps battery life
-on laptops and the Steam Deck. The tray, the control panel, Speech Dispatcher
-and Spiel respond as quickly as before.
-
-[What's in 0.9.1](https://github.com/jg00dman/akousousin/releases/tag/v0.9.1)
+[What's in 0.9.1.3](https://github.com/jg00dman/akousousin/releases/tag/v0.9.1.3)
