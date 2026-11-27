@@ -71,6 +71,9 @@ def install(entry, directory, reviewed=False, publish=True, path=None):
         provenance = {'revision': REVISION, 'model_sha256': sha, 'source': BASE + '/' + model,
                       'reviewed_by_user': reviewed, 'project_review': APPROVED.get(key, '')}
         (stage / 'provenance.json').write_text(json.dumps(provenance, indent=2), encoding='utf-8')
+        # Let the voice report word timing; done here while the file is fresh, rather than at first use.
+        from .voice_timing import ensure_timed
+        ensure_timed(stage / (key + '.onnx'), stage)
         stage.rename(target)
     return {'path': str(target / (key + '.onnx')), 'language': entry['language']['code'],
             'sample_rate': sample_rate, 'name': entry['name'], 'quality': entry['quality']}
